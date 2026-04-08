@@ -1,73 +1,108 @@
 import { useState, useRef, useEffect } from "react";
-import { Bot, Send, AlertTriangle, Sparkles } from "lucide-react";
+import { AlertTriangle, Send, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { useCoordinatorChat } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-const INITIAL_MESSAGES = [
+type ChatMessage = {
+  id: string;
+  role: "user" | "coordinator";
+  content: string;
+  isConfirmation?: boolean;
+  confirmationData?: {
+    title: string;
+    description: string;
+    action: string;
+  };
+};
+
+const INITIAL_MESSAGES: ChatMessage[] = [
   {
-    id: "1",
-    role: "user",
-    content: "How did the system perform this week?"
-  },
-  {
-    id: "2",
+    id: "welcome",
     role: "coordinator",
-    content: "Good week overall. Pipeline A processed 47 comments with 0 errors. Pipeline B drafted 5 posts — 3 approved, 2 pending your review. YouTube engagement is up 12% week-over-week. One urgent escalation in your inbox from an angry student comment on Facebook — worth reviewing today."
+    content:
+      "I’m watching runs, approvals, calendar triggers, and recent performance. Ask for a summary, the next priority, or tell me to prepare or run a pipeline.",
   },
-  {
-    id: "3",
-    role: "user",
-    content: "Run the engagement pipeline now"
-  },
-  {
-    id: "4",
-    role: "coordinator",
-    content: "I can run the engagement pipeline for you right now.",
-    isConfirmation: true,
-    confirmationData: {
-      title: "Run Pipeline A — Engagement",
-      description: "This will process today's comments and flag any escalations."
-    }
-  }
 ];
 
-const SUGGESTIONS = [
-  "Run engagement pipeline",
-  "How did last week go?",
-  "Check ambassador status",
-  "What's next on the calendar?"
+const DEFAULT_SUGGESTIONS = [
+  "Summarize this week",
+  "What needs my approval?",
+  "What is next on the calendar?",
+  "Run the engagement pipeline",
 ];
 
 export default function AgentChat() {
-  const [messages, setMessages] = useState(INITIAL_MESSAGES);
+  const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_MESSAGES);
+  const [suggestions, setSuggestions] = useState(DEFAULT_SUGGESTIONS);
   const [inputValue, setInputValue] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
+  const coordinatorChat = useCoordinatorChat();
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, coordinatorChat.isPending]);
 
-  const handleSend = (text: string = inputValue) => {
-    if (!text.trim()) return;
+  const submitMessage = async (text: string, confirmationAction?: string | null) => {
+    const trimmed = text.trim();
+    if (!trimmed || coordinatorChat.isPending) return;
 
-    setMessages((prev) => [...prev, {
-      id: Date.now().toString(),
+    const userMessage: ChatMessage = {
+      id: `${Date.now()}`,
       role: "user",
-      content: text
-    }]);
+      content: trimmed,
+    };
+
+    const nextMessages = [...messages, userMessage];
+    setMessages(nextMessages);
     setInputValue("");
 
-    setTimeout(() => {
-      setMessages((prev) => [...prev, {
-        id: (Date.now() + 1).toString(),
-        role: "coordinator",
-        content: "I've noted your request. As a mock interface, I don't process live commands yet, but I'm ready when connected to the live API."
-      }]);
-    }, 1000);
+    try {
+      const response = await coordinatorChat.mutateAsync({
+        message: trimmed,
+        confirmationAction: confirmationAction ?? null,
+        history: nextMessages.map(({ role, content }) => ({ role, content })),
+      });
+
+      setSuggestions(
+        Array.isArray(response.suggestions) && response.suggestions.length > 0
+          ? response.suggestions.slice(0, 4)
+          : DEFAULT_SUGGESTIONS
+      );
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `${Date.now()}-reply`,
+          role: "coordinator",
+          content:
+            response.message ||
+            "I reviewed the current workspace state and prepared the next step.",
+          isConfirmation: Boolean(response.confirmation),
+          confirmationData: response.confirmation
+            ? {
+                title: response.confirmation.title,
+                description: response.confirmation.description,
+                action: response.confirmation.action,
+              }
+            : undefined,
+        },
+      ]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "The request failed.";
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `${Date.now()}-error`,
+          role: "coordinator",
+          content: `I couldn't complete that request: ${message}`,
+        },
+      ]);
+    }
   };
 
   return (
@@ -79,7 +114,9 @@ export default function AgentChat() {
             <span className="lowercase text-foreground">samm</span>
           </div>
           <h1 className="mt-2 text-xl font-semibold tracking-tight text-foreground">Coordinate the work</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Ask samm for summaries, next steps, pipeline actions, and campaign coordination.</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Ask samm for summaries, next steps, pipeline actions, and campaign coordination.
+          </p>
         </div>
       </header>
 
@@ -107,12 +144,14 @@ export default function AgentChat() {
                     <span className="ml-1 text-[11px] font-medium lowercase text-muted-foreground">samm</span>
                   )}
 
-                  <div className={cn(
-                    "rounded-2xl px-4 py-3 text-[14px] leading-relaxed shadow-sm",
-                    msg.role === "user"
-                      ? "rounded-tr-sm bg-[#111] text-white"
-                      : "rounded-tl-sm border bg-muted/50 text-foreground"
-                  )}>
+                  <div
+                    className={cn(
+                      "rounded-2xl px-4 py-3 text-[14px] leading-relaxed shadow-sm",
+                      msg.role === "user"
+                        ? "rounded-tr-sm bg-[#111] text-white"
+                        : "rounded-tl-sm border bg-muted/50 text-foreground"
+                    )}
+                  >
                     {msg.content}
                   </div>
 
@@ -128,8 +167,21 @@ export default function AgentChat() {
                         </div>
                       </div>
                       <div className="flex w-full gap-2">
-                        <Button variant="outline" className="h-9 flex-1 text-xs" onClick={() => handleSend("Cancel pipeline run")}>Cancel</Button>
-                        <Button className="h-9 flex-1 text-xs" onClick={() => handleSend("Confirm run")}>Confirm</Button>
+                        <Button
+                          variant="outline"
+                          className="h-9 flex-1 text-xs"
+                          disabled={coordinatorChat.isPending}
+                          onClick={() => submitMessage(`Cancel ${msg.confirmationData?.title}`)}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          className="h-9 flex-1 text-xs"
+                          disabled={coordinatorChat.isPending}
+                          onClick={() => submitMessage(`Confirm ${msg.confirmationData?.title}`, msg.confirmationData?.action)}
+                        >
+                          Confirm
+                        </Button>
                       </div>
                     </div>
                   )}
@@ -137,17 +189,36 @@ export default function AgentChat() {
               </div>
             </div>
           ))}
+
+          {coordinatorChat.isPending && (
+            <div className="flex w-full justify-start">
+              <div className="flex max-w-[80%] gap-3">
+                <Avatar className="mt-1 h-8 w-8 shrink-0 border bg-muted">
+                  <AvatarFallback className="bg-transparent">
+                    <Sparkles className="h-4 w-4 text-muted-foreground" />
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex flex-col gap-1">
+                  <span className="ml-1 text-[11px] font-medium lowercase text-muted-foreground">samm</span>
+                  <div className="rounded-2xl rounded-tl-sm border bg-muted/50 px-4 py-3 text-[14px] text-muted-foreground shadow-sm">
+                    Reviewing the latest workspace state...
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
       <div className="shrink-0 border-t bg-background p-6">
         <div className="mx-auto max-w-3xl">
           <div className="mb-4 flex flex-wrap gap-2">
-            {SUGGESTIONS.map((suggestion) => (
+            {suggestions.map((suggestion) => (
               <button
                 key={suggestion}
-                onClick={() => handleSend(suggestion)}
-                className="rounded-full border bg-muted/50 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                onClick={() => submitMessage(suggestion)}
+                disabled={coordinatorChat.isPending}
+                className="rounded-full border bg-muted/50 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {suggestion}
               </button>
@@ -160,13 +231,18 @@ export default function AgentChat() {
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
-                  handleSend();
+                  submitMessage(inputValue);
                 }
               }}
               placeholder="Ask samm anything..."
               className="flex-1 border-0 bg-transparent px-1 py-5 text-sm placeholder:text-muted-foreground focus-visible:ring-0 focus-visible:ring-offset-0"
             />
-            <Button size="icon" className="h-8 w-8 shrink-0 rounded-lg transition-transform active:scale-95" disabled={!inputValue.trim()} onClick={() => handleSend()}>
+            <Button
+              size="icon"
+              className="h-8 w-8 shrink-0 rounded-lg transition-transform active:scale-95"
+              disabled={!inputValue.trim() || coordinatorChat.isPending}
+              onClick={() => submitMessage(inputValue)}
+            >
               <Send className="ml-0.5 h-4 w-4" />
             </Button>
           </div>

@@ -859,3 +859,46 @@ export function useGetMetricsSparklines(options?: QueryHookOptions) {
 
 
 
+
+type CoordinatorChatRequest = {
+  message: string;
+  history?: Array<{ role: "user" | "coordinator"; content: string }>;
+  confirmationAction?: string | null;
+};
+
+type CoordinatorChatResponse = {
+  message: string;
+  suggestions?: string[];
+  confirmation?: {
+    title: string;
+    description: string;
+    action: string;
+  } | null;
+  invoked_action?: {
+    type: "run_pipeline";
+    pipeline: string;
+    status: "queued" | "completed" | "failed";
+  } | null;
+};
+
+export function useCoordinatorChat(options?: MutationHookOptions) {
+  return useMutation({
+    mutationFn: async ({ message, history = [], confirmationAction = null }: CoordinatorChatRequest) => {
+      const { data, error } = await supabase.functions.invoke("coordinator-chat", {
+        body: {
+          message,
+          history,
+          confirmationAction,
+          orgId: ORG_ID,
+        },
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      return (data ?? {}) as CoordinatorChatResponse;
+    },
+    ...options?.mutation,
+  });
+}
