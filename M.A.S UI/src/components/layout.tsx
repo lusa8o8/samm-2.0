@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import {
+  Sparkles,
   Bell,
   LayoutList,
   BarChart2,
@@ -17,18 +18,18 @@ import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 const navItems = [
+  { href: "/samm", label: "samm", icon: Sparkles },
   { href: "/inbox", label: "Inbox", icon: Bell },
   { href: "/content", label: "Content", icon: LayoutList },
   { href: "/metrics", label: "Metrics", icon: BarChart2 },
   { href: "/ambassadors", label: "Ambassadors", icon: Users },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
-  { href: "/agent", label: "Agent Manager", icon: Bot, isPrefix: true },
+  { href: "/operations", label: "Operations", icon: Bot, isPrefix: true },
 ];
 
-const agentSubnav = [
-  { path: "/agent/overview", label: "Overview" },
-  { path: "/agent/chat", label: "Chat" },
-  { path: "/agent/settings", label: "Settings" },
+const operationsSubnav = [
+  { path: "/operations/overview", label: "Overview" },
+  { path: "/operations/settings", label: "Settings" },
 ];
 
 interface SidebarContentProps {
@@ -39,7 +40,7 @@ function SidebarContent({ onNavigate }: SidebarContentProps) {
   const [location] = useLocation();
   const { data: summary } = useGetInboxSummary();
   const { data: config } = useGetOrgConfig();
-  const isAgentActive = location.startsWith("/agent");
+  const isOperationsActive = location.startsWith("/operations");
   const workspaceName = config?.org_name ?? "Workspace";
   const accountLabel = config?.full_name ?? config?.org_name ?? "Operations";
 
@@ -84,9 +85,9 @@ function SidebarContent({ onNavigate }: SidebarContentProps) {
                 </div>
               </Link>
 
-              {item.href === "/agent" && isAgentActive && (
+              {item.href === "/operations" && isOperationsActive && (
                 <div className="ml-9 mt-1 space-y-1 border-l border-sidebar-border/50 pl-2">
-                  {agentSubnav.map((sub) => (
+                  {operationsSubnav.map((sub) => (
                     <Link key={sub.path} href={sub.path} onClick={onNavigate}>
                       <div
                         className={cn(

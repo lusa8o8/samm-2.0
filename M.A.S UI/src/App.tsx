@@ -25,19 +25,31 @@ function Router() {
     <Layout>
       <Switch>
         <Route path="/">
-          <Redirect to="/inbox" />
+          <Redirect to="/samm" />
         </Route>
+        <Route path="/samm" component={AgentChat} />
         <Route path="/inbox" component={Inbox} />
         <Route path="/content" component={Content} />
         <Route path="/metrics" component={Metrics} />
         <Route path="/ambassadors" component={Ambassadors} />
         <Route path="/calendar" component={Calendar} />
         <Route path="/agent">
-          <Redirect to="/agent/overview" />
+          <Redirect to="/operations/overview" />
         </Route>
-        <Route path="/agent/overview" component={AgentOverview} />
-        <Route path="/agent/chat" component={AgentChat} />
-        <Route path="/agent/settings" component={AgentSettings} />
+        <Route path="/agent/overview">
+          <Redirect to="/operations/overview" />
+        </Route>
+        <Route path="/agent/chat">
+          <Redirect to="/samm" />
+        </Route>
+        <Route path="/agent/settings">
+          <Redirect to="/operations/settings" />
+        </Route>
+        <Route path="/operations">
+          <Redirect to="/operations/overview" />
+        </Route>
+        <Route path="/operations/overview" component={AgentOverview} />
+        <Route path="/operations/settings" component={AgentSettings} />
         <Route component={NotFound} />
       </Switch>
     </Layout>
