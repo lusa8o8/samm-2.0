@@ -40,6 +40,8 @@ function SidebarContent({ onNavigate }: SidebarContentProps) {
   const { data: summary } = useGetInboxSummary();
   const { data: config } = useGetOrgConfig();
   const isAgentActive = location.startsWith("/agent");
+  const workspaceName = config?.org_name ?? "Workspace";
+  const accountLabel = config?.full_name ?? config?.org_name ?? "Operations";
 
   const handleSignOut = async () => {
     await signOut();
@@ -47,34 +49,35 @@ function SidebarContent({ onNavigate }: SidebarContentProps) {
 
   return (
     <>
-      <div className="p-4 flex flex-col gap-1 border-b border-sidebar-border">
-        <h1 className="font-bold text-lg leading-tight">{config?.org_name ?? "TSH"}</h1>
-        <p className="text-xs text-muted-foreground font-medium">Marketing OS</p>
+      <div className="border-b border-sidebar-border px-4 py-4">
+        <div className="flex flex-col gap-1">
+          <p className="text-[11px] font-semibold lowercase tracking-[0.22em] text-sidebar-foreground/52">samm</p>
+          <h1 className="text-base font-semibold leading-tight text-sidebar-foreground">{workspaceName}</h1>
+          <p className="text-xs font-medium text-sidebar-foreground/46">coordinated workspace</p>
+        </div>
       </div>
 
-      <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
+      <nav className="flex-1 space-y-1 overflow-y-auto p-2">
         {navItems.map((item) => {
-          const isActive = item.isPrefix
-            ? location.startsWith(item.href)
-            : location === item.href;
+          const isActive = item.isPrefix ? location.startsWith(item.href) : location === item.href;
 
           return (
             <div key={item.href}>
               <Link href={item.href} onClick={onNavigate}>
                 <div
                   className={cn(
-                    "flex items-center justify-between px-3 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer",
+                    "flex cursor-pointer items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition-colors",
                     isActive
                       ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                      : "hover:bg-sidebar-accent/50 text-sidebar-foreground/70 hover:text-sidebar-foreground"
+                      : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
                   )}
                 >
                   <div className="flex items-center gap-3">
-                    <item.icon className="w-4 h-4" />
+                    <item.icon className="h-4 w-4" />
                     {item.label}
                   </div>
                   {item.href === "/inbox" && summary?.unread ? (
-                    <span className="bg-primary text-primary-foreground text-[10px] px-1.5 py-0.5 rounded-full font-bold">
+                    <span className="rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold text-primary-foreground">
                       {summary.unread}
                     </span>
                   ) : null}
@@ -87,9 +90,9 @@ function SidebarContent({ onNavigate }: SidebarContentProps) {
                     <Link key={sub.path} href={sub.path} onClick={onNavigate}>
                       <div
                         className={cn(
-                          "px-2 py-1.5 rounded-md text-xs font-medium cursor-pointer transition-colors",
+                          "cursor-pointer rounded-md px-2 py-1.5 text-xs font-medium transition-colors",
                           location === sub.path
-                            ? "text-sidebar-accent-foreground bg-sidebar-accent/50"
+                            ? "bg-sidebar-accent/50 text-sidebar-accent-foreground"
                             : "text-sidebar-foreground/60 hover:text-sidebar-foreground"
                         )}
                       >
@@ -104,17 +107,16 @@ function SidebarContent({ onNavigate }: SidebarContentProps) {
         })}
       </nav>
 
-      <div className="p-4 border-t border-sidebar-border mt-auto">
+      <div className="mt-auto border-t border-sidebar-border p-4">
         <div className="flex items-center gap-3">
-          <Avatar className="w-8 h-8 rounded-full bg-sidebar-accent border border-sidebar-border">
-            <AvatarFallback className="text-xs bg-sidebar-accent text-sidebar-accent-foreground">
-              {config?.org_name?.slice(0, 2).toUpperCase() ?? "OP"}
+          <Avatar className="h-8 w-8 rounded-full border border-sidebar-border bg-sidebar-accent">
+            <AvatarFallback className="bg-sidebar-accent text-xs text-sidebar-accent-foreground">
+              {workspaceName.slice(0, 2).toUpperCase()}
             </AvatarFallback>
           </Avatar>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate text-sidebar-foreground">
-              {config?.full_name ?? config?.org_name ?? "TSH Operations"}
-            </p>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium text-sidebar-foreground">{accountLabel}</p>
+            <p className="text-[11px] text-sidebar-foreground/46">workspace account</p>
           </div>
           <button
             type="button"
@@ -125,7 +127,7 @@ function SidebarContent({ onNavigate }: SidebarContentProps) {
               void handleSignOut();
             }}
           >
-            <Settings className="w-4 h-4" />
+            <Settings className="h-4 w-4" />
           </button>
         </div>
       </div>
@@ -137,20 +139,21 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [location] = useLocation();
   const { data: config } = useGetOrgConfig();
+  const workspaceName = config?.org_name ?? "Workspace";
 
   useEffect(() => {
     setMobileOpen(false);
   }, [location]);
 
   return (
-    <div className="min-h-[100dvh] flex bg-background">
-      <aside className="hidden md:flex w-[220px] fixed inset-y-0 left-0 flex-col bg-sidebar border-r border-sidebar-border z-20 text-sidebar-foreground">
+    <div className="flex min-h-[100dvh] bg-background">
+      <aside className="fixed inset-y-0 left-0 z-20 hidden w-[220px] flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex">
         <SidebarContent />
       </aside>
 
       {mobileOpen && (
         <div
-          className="md:hidden fixed inset-0 bg-black/40 z-30 backdrop-blur-sm"
+          className="fixed inset-0 z-30 bg-black/40 backdrop-blur-sm md:hidden"
           onClick={() => setMobileOpen(false)}
           aria-hidden="true"
         />
@@ -158,31 +161,34 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
       <aside
         className={cn(
-          "md:hidden fixed inset-y-0 left-0 flex flex-col w-[260px] bg-sidebar border-r border-sidebar-border z-40 text-sidebar-foreground transition-transform duration-300 ease-in-out",
+          "fixed inset-y-0 left-0 z-40 flex w-[260px] flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-transform duration-300 ease-in-out md:hidden",
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
         <button
-          className="absolute top-3 right-3 p-1.5 rounded-md text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-colors"
+          className="absolute right-3 top-3 rounded-md p-1.5 text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
           onClick={() => setMobileOpen(false)}
           aria-label="Close menu"
         >
-          <X className="w-5 h-5" />
+          <X className="h-5 w-5" />
         </button>
 
         <SidebarContent onNavigate={() => setMobileOpen(false)} />
       </aside>
 
-      <main className="flex-1 md:ml-[220px] flex flex-col overflow-hidden min-h-screen">
-        <div className="md:hidden flex items-center gap-3 h-12 px-4 border-b bg-background/95 backdrop-blur sticky top-0 z-10 shrink-0">
+      <main className="ml-0 flex min-h-screen flex-1 flex-col overflow-hidden md:ml-[220px]">
+        <div className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-3 border-b bg-background/95 px-4 backdrop-blur md:hidden">
           <button
-            className="p-1.5 -ml-1 rounded-md text-foreground/70 hover:text-foreground hover:bg-muted transition-colors"
+            className="-ml-1 rounded-md p-1.5 text-foreground/70 transition-colors hover:bg-muted hover:text-foreground"
             onClick={() => setMobileOpen(true)}
             aria-label="Open menu"
           >
-            <Menu className="w-5 h-5" />
+            <Menu className="h-5 w-5" />
           </button>
-          <span className="font-semibold text-sm">{config?.org_name ?? "TSH"} Marketing OS</span>
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold lowercase tracking-[0.2em] text-foreground/46">samm</p>
+            <p className="truncate text-sm font-medium text-foreground">{workspaceName}</p>
+          </div>
         </div>
 
         {children}
