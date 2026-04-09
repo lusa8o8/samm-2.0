@@ -17,8 +17,14 @@ Already stable and verified:
 - Operations overview visibility for pipeline runs
 - frontend error normalization for backend function failures
 - browser parity verified for the current Pipeline A flow after the integration-registry refactor
+- Pipeline A rebuilt on the shared engine and parity-verified against the pre-engine baseline
 
 This is the current foundation. Future work should preserve this behavior.
+
+Current unstable edges still visible before the next architectural slice:
+- Pipeline B invocation from `coordinator-chat` is not yet re-verified stable after the request-shape mismatch surfaced
+- Pipeline C invocation from `coordinator-chat` is not yet re-verified stable after the same request-shape mismatch surfaced
+- these are stabilization tasks, not replacements for the resumable-gate milestones
 
 ## Roadmap Rules
 Every milestone should follow these rules:
@@ -167,6 +173,9 @@ Commit policy:
 - one stable commit after adapter parity is confirmed
 
 ## Milestone 5: Rebuild Pipeline A On The Engine
+Status:
+- complete
+
 Goal:
 - make Pipeline A the first fully modular declarative pipeline
 
@@ -188,8 +197,39 @@ Verification:
 - metrics snapshot still writes
 - run row transitions out of `running`
 
+Completed checkpoint:
+- Pipeline A now runs through the shared engine baseline
+- hosted parity matched the pre-engine baseline exactly
+- browser verification confirmed `/samm` and Operations continued to reflect the same Pipeline A results
+
 Commit policy:
 - stable checkpoint commit after production-like verification
+
+## Milestone 5A: Stabilize Pipeline B And C Invocation Baselines
+Status:
+- pending
+
+Goal:
+- restore and verify the current hardcoded Pipeline B and Pipeline C run paths before their larger architectural slices continue
+
+Why this slice exists:
+- Pipeline B and Pipeline C are not yet at the same stability level as Pipeline A
+- the current failure is a narrow invocation-contract issue, not the full resumable-gate implementation
+- the next architectural slices should start from a known-good baseline, not from a broken entrypoint
+
+Scope:
+- normalize request parsing for scheduler-triggered runs
+- accept the current scheduler payload shape consistently
+- verify `/samm` and direct invocation can start Pipeline B and Pipeline C without immediate function failure
+- keep all existing workflow logic unchanged beyond the invocation contract fix
+
+Verification:
+- `coordinator-chat` can trigger Pipeline B without a 500 entrypoint failure
+- `coordinator-chat` can trigger Pipeline C without a 500 entrypoint failure
+- Operations no longer shows `Never` only because the function crashes before real execution starts
+
+Commit policy:
+- one narrow stability commit before Milestone 6 or 7 implementation continues
 
 ## Milestone 6: Add Resumable Human Gates For Pipeline B
 Goal:
@@ -313,6 +353,7 @@ Carry through milestones:
 - 1
 - 2
 - 5
+- 5A
 - 7
 - 9
 - 10
@@ -332,13 +373,13 @@ Reason:
 
 ## Recommended Immediate Next Slice
 The next concrete implementation slice should be:
-1. do discovery on the current Pipeline A function and map it into the target engine shape
-2. define the minimum declarative step contract needed for Pipeline A only
-3. rebuild Pipeline A on the engine while preserving exact current behavior
-4. verify parity for comments, escalations, replies, poll creation, metrics snapshot, and run completion
-5. commit the engine-backed Pipeline A slice only after production-like verification
+1. verify and stabilize the current Pipeline B and Pipeline C invocation path from `coordinator-chat`
+2. commit the narrow entrypoint stability fix once `/samm` and direct invocation no longer fail immediately
+3. start Pipeline B discovery from the stabilized baseline
+4. define the smallest `waiting_human` / resume slice for Pipeline B
+5. implement and verify the resumable human gate before widening scope into Pipeline C
 
-This is now the highest-leverage move because Milestones 1-4 are complete and Pipeline A is the first bounded workflow that exercises the engine shape without the resumable-human-gate complexity of Pipeline B or C.
+This is now the highest-leverage move because Pipeline A is already engine-backed and parity-verified, while Pipeline B and Pipeline C still need a clean stable baseline before their resumable-workflow milestones proceed.
 
 ## Commit Strategy
 Recommended commit pattern:
@@ -359,6 +400,7 @@ The roadmap is intentionally conservative:
 - normalize run state
 - introduce agent and integration registries
 - modularize Pipeline A first
+- stabilize B and C entrypoints
 - add resumable gates for B and C
 - bring onboarding, billing, and live APIs in only after the execution core is reliable
 

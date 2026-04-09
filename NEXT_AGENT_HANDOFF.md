@@ -79,7 +79,7 @@ Committed and pushed:
 These are already pushed to `main`.
 
 ## Current Status
-The current runtime is stable through the Milestone 5 boundary.
+The current runtime is stable through the Milestone 5 boundary for Pipeline A only.
 
 Verified:
 - `/samm` can run Pipeline A successfully
@@ -93,39 +93,47 @@ Verified:
   - `spam_ignored: 0`
   - `errors: []`
 
-There is no active runtime blocker at the moment.
+Not yet stabilized:
+- Pipeline B invocation from `coordinator-chat`
+- Pipeline C invocation from `coordinator-chat`
+
+Current diagnosed blocker:
+- `coordinator-chat` invokes downstream pipelines with `org_id`
+- Pipeline B and Pipeline C were reading `orgId`
+- this produced `undefined` org ids and immediate 500 failures at function entry for Pipeline B, and likely the same class of failure for Pipeline C
 
 ## Exact Next Slice
 ### Goal
-Add resumable human-gate execution for Pipeline B without changing the current publishing behavior more than necessary.
+Stabilize the current Pipeline B and Pipeline C invocation baselines before continuing into the larger resumable-workflow milestones.
 
 ### Required workflow
 1. Discovery:
-   - read the current `pipeline-b-weekly` implementation end to end
-   - map the fetch, planning, drafting, approval, publish, ambassador update, and reporting phases
-   - inspect the current Content review and Inbox actions that touch draft approval state
-   - identify the current scheduler and state surfaces available for pause/resume behavior
+   - confirm the current request payload contract between `coordinator-chat` and downstream pipeline functions
+   - confirm Pipeline B and Pipeline C can accept scheduler-triggered payloads without entrypoint failure
 2. Diagnosis:
-   - state exactly which parts of Pipeline B are still hardcoded and which parts need a persisted human gate
-   - separate minimum resumable-gate requirements from optional future abstractions
+   - separate the narrow invocation-contract bug from the larger Pipeline B resumable-gate and Pipeline C long-window execution milestones
 3. Plan:
-   - define the smallest Pipeline B slice that introduces `waiting_human` / resume behavior while preserving current outputs
+   - define the smallest stability slice that restores B and C invocation without changing their workflow logic
 4. Edit:
-   - keep the first resumable-gate slice narrow and reversible
+   - keep the fix limited to request parsing and any directly related entrypoint handling
 5. Verify:
-   - drafts pause the run cleanly
-   - approval resumes the run cleanly
-   - rejection exits or loops according to the chosen narrow contract
-   - reporting still lands in Inbox
-   - UI surfaces still reflect the same content-review workflow clearly
+   - `/samm` can trigger Pipeline B without immediate 500 failure
+   - `/samm` can trigger Pipeline C without immediate 500 failure
+   - direct invocation matches the same result
 6. Commit stable slice
 7. Push if requested
 
-## Why Pipeline B Next
-- the roadmap and architecture docs define Pipeline B as the first real resumable human-gate workflow
-- it already has a draft approval phase that naturally maps to `waiting_human`
-- it is a smaller resumability problem than Pipeline C
-- it exercises the next major architectural boundary after Pipeline A engine conversion
+## Why This Slice Comes First
+- Pipeline A is already engine-backed and parity-verified
+- Pipeline B and Pipeline C should not move into larger architectural work while their basic run path is broken
+- the current issue is a narrow stability defect, so it should be fixed and checkpointed separately from Milestone 6 and Milestone 7
+
+## After This Stability Slice
+1. Add resumable human-gate execution for Pipeline B.
+2. Add long-window resumable execution for Pipeline C.
+3. Move to onboarding/capability-template work once the execution core is stable.
+4. Add usage metering and billing enforcement.
+5. Swap mocked adapters for live provider APIs only after the engine and gate boundaries are stable.
 
 ## Relevant Files
 ### Frontend
@@ -136,6 +144,7 @@ Add resumable human-gate execution for Pipeline B without changing the current p
 
 ### Supabase
 - `supabase/functions/pipeline-b-weekly/index.ts`
+- `supabase/functions/pipeline-c-campaign/index.ts`
 - `supabase/functions/coordinator-chat/index.ts`
 - `supabase/functions/coordinator-chat/scheduler.ts`
 - `supabase/functions/_shared/pipeline-engine.ts`
@@ -156,13 +165,7 @@ Add resumable human-gate execution for Pipeline B without changing the current p
 - browser parity for Milestone 4 was verified after running Pipeline A from `/samm`
 - engine-backed Pipeline A was deployed and matched the previous hosted parity baseline exactly
 - the current local environment did not have `deno` installed, so local `deno check` was not available during parity verification
-
-## Medium-Term Next Slices After Pipeline B Resumable Gates
-In order:
-1. Add long-window resumable execution for Pipeline C.
-2. Move to onboarding/capability-template work once the execution core is stable.
-3. Add usage metering and billing enforcement.
-4. Swap mocked adapters for live provider APIs only after the engine and gate boundaries are stable.
+- if a resumed session starts from a user report of Pipeline B or C failing from `/samm`, check for request-shape mismatches before assuming the resumable-workflow milestone is at fault
 
 ## Constraints To Preserve
 - Do not do a broad `samm` workspace redesign yet.
