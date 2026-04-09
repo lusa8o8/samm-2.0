@@ -73,10 +73,11 @@ Deno.serve(async (req) => {
     apiKey: Deno.env.get('ANTHROPIC_API_KEY')!
   })
 
-  const context: PipelineContext = await req.json().catch(() => ({
-    orgId: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
-    today: new Date().toISOString().split('T')[0],
-    calendarEvent: {
+  const payload = await req.json().catch(() => ({}))
+  const context: PipelineContext = {
+    orgId: payload?.orgId ?? payload?.org_id ?? 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+    today: payload?.today ?? new Date().toISOString().split('T')[0],
+    calendarEvent: payload?.calendarEvent ?? {
       id: 'demo-event',
       event_type: 'exam_window',
       event_date: '2026-05-11',
@@ -85,7 +86,7 @@ Deno.serve(async (req) => {
       universities: ['UNZA'],
       lead_days: 21
     }
-  }))
+  }
 
   const config = await getOrgConfig(supabase, context.orgId)
 

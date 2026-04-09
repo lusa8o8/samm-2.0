@@ -121,10 +121,12 @@ Deno.serve(async (req) => {
     apiKey: Deno.env.get('ANTHROPIC_API_KEY')!
   })
 
-  const context: PipelineContext = await req.json().catch(() => ({
-    orgId: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
-    today: new Date().toISOString().split('T')[0]
-  }))
+  const payload = await req.json().catch(() => ({}))
+  const context: PipelineContext = {
+    orgId: payload?.orgId ?? payload?.org_id ?? 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+    today: payload?.today ?? new Date().toISOString().split('T')[0],
+    calendarEvents: Array.isArray(payload?.calendarEvents) ? payload.calendarEvents : undefined
+  }
 
   const config = await getOrgConfig(supabase, context.orgId)
 
