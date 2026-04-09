@@ -6,6 +6,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.27.0'
+import { getAgentDefinition } from '../_shared/agent-registry.ts'
 
 // ── types ─────────────────────────────────────────────────────────────
 interface CalendarEvent {
@@ -151,7 +152,7 @@ Deno.serve(async (req) => {
           }
         },
         created_by_pipeline: 'pipeline-c-campaign',
-        created_by_agent: 'campaign-planner',
+        created_by_agent: getAgentDefinition('campaign_planner').id,
         expires_at: addDays(context.today, 3)
       })
       .select('id')
@@ -212,7 +213,7 @@ Deno.serve(async (req) => {
           content_registry_id: regRow?.id
         },
         created_by_pipeline: 'pipeline-c-campaign',
-        created_by_agent: 'copy-writer',
+        created_by_agent: getAgentDefinition('copy_writer').id,
         ref_table: 'content_registry',
         ref_id: regRow?.id
       })
@@ -228,7 +229,7 @@ Deno.serve(async (req) => {
         brief: designBrief
       },
       created_by_pipeline: 'pipeline-c-campaign',
-      created_by_agent: 'design-brief-agent'
+      created_by_agent: getAgentDefinition('design_brief_agent').id
     })
 
     results.design_brief_sent = true
@@ -564,7 +565,7 @@ Campaign posts: ${JSON.stringify(campaignPosts?.slice(0, 5))}`
         suggestion: 'Consider adjusting the campaign messaging or boosting with paid ads'
       },
       created_by_pipeline: 'pipeline-c-campaign',
-      created_by_agent: 'monitor'
+      created_by_agent: getAgentDefinition('monitor').id
     })
     console.log('Monitor: escalation sent to human inbox')
   }
@@ -616,7 +617,7 @@ Current platform metrics: ${JSON.stringify(metrics?.slice(0, 4))}`
       pipeline_results: pipelineResults
     },
     created_by_pipeline: 'pipeline-c-campaign',
-    created_by_agent: 'post-campaign-reporter'
+    created_by_agent: getAgentDefinition('post_campaign_reporter').id
   })
 
   console.log('Post-campaign report sent to CEO inbox')

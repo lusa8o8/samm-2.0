@@ -6,6 +6,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.27.0'
+import { getAgentDefinition } from '../_shared/agent-registry.ts'
 
 // ── types ─────────────────────────────────────────────────────────────
 interface NewContent {
@@ -221,7 +222,7 @@ Deno.serve(async (req) => {
           content_registry_id: registryRow?.id
         },
         created_by_pipeline: 'pipeline-b-weekly',
-        created_by_agent: 'copy-writer',
+        created_by_agent: getAgentDefinition('copy_writer').id,
         ref_table: 'content_registry',
         ref_id: registryRow?.id
       })
@@ -491,7 +492,7 @@ Write the weekly report.`
       pipeline_results: pipelineResults
     },
     created_by_pipeline: 'pipeline-b-weekly',
-    created_by_agent: 'reporter'
+    created_by_agent: getAgentDefinition('reporter').id
   })
 
   console.log('Weekly report sent to human inbox')

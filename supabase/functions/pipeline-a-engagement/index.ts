@@ -1,3 +1,4 @@
+import { getAgentDefinition } from '../_shared/agent-registry.ts'
 import { PIPELINE_RUN_STATUS, type PipelineRunStatus } from '../_shared/pipeline-run-status.ts'
 // supabase/functions/pipeline-a-engagement/index.ts
 // ─────────────────────────────────────────────────────────────────────
@@ -224,7 +225,7 @@ Deno.serve(async (req) => {
               suggested_response: await draftReply(anthropic, classified, brandVoice)
             },
             created_by_pipeline: 'pipeline-a-engagement',
-            created_by_agent: 'classifier',
+            created_by_agent: getAgentDefinition('classifier').id,
             ref_table: 'content_registry'
           })
           results.escalations++
@@ -244,7 +245,7 @@ Deno.serve(async (req) => {
               suggestion: 'This comment has high engagement potential — consider pinning or responding publicly'
             },
             created_by_pipeline: 'pipeline-a-engagement',
-            created_by_agent: 'classifier'
+            created_by_agent: getAgentDefinition('classifier').id
           })
 
           const reply = await draftReply(anthropic, classified, brandVoice)
@@ -474,7 +475,7 @@ async function checkAmbassadors(
           suggestion: 'Consider removing if unresponsive for another week'
         },
         created_by_pipeline: 'pipeline-a-engagement',
-        created_by_agent: 'ambassador-checker'
+        created_by_agent: getAgentDefinition('ambassador_checker').id
       })
     }
   }
