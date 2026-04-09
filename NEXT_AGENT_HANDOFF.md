@@ -19,6 +19,23 @@ Carry this forward exactly.
 
 This discipline has kept the product clean and lean. Do not regress into broad exploratory edits without a locked plan.
 
+## If The Session Breaks Or Rate Limits Hit
+Before touching code again, reread the relevant docs for full context:
+- `NEXT_AGENT_HANDOFF.md`
+- `SAMM_IMPLEMENTATION_ROADMAP.md`
+- `SAMM_FULL_SYSTEM_ARCHITECTURE.md`
+- `SAMM_RUNTIME_SPEC.md`
+- `SAMM_SCHEDULER_CONTRACT.md`
+- `SAMM_CODEBASE_MAPPING.md`
+
+Then continue with the same discipline:
+- discovery
+- diagnosis
+- plan
+- narrow execution
+- verification
+- commit
+
 ## Product State
 Brand and product direction are now centered on `samm`.
 
@@ -45,6 +62,7 @@ Current product stance:
 - normalized pipeline run status contract introduced in shared runtime code
 - agent registry slice completed
 - integration registry slice completed, committed, pushed, deployed, and parity-verified
+- Pipeline A rebuilt on the shared engine, committed, pushed, deployed, and parity-verified
 
 ### Architecture Docs
 Committed and pushed:
@@ -54,63 +72,76 @@ Committed and pushed:
 - `SAMM_IMPLEMENTATION_ROADMAP.md`
 
 ## Latest Important Commits
+- `1b9f173 refactor: rebuild pipeline a on shared engine`
+- `8a523d5 docs: update roadmap after milestone 4 parity`
 - `e84703a feat: add integration registry parity slice`
-- `04db3ee Add coordinator chat orchestration slice`
-- `4442e36 Add samm runtime architecture specs`
 
 These are already pushed to `main`.
 
 ## Current Status
-The current runtime is stable at the Milestone 4 boundary.
+The current runtime is stable through the Milestone 5 boundary.
 
 Verified:
 - `/samm` can run Pipeline A successfully
 - inbox and Operations overview reflect the latest Pipeline A output
-- integration-registry wiring did not change the current Pipeline A behavior
+- integration-registry wiring did not change Pipeline A behavior
+- engine-backed Pipeline A returns the same hosted parity result as the pre-engine baseline:
+  - `comments_processed: 7`
+  - `replies_sent: 5`
+  - `escalations: 2`
+  - `boosts_suggested: 2`
+  - `spam_ignored: 0`
+  - `errors: []`
 
 There is no active runtime blocker at the moment.
 
 ## Exact Next Slice
 ### Goal
-Prepare the rebuild of Pipeline A onto the target engine shape without changing behavior.
+Add resumable human-gate execution for Pipeline B without changing the current publishing behavior more than necessary.
 
 ### Required workflow
 1. Discovery:
-   - read the current `pipeline-a-engagement` implementation end to end
-   - map its current loop, parallel work, writes, and run-state handling
-   - identify the minimum engine contract needed for Pipeline A only
+   - read the current `pipeline-b-weekly` implementation end to end
+   - map the fetch, planning, drafting, approval, publish, ambassador update, and reporting phases
+   - inspect the current Content review and Inbox actions that touch draft approval state
+   - identify the current scheduler and state surfaces available for pause/resume behavior
 2. Diagnosis:
-   - state exactly which parts of Pipeline A are still hardcoded
-   - separate engine requirements from optional future abstractions
+   - state exactly which parts of Pipeline B are still hardcoded and which parts need a persisted human gate
+   - separate minimum resumable-gate requirements from optional future abstractions
 3. Plan:
-   - define the smallest engine-backed slice that preserves exact outputs
+   - define the smallest Pipeline B slice that introduces `waiting_human` / resume behavior while preserving current outputs
 4. Edit:
-   - keep the first engine slice narrow and reversible
+   - keep the first resumable-gate slice narrow and reversible
 5. Verify:
-   - confirm comments, escalations, replies, poll posts, metrics snapshot, and run status remain unchanged
-   - confirm `/samm` and Operations still reflect the same Pipeline A outcomes
+   - drafts pause the run cleanly
+   - approval resumes the run cleanly
+   - rejection exits or loops according to the chosen narrow contract
+   - reporting still lands in Inbox
+   - UI surfaces still reflect the same content-review workflow clearly
 6. Commit stable slice
 7. Push if requested
 
-## Why Pipeline A Next
-- it already exposed the runtime failure modes earlier in the project
-- it has bounded scope
-- it includes loop, parallel, classification, escalation, content writes, metric snapshotting, and run completion
-- it is the smallest real workflow that exercises the target engine model
+## Why Pipeline B Next
+- the roadmap and architecture docs define Pipeline B as the first real resumable human-gate workflow
+- it already has a draft approval phase that naturally maps to `waiting_human`
+- it is a smaller resumability problem than Pipeline C
+- it exercises the next major architectural boundary after Pipeline A engine conversion
 
 ## Relevant Files
 ### Frontend
 - `M.A.S UI/src/pages/agent/chat.tsx`
 - `M.A.S UI/src/lib/api.ts`
 - `M.A.S UI/src/lib/supabase.ts`
+- any Content review UI that approves or rejects drafts
 
 ### Supabase
-- `supabase/functions/pipeline-a-engagement/index.ts`
+- `supabase/functions/pipeline-b-weekly/index.ts`
 - `supabase/functions/coordinator-chat/index.ts`
-- `supabase/functions/coordinator-chat/deno.json`
 - `supabase/functions/coordinator-chat/scheduler.ts`
+- `supabase/functions/_shared/pipeline-engine.ts`
 - `supabase/functions/_shared/agent-registry.ts`
 - `supabase/functions/_shared/integration-registry.ts`
+- `supabase/functions/_shared/pipeline-run-status.ts`
 - `supabase/config.toml`
 
 ### Architecture Source Of Truth
@@ -123,16 +154,15 @@ Prepare the rebuild of Pipeline A onto the target engine shape without changing 
 ## Important Operational Notes
 - `ANTHROPIC_API_KEY` already exists in hosted Supabase Edge Function secrets.
 - browser parity for Milestone 4 was verified after running Pipeline A from `/samm`
-- Operations overview showed the expected success row and summary after the run
+- engine-backed Pipeline A was deployed and matched the previous hosted parity baseline exactly
 - the current local environment did not have `deno` installed, so local `deno check` was not available during parity verification
 
-## Medium-Term Next Slices After Pipeline A Engine Discovery
+## Medium-Term Next Slices After Pipeline B Resumable Gates
 In order:
-1. Rebuild Pipeline A on the engine with parity preserved.
-2. Add resumable human-gate execution for Pipeline B.
-3. Add long-window resumable execution for Pipeline C.
-4. Move to onboarding/capability-template work once the execution core is stable.
-5. Swap mocked adapters for live provider APIs only after the engine boundary is stable.
+1. Add long-window resumable execution for Pipeline C.
+2. Move to onboarding/capability-template work once the execution core is stable.
+3. Add usage metering and billing enforcement.
+4. Swap mocked adapters for live provider APIs only after the engine and gate boundaries are stable.
 
 ## Constraints To Preserve
 - Do not do a broad `samm` workspace redesign yet.
