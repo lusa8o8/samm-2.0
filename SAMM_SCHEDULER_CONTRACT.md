@@ -1,183 +1,96 @@
-# SAMM Codebase Mapping
+# SAMM Scheduler Contract
 
 ## Purpose
-This document maps the target `samm` runtime loop onto the current repository so future agent work can proceed with low ambiguity.
+The scheduler is the execution boundary for `samm`. It decides whether an action may run, normalizes execution state, and prevents the coordinator model from guessing about live operational state.
 
-## Current Runtime Entry Point
-Current coordinator-chat entry point:
-- [coordinator-chat index](C:\Users\Lusa\tsh-marketing-system\supabase\functions\coordinator-chat\index.ts)
+## Current Contract
+The current scheduler lives inline inside `coordinator-chat` and owns these responsibilities:
+- inspect recent `pipeline_runs`
+- expire stale `running` rows before any action decision
+- answer explicit pipeline status questions deterministically
+- gate new pipeline runs when a live run already exists
+- invoke approved pipelines
+- fetch the latest run row after invocation
+- return structured execution results to the caller
 
-Current frontend entry point:
-- [chat page](C:\Users\Lusa\tsh-marketing-system\M.A.S%20UI\src\pages\agent\chat.tsx)
+## Inputs
+Current scheduler inputs:
+- `orgId`
+- operator message
+- optional `confirmationAction`
+- recent `pipeline_runs`
+- inferred pipeline target
 
-Current frontend invoke path:
-- [api hook](C:\Users\Lusa\tsh-marketing-system\M.A.S%20UI\src\lib\api.ts)
+## Outputs
+Current scheduler outputs are runtime response objects with:
+- `message`
+- `suggestions`
+- optional `invoked_action`
 
-## Current State By Layer
+`invoked_action` shape:
+- `type: 'run_pipeline'`
+- `pipeline: string`
+- `status: 'running' | 'completed' | 'failed'`
+- `run_id?: string | null`
 
-### Session Layer
-Current status:
-- minimal only
-- frontend holds message history in component state
-- recent history is sent to the function on each turn
+## Decision Order
+The current scheduler decision order is:
+1. Load recent runs.
+2. Mark stale `running` rows as `failed` when they exceed the runtime window.
+3. Resolve explicit status requests first.
+4. Resolve explicit run requests next.
+5. Respect cancel requests.
+6. Respect confirmation requests.
+7. Only then allow the coordinator model to propose an action.
+8. Route model-approved mutations back through the same scheduler path.
 
-Current file:
-- [chat page](C:\Users\Lusa\tsh-marketing-system\M.A.S%20UI\src\pages\agent\chat.tsx)
+## Stale Run Policy
+Current stale-run rule:
+- any `pipeline_runs` row with `status = 'running'`
+- and `started_at` older than 10 minutes
+- is marked `failed`
+- with `result.error = 'Marked stale after exceeding runtime window'`
 
-Gap:
-- no summarization
-- no persisted conversation store
-- no runtime-side session manager
+This rule exists so old stuck runs do not block new operator requests or pollute status narration.
 
-### Context Builder
-Current status:
-- implemented directly inside the edge function
-- shared state is pulled from Supabase tables inline
+## Pipeline Run Contract
+For an approved run request, the scheduler should:
+1. confirm no active live run remains after stale expiry
+2. invoke the target pipeline function
+3. reload the latest run row for that pipeline
+4. return one of three outcomes:
+   - `running`
+   - `completed`
+   - `failed`
 
-Current file:
-- [coordinator-chat index](C:\Users\Lusa\tsh-marketing-system\supabase\functions\coordinator-chat\index.ts)
+The scheduler should not narrate guessed state when a concrete run row is available.
 
-Current sources:
-- `org_config`
-- `platform_metrics`
-- `pipeline_runs`
-- `academic_calendar`
-- `human_inbox`
+## Status Contract
+For an explicit status request, the scheduler should:
+- return the latest run for the requested pipeline
+- prefer persisted state over model-generated narration
+- describe `running`, `failed`, and `success` states directly
+- include the failure summary when present
 
-Gap:
-- context shaping is ad hoc
-- no dedicated selector utilities
-- no capability-aware filtering yet
+## Guardrails
+Current guardrails:
+- explicit status checks never trigger pipeline execution
+- explicit cancel requests never mutate state
+- only one pipeline invocation should occur in a single request path
+- stale rows are cleaned before deciding whether a new run is allowed
 
-### Coordinator Model Layer
-Current status:
-- present
-- implemented as a single Anthropic call inside `coordinator-chat`
+## Known Gaps
+The scheduler is stable but still incomplete:
+- it is not yet extracted into a dedicated module
+- it does not yet expose a first-class queue or lease system
+- it does not yet enforce full per-request hard limits
+- it does not yet support UI polling by `run_id`
+- it still depends on a one-shot edge function request lifecycle
 
-Current file:
-- [coordinator-chat index](C:\Users\Lusa\tsh-marketing-system\supabase\functions\coordinator-chat\index.ts)
-
-Gap:
-- prompt is still thin
-- personality is light
-- no multi-turn internal orchestration
-
-### Scheduler Layer
-Current status:
-- partial only
-- there is direct action inference and direct pipeline invocation
-- there is not yet a first-class scheduler module
-
-Current file:
-- [coordinator-chat index](C:\Users\Lusa\tsh-marketing-system\supabase\functions\coordinator-chat\index.ts)
-
-Current behavior:
-- infer pipeline target from message or confirmation action
-- optionally invoke pipeline directly
-
-Gap:
-- no normalized scheduler request/result layer
-- no reusable hard-limit enforcement abstraction
-- no capability gating
-
-### Response Formatter
-Current status:
-- partially implemented
-- backend returns message, suggestions, and optional confirmation
-- frontend maps that into the current `samm` UI message components
-
-Current files:
-- [coordinator-chat index](C:\Users\Lusa\tsh-marketing-system\supabase\functions\coordinator-chat\index.ts)
-- [chat page](C:\Users\Lusa\tsh-marketing-system\M.A.S%20UI\src\pages\agent\chat.tsx)
-
-Gap:
-- no shared response schema package
-- frontend error handling still collapses all non-2xx responses into generic failures
-
-## Mapping The Target Loop
-
-### Step 1. Receive operator input
-Current location:
-- [chat page](C:\Users\Lusa\tsh-marketing-system\M.A.S%20UI\src\pages\agent\chat.tsx)
-
-### Step 2. Append to session
-Current location:
-- frontend component state in [chat page](C:\Users\Lusa\tsh-marketing-system\M.A.S%20UI\src\pages\agent\chat.tsx)
-
-Future improvement:
-- move session handling into a shared runtime/session module
-
-### Step 3. Build prompt from session + memory + tools
-Current location:
-- inline in [coordinator-chat index](C:\Users\Lusa\tsh-marketing-system\supabase\functions\coordinator-chat\index.ts)
-
-Future improvement:
-- extract a context builder
-- add capability flags
-- add long-session summarization
-
-### Step 4. Call model
-Current location:
-- Anthropic call in [coordinator-chat index](C:\Users\Lusa\tsh-marketing-system\supabase\functions\coordinator-chat\index.ts)
-
-Future improvement:
-- wrap in a coordinator-model adapter
-- centralize prompt contract and parsing
-
-### Step 5. If no tool calls, finish turn
-Current location:
-- implicit in current JSON contract when `action` is null
-
-Future improvement:
-- make termination explicit in a runtime result object
-
-### Step 6. If tool calls, hand to scheduler
-Current location:
-- not truly separated yet
-
-Required future work:
-- create scheduler module and route all mutations through it
-
-### Step 7. Append tool results to session
-Current location:
-- not implemented as a true loop yet
-
-Required future work:
-- runtime loop that can re-enter the coordinator with scheduler results
-
-### Step 8. Repeat until done or bounded
-Current location:
-- not implemented
-
-Required future work:
-- bounded turn loop with hard controls
-
-## Immediate Refactor Sequence
-The safest next architecture sequence is:
-
-1. Extract scheduler logic from `coordinator-chat` into its own internal module.
-2. Introduce normalized scheduler request/result shapes.
-3. Add hard controls around pipeline invocations and turn count.
-4. Improve backend error normalization so the frontend can show useful failures.
-5. Add capability flags into context selection.
-6. Only after that, consider richer runtime memory or more tools.
-
-## What Not To Do Yet
-Do not yet:
-- redesign the `samm` workspace UI around this architecture
-- add many new tools before the scheduler contract exists
-- add external API actions before the internal execution layer is bounded
-- overcomplicate memory before current turn orchestration is stable
-
-## Current Best Mental Model
-Right now the repo has:
-- a deployed chat-enabled coordinator function
-- a thin action inference layer
-- a good enough frontend shell
-
-It does not yet have:
-- a full runtime loop
-- a first-class scheduler
-- bounded multi-step orchestration
-
-That is the correct next frontier for `samm`.
+## Next Refactor Target
+The next scheduler refactor should:
+1. extract scheduler helpers into a dedicated module
+2. normalize scheduler request/result types
+3. expose `run_id` as a first-class UI polling key
+4. separate scheduler execution from coordinator prompting more cleanly
+5. add capability gating and explicit policy enforcement
