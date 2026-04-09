@@ -63,8 +63,10 @@ export default function AgentOverview() {
                         <p className="mt-0.5 line-clamp-1 text-[12px] text-muted-foreground">{data.description}</p>
                       </div>
                       <div className="flex h-6 w-6 shrink-0 items-center justify-center">
-                        {data.status === "running" && <span className="h-2.5 w-2.5 rounded-full bg-green-500 animate-pulse" />}
+                        {(data.status === "running" || data.status === "resumed") && <span className="h-2.5 w-2.5 rounded-full bg-green-500 animate-pulse" />}
                         {data.status === "success" && <span className="h-2.5 w-2.5 rounded-full bg-green-500" />}
+                        {data.status === "waiting_human" && <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />}
+                        {data.status === "cancelled" && <span className="h-2.5 w-2.5 rounded-full bg-gray-400" />}
                         {data.status === "failed" && <span className="h-2.5 w-2.5 rounded-full bg-red-500" />}
                         {data.status === "idle" && <span className="h-2.5 w-2.5 rounded-full bg-gray-300" />}
                       </div>
@@ -131,12 +133,15 @@ export default function AgentOverview() {
                               variant={
                                 run.status === "success" ? "default" :
                                 run.status === "failed" ? "destructive" :
-                                run.status === "running" ? "secondary" : "outline"
+                                run.status === "running" || run.status === "resumed" ? "secondary" :
+                                run.status === "waiting_human" ? "secondary" : "outline"
                               }
                               className={cn(
                                 "h-5 text-[10px] capitalize",
                                 run.status === "success" && "border-green-200 bg-green-100 text-green-800 hover:bg-green-100",
-                                run.status === "running" && "border-blue-200 bg-blue-100 text-blue-800 hover:bg-blue-100"
+                                (run.status === "running" || run.status === "resumed") && "border-blue-200 bg-blue-100 text-blue-800 hover:bg-blue-100",
+                                run.status === "waiting_human" && "border-amber-200 bg-amber-100 text-amber-800 hover:bg-amber-100",
+                                run.status === "cancelled" && "border-gray-200 bg-gray-100 text-gray-700 hover:bg-gray-100"
                               )}
                             >
                               {run.status}

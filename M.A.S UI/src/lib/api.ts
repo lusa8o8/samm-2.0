@@ -59,6 +59,17 @@ const PIPELINE_DESCRIPTIONS: Record<string, string> = {
 
 const PLATFORM_ORDER = ["facebook", "whatsapp", "youtube", "email"];
 
+const PIPELINE_RUN_STATUS = {
+  idle: 'idle',
+  queued: 'queued',
+  running: 'running',
+  waiting_human: 'waiting_human',
+  resumed: 'resumed',
+  success: 'success',
+  failed: 'failed',
+  cancelled: 'cancelled',
+} as const;
+
 function titleCase(value: string) {
   return value
     .replace(/[_-]/g, " ")

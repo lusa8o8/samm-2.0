@@ -1,3 +1,4 @@
+import { PIPELINE_RUN_STATUS, type PipelineRunStatus } from '../_shared/pipeline-run-status.ts'
 // supabase/functions/coordinator/index.ts
 // ─────────────────────────────────────────────────────────────────────
 // Coordinator — runs daily at 07:00
@@ -174,7 +175,7 @@ async function startRun(
 ): Promise<string> {
   const { data } = await supabase
     .from('pipeline_runs')
-    .insert({ org_id: orgId, pipeline, status: 'running' })
+    .insert({ org_id: orgId, pipeline, status: PIPELINE_RUN_STATUS.RUNNING })
     .select('id')
     .single()
   return data?.id
@@ -183,7 +184,7 @@ async function startRun(
 async function finishRun(
   supabase: any,
   runId: string,
-  status: string,
+  status: PipelineRunStatus,
   result: unknown
 ) {
   await supabase

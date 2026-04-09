@@ -1,3 +1,9 @@
+import {
+  PIPELINE_RUN_STATUS,
+  isPipelineRunBlocking,
+  isPipelineRunExecuting,
+} from '../_shared/pipeline-run-status.ts'
+
 const PIPELINE_TARGETS: Record<string, string> = {
   coordinator: 'coordinator',
   'pipeline-a-engagement': 'pipeline-a-engagement',
@@ -27,7 +33,7 @@ export type ChatResponse = {
   invoked_action?: {
     type: 'run_pipeline'
     pipeline: string
-    status: 'queued' | 'running' | 'completed' | 'failed'
+    status: 'queued' | 'running' | 'waiting_human' | 'resumed' | 'completed' | 'failed' | 'cancelled'
     run_id?: string | null
   } | null
 }
@@ -102,7 +108,7 @@ export function inferPipelineTarget(text: string): PipelineTarget | null {
 }
 
 function isStaleRunningRun(row: any) {
-  if (row?.status != 'running') return false
+  if (!isPipelineRunExecuting(row?.status)) return false
 
   const startedAt = row?.started_at ?? row?.created_at
   if (!startedAt) return false
@@ -124,7 +130,7 @@ export async function expireStaleRuns(supabase: any, rows: any[]) {
   await supabase
     .from('pipeline_runs')
     .update({
-      status: 'failed',
+      status: PIPELINE_RUN_STATUS.FAILED,
       finished_at: new Date().toISOString(),
       result: { error: 'Marked stale after exceeding runtime window' },
     })
@@ -134,7 +140,7 @@ export async function expireStaleRuns(supabase: any, rows: any[]) {
     staleRunIds.includes(row.id)
       ? {
           ...row,
-          status: 'failed',
+          status: PIPELINE_RUN_STATUS.FAILED,
           finished_at: new Date().toISOString(),
           result: { error: 'Marked stale after exceeding runtime window' },
         }
@@ -215,17 +221,32 @@ function formatPipelineStatusResponse(pipeline: PipelineTarget, run: any): ChatR
       })
     : 'unknown time'
 
-  if (run.status === 'running') {
+  if (run.status === PIPELINE_RUN_STATUS.WAITING_HUMAN) {
+    return {
+      message: `${pipeline?.title ?? 'That pipeline'} is waiting on human approval before it can continue.`,
+      suggestions: ['What needs my approval?', 'Check pipeline results', 'Summarize this week'],
+    }
+  }
+
+  if (run.status === PIPELINE_RUN_STATUS.RUNNING || run.status === PIPELINE_RUN_STATUS.RESUMED) {
     return {
       message: `${pipeline?.title ?? 'That pipeline'} is currently running (started ${startedLabel}, ${formatElapsed(startedAt)} ago).`,
       suggestions: ['Check pipeline results', 'What needs my approval?', 'Summarize this week'],
     }
   }
 
-  if (run.status === 'failed') {
+  if (run.status === PIPELINE_RUN_STATUS.FAILED) {
     const reason = run.result?.error ?? run.result_summary ?? 'No failure summary recorded.'
     return {
       message: `${pipeline?.title ?? 'That pipeline'} last failed at ${startedLabel}. ${reason}`,
+      suggestions: ['Run the engagement pipeline', 'Check pipeline results', 'What needs my approval?'],
+    }
+  }
+
+  if (run.status === PIPELINE_RUN_STATUS.CANCELLED) {
+    const reason = run.result?.error ?? run.result_summary ?? 'No cancellation summary recorded.'
+    return {
+      message: `${pipeline?.title ?? 'That pipeline'} was cancelled at ${startedLabel}. ${reason}`,
       suggestions: ['Run the engagement pipeline', 'Check pipeline results', 'What needs my approval?'],
     }
   }
@@ -240,15 +261,21 @@ function formatPipelineStatusResponse(pipeline: PipelineTarget, run: any): ChatR
 async function schedulePipelineRun(supabase: any, pipeline: PipelineTarget, orgId: string, runs: any[]): Promise<ChatResponse> {
   const latestRun = getLatestPipelineRun(runs, pipeline.id)
 
-  if (latestRun?.status === 'running') {
+  if (isPipelineRunBlocking(latestRun?.status)) {
     const startedAt = latestRun.started_at ?? latestRun.created_at ?? null
     return {
-      message: `${pipeline.title} is already running (started ${formatElapsed(startedAt)} ago).`,
+      message: latestRun?.status === PIPELINE_RUN_STATUS.WAITING_HUMAN
+        ? `${pipeline.title} is waiting on human approval before it can continue.`
+        : `${pipeline.title} is already running (started ${formatElapsed(startedAt)} ago).`,
       suggestions: ['Check pipeline results', 'What needs my approval?', 'Summarize this week'],
       invoked_action: {
         type: 'run_pipeline',
         pipeline: pipeline.id,
-        status: 'running',
+        status: latestRun?.status === PIPELINE_RUN_STATUS.WAITING_HUMAN
+          ? PIPELINE_RUN_STATUS.WAITING_HUMAN
+          : latestRun?.status === PIPELINE_RUN_STATUS.RESUMED
+            ? PIPELINE_RUN_STATUS.RESUMED
+            : PIPELINE_RUN_STATUS.RUNNING,
         run_id: latestRun.id ?? null,
       },
     }
@@ -257,20 +284,20 @@ async function schedulePipelineRun(supabase: any, pipeline: PipelineTarget, orgI
   await invokePipeline(supabase, pipeline.id, orgId)
   const refreshedRun = await fetchLatestPipelineRun(supabase, orgId, pipeline.id)
 
-  if (refreshedRun?.status === 'failed') {
+  if (refreshedRun?.status === PIPELINE_RUN_STATUS.FAILED) {
     return {
       message: `${pipeline.title} failed immediately. ${refreshedRun.result?.error ?? 'No failure summary recorded.'}`,
       suggestions: ['Check pipeline results', 'What needs my approval?', 'Summarize this week'],
       invoked_action: {
         type: 'run_pipeline',
         pipeline: pipeline.id,
-        status: 'failed',
+        status: PIPELINE_RUN_STATUS.FAILED,
         run_id: refreshedRun.id ?? null,
       },
     }
   }
 
-  if (refreshedRun?.status === 'success') {
+  if (refreshedRun?.status === PIPELINE_RUN_STATUS.SUCCESS) {
     return {
       message: `${pipeline.title} completed successfully. ${refreshedRun.result_summary ?? refreshedRun.result?.error ?? 'The latest run is now reflected in workspace state.'}`,
       suggestions: ['Check pipeline results', 'What needs my approval?', 'Summarize this week'],
@@ -289,7 +316,7 @@ async function schedulePipelineRun(supabase: any, pipeline: PipelineTarget, orgI
     invoked_action: {
       type: 'run_pipeline',
       pipeline: pipeline.id,
-      status: 'running',
+      status: PIPELINE_RUN_STATUS.RUNNING,
       run_id: refreshedRun?.id ?? null,
     },
   }

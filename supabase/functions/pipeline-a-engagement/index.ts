@@ -1,3 +1,4 @@
+import { PIPELINE_RUN_STATUS, type PipelineRunStatus } from '../_shared/pipeline-run-status.ts'
 // supabase/functions/pipeline-a-engagement/index.ts
 // ─────────────────────────────────────────────────────────────────────
 // Pipeline A — Daily Engagement
@@ -490,7 +491,7 @@ async function startRun(
     .insert({
       org_id: orgId,
       pipeline,
-      status: 'running',
+      status: PIPELINE_RUN_STATUS.RUNNING,
       started_at: new Date().toISOString()
     })
     .select('id')
@@ -502,7 +503,7 @@ async function startRun(
 async function finishRun(
   supabase: any,
   runId: string,
-  status: string,
+  status: PipelineRunStatus,
   result: unknown
 ) {
   if (!runId) return
