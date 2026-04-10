@@ -498,6 +498,57 @@ Three verified paths:
 Commit policy:
 - stable commit `49decf2` after browser verification of all three paths
 
+## Milestone 7E: Design Brief To Content Registry + Image Upload + Share
+Status:
+- next slice
+
+Goal:
+- move design brief out of Inbox and into Content Registry alongside the campaign copy cards
+- harden the Inbox boundary: only workflow gates, reports, escalations, and performance suggestions
+- allow marketers to attach images to content cards
+- allow design briefs to be shared with designers directly from Content Registry
+
+Why:
+- design brief and copy cards currently land in different surfaces (Inbox vs Content Registry) — marketer must context-switch to review them
+- co-locating them in Content Registry under the same campaign group enables side-by-side review and keeps alignment visible
+- editing copy and the design brief independently across two pages creates misalignment risk
+- image upload belongs at draft stage so the marketer approves a complete post (copy + visual) before it is scheduled
+
+Design decisions locked:
+- design brief inserts into `content_registry` with `platform: 'design_brief'`, not into `human_inbox`
+- design brief card renders differently: Edit + Share (WhatsApp, email, Telegram, clipboard) + Approve (future Canva hook)
+- no Approve/Reject on design brief until a design tool integration exists — Approve is the future Canva trigger
+- actually: keep Approve on the card as the future Canva hook; share is the current manual path
+- design brief is included in the campaign group alongside copy cards (same `pipeline_run_id`)
+- image upload is direct browser-to-Supabase-Storage — zero edge function involvement
+- `media_url` column added to `content_registry` for image attachment
+- image attachable on draft cards (before approval); marketer approves complete post (copy + image)
+- Inbox after this slice: campaign brief (CEO gate), reports, performance suggestions, escalations, revision requests, ambassador flags only
+
+Scope:
+- `pipeline-c-campaign/index.ts`: change design brief insert from `human_inbox` to `content_registry` with `platform: 'design_brief'`
+- migration: add `media_url text` column to `content_registry`
+- `content.tsx`: render design brief cards differently (Edit + Share + Approve); image upload on copy cards
+- `api.ts`: add `useUploadContentImage` mutation (Storage upload + patch `media_url`)
+- share button: static dropdown with WhatsApp / email / Telegram / copy-to-clipboard — no API call
+
+Do not include:
+- Canva integration (future milestone)
+- linked field propagation between copy cards and design brief (future)
+- image upload on design brief cards (brief is text only)
+
+Verification:
+- after Pipeline C run, Content Registry Drafts tab shows 6 copy cards + 1 design brief card, all grouped under the campaign
+- design brief card shows Edit, Share, and Approve actions; no Approve/Reject pair on copy cards changes
+- share dropdown opens with WhatsApp / email / Telegram / clipboard options, pre-populated with brief content
+- image can be attached to a draft copy card; thumbnail appears on the card
+- approving a copy card with an image attached schedules it correctly
+- Inbox no longer receives design brief items after this slice
+- all previous Pipeline C flows (CEO gate, marketer gate, rejection loop) still work unchanged
+
+Commit policy:
+- one stable commit after browser verification of all paths
+
 ## Milestone 8: Onboarding And Capability Templates
 Goal:
 - make multi-client onboarding a first-class system path

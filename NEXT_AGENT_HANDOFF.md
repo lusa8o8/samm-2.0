@@ -80,16 +80,16 @@ Committed and pushed:
 - `SAMM_FULL_SYSTEM_ARCHITECTURE.md`
 
 ## Latest Important Commits
+- `2d7db3a fix: map fyi mark-read action to actioned status (not read)`
 - `49decf2 feat: marketer approval gate with inline edit and rejection loop (Milestone 7D)`
 - `40592f0 feat: batch approval in Content Registry (Milestone 7C)`
 - `405500c fix: boost suggestion priority fyi, document Pipeline A stubs and Milestone 5B`
 - `82fea3f feat: content registry as approval surface for copy assets (Milestone 7B)`
-- `803b9b0 feat: two-phase copy generation for Pipeline C (Milestone 7A)`
 
 All committed to `main`. Push to remote with: `/mingw64/bin/git -C "C:/Users/Lusa/tsh-marketing-system" push origin main`
 
 ## Current Status
-Stable through Milestone 7D.
+Stable through Milestone 7D + mark-read fix.
 
 ### Pipeline C end-to-end verified flow:
 1. `/samm` triggers Pipeline C → `running`
@@ -134,28 +134,55 @@ Already fixed this session:
 - boost suggestion priority changed from `normal` to `fyi` — shows "Mark read" instead of Approve/Reject, since the reply is already written before the inbox item is created
 
 ## Exact Next Slice
-### Milestone 8: Onboarding And Capability Templates
-
-Milestones 7 through 7D are all complete. The next slice is Milestone 8.
+### Milestone 7E: Design Brief To Content Registry + Image Upload + Share
 
 ### Goal
-Make multi-client onboarding a first-class system path so a new org can be provisioned without manual table surgery.
+- Move design brief out of Inbox into Content Registry alongside the campaign copy cards
+- Harden the Inbox boundary to workflow gates, reports, escalations, and suggestions only
+- Allow image attachment on draft copy cards
+- Add share action on design brief cards
 
-### Scope
-- org bootstrap template
-- default `org_config` values
-- default capability flags per plan tier
-- default KPI targets
-- default pipeline enablement
-- default adapter registrations per plan tier
+### Locked plan
 
-### After Milestone 8
+**`supabase/functions/pipeline-c-campaign/index.ts`**
+- Change design brief insert from `human_inbox` to `content_registry`
+- Use `platform: 'design_brief'`, same `pipeline_run_id` and `campaign_name` as copy cards
+- Status: `draft` (appears in Drafts tab alongside copy cards)
+- Keep insert in stage 2 (after copy approval, in the resume → monitor → report phase) — NOT before the marketer gate
+
+**Migration**
+- Add `media_url text` to `content_registry`
+
+**`M.A.S UI/src/lib/api.ts`**
+- Add `useUploadContentImage`: uploads file to Supabase Storage, patches `media_url` on the row
+- Storage bucket: `content-media` (create if not exists, public read)
+
+**`M.A.S UI/src/pages/content.tsx`**
+- Design brief card: detect `platform === 'design_brief'`, render Edit + Share + Approve (not Approve/Reject pair)
+- Share dropdown: WhatsApp (`wa.me/?text=...`), email (`mailto:?subject=...&body=...`), Telegram (`t.me/share/url?text=...`), copy to clipboard — all static, no API
+- Copy cards: add image upload button (file input) → calls `useUploadContentImage` → shows thumbnail on card
+- Image upload available on `draft` and `scheduled` cards
+
+### Inbox boundary after this slice
+Only these item types route to Inbox:
+- `campaign_brief` — CEO approval gate
+- `campaign_report` — post-run report
+- `weekly_report` — Pipeline B report
+- `escalation` — complaint escalation from Pipeline A
+- `suggestion` — performance suggestions (boost, underperforming) — FYI priority
+- `revision_request` — rejection feedback loop signal
+- `ambassador_flag` — ambassador check-in
+
+Design brief (`suggestion` with `payload.type === 'design_brief'`) no longer routes to Inbox.
+
+### After Milestone 7E
+- Milestone 8: onboarding and capability templates
 - Milestone 9: usage metering and billing enforcement
-- Milestone 5B (can be done any time): enable real LLM classification and reply generation in Pipeline A
-- Milestone 10: live API swaps behind adapters (includes real comment fetching for Pipeline A)
+- Milestone 5B (any time): real LLM in Pipeline A
+- Milestone 10: live API swaps
 
 ### Architecture vision to carry forward
-The user has confirmed the system should be "super modular — lego set up and plugin modular." Every new capability should be addable without touching existing pipelines. Inbox is the routing surface for workflow decisions; Content Registry is the review surface for content. Do not blur this boundary.
+The system is "super modular — lego set up and plugin modular." Inbox = workflow decisions and signals. Content Registry = all content assets including briefs. Design tool integrations (Canva, Adobe Express) add named buttons to the design brief card when connected — they do not repurpose generic Approve/Reject.
 
 ## Relevant Files
 ### Frontend
