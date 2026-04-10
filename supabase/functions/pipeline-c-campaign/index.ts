@@ -342,8 +342,11 @@ async function resumePipelineCRun(params: { supabase: any; anthropic: Anthropic;
         .eq('pipeline_run_id', runId)
         .eq('org_id', context.orgId)
 
-      const rejected = (draftRows ?? []).filter((r: any) => r.status === 'rejected')
-      const stillDraft = (draftRows ?? []).filter((r: any) => r.status === 'draft')
+      // Exclude design_brief — it is not a copy gate. Its approval status is independent
+      // of the marketer review and must not block pipeline resume.
+      const copyRows = (draftRows ?? []).filter((r: any) => r.platform !== 'design_brief')
+      const rejected = copyRows.filter((r: any) => r.status === 'rejected')
+      const stillDraft = copyRows.filter((r: any) => r.status === 'draft')
 
       if (rejected.length > 0) {
         // At least one draft was rejected — create revision request and pause
