@@ -575,7 +575,7 @@ export function useRetryContent(options?: MutationHookOptions) {
 
 export function useActionContent(options?: MutationHookOptions) {
   return useMutation({
-    mutationFn: async ({ id, pipelineRunId, data }: { id: string; pipelineRunId?: string | null; data: { action: "approve" | "reject"; note?: string } }) => {
+    mutationFn: async ({ id, pipelineRunId, platform, data }: { id: string; pipelineRunId?: string | null; platform?: string | null; data: { action: "approve" | "reject"; note?: string } }) => {
       const patch: Record<string, unknown> =
         data.action === "approve"
           ? { status: "scheduled" }
@@ -596,18 +596,19 @@ export function useActionContent(options?: MutationHookOptions) {
         await requestPipelineBResume();
       }
 
-      // Pipeline C resume gate
-      if (pipelineRunId) {
+      // Pipeline C resume gate — design_brief rows are not copy gates, skip entirely
+      if (pipelineRunId && platform !== "design_brief") {
         if (data.action === "reject") {
           // Rejection always triggers resume so pipeline can create revision item
           await requestPipelineCResume();
         } else {
-          // Approve: only trigger if no draft rows remain for this run
+          // Approve: only trigger if no copy draft rows remain for this run
           const { count } = await supabase
             .from("content_registry")
             .select("id", { count: "exact", head: true })
             .eq("pipeline_run_id", pipelineRunId)
             .eq("status", "draft")
+            .neq("platform", "design_brief")
             .eq("org_id", ORG_ID);
 
           if ((count ?? 0) === 0) {
@@ -630,6 +631,7 @@ export function useBatchApproveContent(options?: MutationHookOptions) {
         .update({ status: "scheduled" })
         .eq("pipeline_run_id", pipelineRunId)
         .eq("status", "draft")
+        .neq("platform", "design_brief")
         .eq("org_id", ORG_ID);
 
       if (error) throw error;
@@ -660,6 +662,36 @@ export function useEditContent(options?: MutationHookOptions) {
 
       if (error) throw error;
       return { id };
+    },
+    ...options?.mutation,
+  });
+}
+
+export function useUploadContentImage(options?: MutationHookOptions) {
+  return useMutation({
+    mutationFn: async ({ id, file }: { id: string; file: File }) => {
+      const ext = file.name.split(".").pop() ?? "jpg";
+      const path = `${ORG_ID}/${id}.${ext}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("content-media")
+        .upload(path, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from("content-media")
+        .getPublicUrl(path);
+
+      const { error: updateError } = await supabase
+        .from("content_registry")
+        .update({ media_url: publicUrl })
+        .eq("id", id)
+        .eq("org_id", ORG_ID);
+
+      if (updateError) throw updateError;
+
+      return { id, media_url: publicUrl };
     },
     ...options?.mutation,
   });

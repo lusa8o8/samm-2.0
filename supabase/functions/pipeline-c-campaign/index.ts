@@ -421,13 +421,15 @@ async function resumePipelineCRun(params: { supabase: any; anthropic: Anthropic;
         })
     }
 
-    await supabase.from('human_inbox').insert({
+    await supabase.from('content_registry').insert({
       org_id: context.orgId,
-      item_type: 'suggestion',
-      priority: 'normal',
-      payload: { type: 'design_brief', campaign_name: campaignBrief.name, brief: designBrief },
-      created_by_pipeline: 'pipeline-c-campaign',
-      created_by_agent: getAgentDefinition('design_brief_agent').id
+      platform: 'design_brief',
+      body: designBrief,
+      status: 'draft',
+      is_campaign_post: true,
+      campaign_name: campaignBrief.name,
+      pipeline_run_id: runId,
+      created_by: 'pipeline-c-campaign'
     })
 
     results.design_brief_sent = true
