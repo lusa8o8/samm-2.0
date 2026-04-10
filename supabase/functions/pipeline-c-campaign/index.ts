@@ -711,7 +711,7 @@ async function runDesignBriefAgent(
     model: 'claude-sonnet-4-5',
     max_tokens: 300,
     system: `Write a concise design brief for a student-focused EdTech campaign flyer.
-Plain text, bullet points, under 150 words.`,
+Plain text only. No markdown, no asterisks, no bold, no headers. Use plain bullet points with a dash (-). Under 150 words.`,
     messages: [{
       role: 'user',
       content: `Campaign: ${brief.name}
