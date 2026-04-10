@@ -136,35 +136,47 @@ Already fixed this session:
 - boost suggestion priority changed from `normal` to `fyi` — shows "Mark read" instead of Approve/Reject, since the reply is already written before the inbox item is created
 
 ## Exact Next Slice
-### Milestone 8: Onboarding And Capability Templates
+### Milestone 8: Multi-Tenant Infrastructure
 
 Milestones 7 through 7E are all complete. The next slice is Milestone 8.
 
-### Goal
-Make multi-client onboarding a first-class system path so a new org can be provisioned without manual table surgery.
+### What is already built
+- Supabase auth (login/signup screen exists, branded as samm)
+- `org_config` table with `brand_voice`, `kpi_targets`, `org_name`, `timezone`
+- All pipeline DB queries already scope by `org_id` — data isolation is complete
+- `coordinator-chat` reads `org_id` from `user.app_metadata?.org_id`
 
-### Scope
-- org bootstrap template
-- default `org_config` values
-- default capability flags per plan tier
-- default KPI targets
-- default pipeline enablement
-- default adapter registrations per plan tier
+### What needs building
+1. **Frontend org resolution** — replace hardcoded `ORG_ID` constant in `supabase.ts` with a function that reads `org_id` from the auth session. Propagate to all `api.ts` query hooks.
+2. **Auto-provisioning** — edge function or DB trigger that creates a default `org_config` row when a new user signs up. Default includes: brand voice placeholder, default KPI targets, all pipelines enabled.
 
-### After Milestone 8
-- Milestone 9: usage metering and billing enforcement
-- Milestone 5B (any time): real LLM in Pipeline A
-- Milestone 10: live API swaps behind adapters
+### Deferred from this slice
+- Onboarding UI flow (4-5 screen wizard) — Milestone 8B
+- Capability flags and sidebar filtering — after broad integration coverage
+- Progressive narrowing (ambassador vs affiliate vs UGC) — after broad integration coverage
+- Usage metering and billing enforcement
+
+### Full product roadmap
+See `SAMM_IMPLEMENTATION_ROADMAP.md` for full milestone list including:
+- M8B: Onboarding flow UI
+- M9: Copy quality check (Pipeline C phase 3 critic)
+- M10: Editable calendar + NL calendar commands
+- M11: Live platform publishing
+- M12: Multi-channel access (Slack, Teams, WhatsApp, Telegram, email)
+- M13: Voice interface
+- M14: Dashless operation (Google Sheets, Docs, Excel)
+- M15: Visual plugin builder (n8n-style)
+- M16: Sales and CRM integration
 
 ### Architecture vision to carry forward
-The system is "super modular — lego set up and plugin modular." Inbox = workflow decisions and signals. Content Registry = all content assets including briefs. Design tool integrations (Canva, Adobe Express) add named buttons to the design brief card when connected — they do not repurpose generic Approve/Reject.
+Go broad by default — all connectors, agents, and pipelines available to every org. Narrowing comes later via onboarding questions that set capability flags. Each channel (Slack, Teams, WhatsApp) is a plugin in the integration registry — adding a new channel does not touch core scheduler or pipelines. Inbox = workflow decisions. Content Registry = all content assets.
 
 ## Relevant Files
 ### Frontend
 - `M.A.S UI/src/pages/content.tsx` — Content Registry UI, has Drafts tab with Approve/Reject
 - `M.A.S UI/src/pages/inbox.tsx` — Inbox UI
 - `M.A.S UI/src/lib/api.ts` — all mutations: useActionContent, useActionInboxItem, useBatchApproveContent, useEditContent, useUploadContentImage
-- `M.A.S UI/src/lib/supabase.ts` — ORG_ID constant
+- `M.A.S UI/src/lib/supabase.ts` — ORG_ID hardcoded constant (Milestone 8 changes this to session-derived)
 
 ### Supabase
 - `supabase/functions/pipeline-a-engagement/index.ts` — Pipeline A; classifyComment and draftReply are stubbed

@@ -550,76 +550,197 @@ Verification:
 Commit policy:
 - one stable commit after browser verification of all paths
 
-## Milestone 8: Onboarding And Capability Templates
+## Milestone 8: Multi-Tenant Infrastructure
+Status:
+- next slice
+
 Goal:
-- make multi-client onboarding a first-class system path
+- make the system genuinely multi-tenant without manual table surgery
+- frontend reads org identity from the authenticated session, not a hardcoded constant
+- a new org can be provisioned automatically on signup
+
+What is already built:
+- Supabase auth (login/signup screen exists, branded as samm)
+- `org_config` table with `brand_voice`, `kpi_targets`, `org_name`, `timezone`
+- All pipeline DB queries already scope by `org_id` — data isolation is done
+- `coordinator-chat` already reads `org_id` from `user.app_metadata?.org_id`
+
+What is missing:
+- Frontend `ORG_ID` is a hardcoded constant in `supabase.ts` — every UI query ignores the logged-in user
+- No auto-provisioning — creating a second org requires manual SQL inserts
+- No default `org_config` template for new orgs
 
 Scope:
-- org bootstrap template
-- default `org_config`
-- default capability flags
-- default KPI targets
-- default pipeline enablement
-- default adapter registrations per plan tier
+- `supabase.ts`: replace hardcoded `ORG_ID` constant with a function that reads `org_id` from the auth session
+- all `api.ts` query hooks: use session-derived `org_id` instead of the constant
+- edge function or Supabase database trigger: auto-create `org_config` row with sensible defaults when a new user signs up
+- default `org_config` template: brand voice placeholder, default KPI targets, all pipelines enabled, all platform adapters registered
+
+Deferred to a later milestone:
+- onboarding UI flow (the 4-5 screen wizard collecting brand voice, platforms, KPIs, first calendar event)
+- capability flags and sidebar filtering based on business type
+- progressive narrowing (ambassador vs affiliate vs UGC distinction)
+- usage metering and billing tier enforcement
+
+Onboarding philosophy locked:
+- go broad by default — all connectors, agents, and pipelines available to every org
+- narrowing comes later via onboarding questions that set capability flags per org
+- businesses without ambassadors eventually get capability flags that suppress ambassador copy agents, hide ambassador sidebar items, and skip ambassador pipeline steps
+- the agent registry and integration registry already support this — a capability check before an agent runs is a narrow future change
 
 Verification:
-- a new org can be provisioned without manual table surgery
-- disabled capabilities stay hidden from runtime suggestions
+- two separate Supabase auth users each see only their own org's data in the UI
+- a new signup auto-creates an `org_config` row without manual SQL
+- all pipeline runs, inbox items, content, and metrics are correctly scoped to the signed-in user's org
 
 Commit policy:
-- one stable commit for provisioning templates
-- separate stable commit for UI onboarding flow if built at the same time
+- one stable commit for the frontend org resolution change
+- one stable commit for the auto-provisioning trigger/function
 
-## Milestone 9: Usage Metering And Billing Enforcement
+## Milestone 8B: Onboarding Flow UI
+Status:
+- deferred — build after Milestone 8 and broad integration coverage
+
 Goal:
-- make cost and entitlement boundaries explicit before heavy live API usage
+- frictionless first-run experience that collects org identity, brand voice, active platforms, KPIs, and first calendar event
+- redirect to samm workspace on completion
 
 Scope:
-- usage attribution by org, pipeline, agent, and tool event
-- billing tier gates
-- per-tier capability enforcement
-- optional run-frequency limits
+- 4-5 screen wizard on first login
+- brand voice form (tone, always/never say, CTA preference, example posts)
+- platform selection (full integration list — go broad)
+- KPI targets input
+- first calendar event seed
+- writes to `org_config` and `academic_calendar` on completion
 
-Verification:
-- disabled features cannot be triggered through chat or direct UI routes
-- usage records line up with run history
+## Milestone 9: Copy Quality Check (Pipeline C Phase 3)
+Status:
+- planned
 
-Commit policy:
-- one stable commit for metering primitives
-- one stable commit for enforcement behavior
-
-## Milestone 10: Live API Swaps Behind Adapters
 Goal:
-- replace mocks with real providers without changing scheduler or runtime behavior
+- add a critic pass after the 6 parallel platform adapters run
+- ensures copy is consistent with the canonical message and flags weak output before it reaches the marketer
+
+Scope:
+- one LLM critic call that reviews all 6 adapter outputs against the canonical copy
+- flags divergence from headline, CTA, or key fact
+- optionally revises flagged assets before inserting into content_registry
+- keeps the marketer gate unchanged — critic runs before human review, not instead of it
+
+## Milestone 10: Editable Calendar + Natural Language Calendar Commands
+Status:
+- planned
+
+Goal:
+- calendar is fully editable from the UI (add, edit, delete events)
+- users can prompt samm to create or update calendar events in natural language
+- "schedule a post about the UNZA orientation next Friday" resolves the event from the calendar and queues a Pipeline C run
+
+Scope:
+- editable calendar UI (currently read-only)
+- `coordinator-chat` extended to handle calendar create/update commands
+- natural language post drafting against a named event: samm reads calendar, generates copy on demand outside of cron schedule
+- on-demand Pipeline C trigger from a chat command, not just cron
+
+## Milestone 11: Live Platform Publishing
+Status:
+- planned (previously Milestone 10)
+
+Goal:
+- replace mock publish actions with real platform API calls behind the existing adapter interfaces
+- no scheduler or runtime rewrite required — adapters swap mocks for real calls
 
 Scope:
 - Facebook Graph API
 - WhatsApp Business API
 - YouTube Data API
-- email provider
+- email provider (SendGrid or equivalent)
 - StudyHub metrics feed
 
-Verification:
-- adapter failures are surfaced cleanly
-- retries are bounded
-- state writes remain deterministic
-- no scheduler rewrite required
-
 Commit policy:
-- one provider family at a time
-- never batch all live integrations into one release
+- one provider family at a time — never batch all live integrations into one release
+
+## Milestone 12: Multi-Channel Samm Access
+Status:
+- planned
+
+Goal:
+- users can talk to samm from Slack, Teams, WhatsApp, Telegram, or email
+- samm responds, runs pipelines, and routes approvals through whichever channel the user is in
+- the coordinator-chat logic is channel-agnostic — each channel is an input/output adapter
+
+Scope:
+- webhook receiver per channel (Slack, Teams, WhatsApp Business API, Telegram Bot API, email inbound)
+- normalize incoming message to the coordinator-chat format
+- route samm's response back to the originating channel
+- image sharing in DMs: user sends an image → samm queues it as a post with platform and scheduling prompt
+
+Architecture note:
+- each channel is a plugin in the integration registry — adding a new channel does not touch the core scheduler or pipelines
+- approval actions (approve/reject inbox items) routable via channel buttons/reactions where the platform supports it
+
+## Milestone 13: Voice Interface
+Status:
+- planned
+
+Goal:
+- users can speak to samm and receive spoken responses
+- highest wow factor — full pipeline delegation via voice
+
+Scope:
+- speech-to-text input (Whisper API or browser Web Speech API)
+- text-to-speech output for samm responses
+- voice-compatible response formatting (no markdown in spoken output)
+- available in the samm web UI first, then as a channel adapter for WhatsApp voice notes
+
+## Milestone 14: Dashless Operation + External Tool Integrations
+Status:
+- planned
+
+Goal:
+- samm operates inside the user's existing tools without requiring the samm UI
+- reports, content drafts, and campaign results deliverable to Google Sheets, Docs, Excel
+
+Scope:
+- Google Sheets / Excel integration: campaign reports written directly to a connected sheet
+- Google Docs integration: copy assets drafted into a doc for review
+- samm runs entirely via channel access (Slack, Teams, WhatsApp) for users who prefer no additional interface
+
+## Milestone 15: Visual Plugin Builder
+Status:
+- long-term vision
+
+Goal:
+- n8n-style visual interface for connecting integrations, configuring pipelines, and building custom automation flows
+- users add "lego" blocks for channels, tools, and pipeline steps without writing code
+
+Scope:
+- visual canvas for pipeline configuration
+- drag-and-drop connector management
+- capability flag management per org from the visual builder
+- custom trigger and action definitions
+
+## Milestone 16: Sales and CRM Integration
+Status:
+- long-term vision, gated by plan tier
+
+Goal:
+- samm connected to CRM systems (HubSpot, Salesforce, Pipedrive)
+- campaign performance data flows into sales pipeline
+- lead attribution from content engagement back to CRM contacts
 
 ## Cross-Cutting Deferred Workstreams
 These workstreams must remain visible across milestones.
 
-### Onboarding Flow
-Carry through milestones:
-- 6
-- 8
-- 9
+### Cron Scalability
+Current crons are per-pipeline, single-org. At ~20-50 active orgs running concurrent pipelines, move to a proper job queue (Inngest, Trigger.dev, or Supabase queuing). Not a Milestone 8 problem — monitor and address when concurrency becomes a real constraint.
 
-Reason:
-- capability gating and org provisioning shape runtime behavior early
+### Progressive Onboarding Narrowing
+After broad coverage is established, onboarding questions set capability flags that:
+- hide irrelevant sidebar items per org
+- suppress irrelevant agents in pipeline runs
+- skip irrelevant inbox item types
+The agent registry and integration registry already support this — it is a narrow future addition, not an architectural change.
 
 ### Approval UX
 Carry through milestones:
