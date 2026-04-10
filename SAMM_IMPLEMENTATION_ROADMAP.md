@@ -268,10 +268,9 @@ Commit policy:
 
 ## Milestone 7: Add Long-Window Campaign Execution For Pipeline C
 Status:
-- active
-- first CEO brief gate implemented and deployed
-- live verification in progress
-- current blocker is the approval-to-resume handoff after the Inbox `campaign_brief` action
+- complete
+- first CEO brief gate implemented, deployed, and browser-verified end-to-end
+- approval-to-resume handoff confirmed working with real-time UI status updates
 
 Goal:
 - support multi-step campaign workflows with multiple human gates and monitoring loops
@@ -283,36 +282,77 @@ Scope:
 - post-campaign closeout
 - explicit `waiting_human` and `resumed` transitions
 
-Active first slice:
-- add persisted `pipeline_runs` support for Pipeline C
-- replace demo auto-approval of the CEO campaign brief with a real `waiting_human` gate
-- add a resume path that continues only after CEO approval or exits cleanly on rejection
-- keep the first slice narrow and do not yet widen into the marketer draft-approval gate or the monitoring loop resume model
+First slice delivered:
+- persisted `pipeline_runs` support for Pipeline C
+- real `waiting_human` gate after CEO campaign brief creation
+- resume path continues only after CEO approval, exits cleanly to `cancelled` on rejection
+- fire-and-forget resume via `EdgeRuntime.waitUntil` to avoid 54-second gateway timeout
 
-Why this first:
-- it establishes the real long-window execution boundary for Pipeline C
-- it reuses the proven Milestone 6 persisted human-gate pattern from Pipeline B
-- it avoids batching both human gates and the monitoring loop into one risky checkpoint
+Verification completed:
+- Pipeline C run creates a persisted run row and pauses in `waiting_human` after the campaign brief is created
+- the CEO `campaign_brief` is visible and actionable from Inbox
+- approval triggers `resume pipeline c` through `coordinator-chat`
+- run transitions `waiting_human` → `resumed` → `success` in real time without page refresh
+- draft approvals and campaign report land in Inbox after resume
+- full browser end-to-end verified on live hosted environment
 
-Verification:
-- initial Pipeline C run creates a persisted run row and pauses in `waiting_human` after the campaign brief is created
-- the CEO campaign brief is visible and actionable from Inbox
-- resume through scheduler-backed behavior moves the run forward only when the brief is approved
-- rejection exits the run cleanly to `cancelled`
-- a campaign can pause and resume across sessions
-- monitoring alerts land in Inbox
-- post-campaign report completes and closes the workflow cleanly
-
-Current verified state:
-- direct hosted invocation of `pipeline-c-campaign` returns `ok: true` with `waiting_human: true`
-- Operations shows the latest Pipeline C run in `waiting_human`
-- the CEO `campaign_brief` lands in Inbox correctly
-- Inbox approval triggers `resume pipeline c` through `coordinator-chat`
-- the scheduler `resumePipelineRun` bug has been fixed (`a127214`): it now queries for the `waiting_human` run directly rather than relying on the pre-loaded 8-row snapshot
-- end-to-end browser verification of the full approval-to-resume flow is the remaining open step before Milestone 7 first gate is fully closed
+Fixes committed:
+- `a127214`: `resumePipelineRun` now queries `waiting_human` run directly, bypassing the pre-loaded 8-row snapshot
+- `c3cd0af`: pipeline resume is now fire-and-forget via `EdgeRuntime.waitUntil`, eliminating the 54-second synchronous timeout
 
 Commit policy:
-- break this into multiple stable commits, not one large merge
+- stable checkpoint commit after browser verification: complete
+
+## Milestone 7A: Two-Phase Copy Generation For Pipeline C
+Status:
+- next slice
+
+Goal:
+- ensure consistent core messaging across all 6 campaign copy assets before platform adaptation
+
+Why this matters:
+- current copy writer fires 6 independent single-shot LLM calls with no shared state
+- each call independently interprets `brief.key_message` and `brief.call_to_action`
+- results in divergent emphasis, urgency, and phrasing across platforms
+- human reviewers are approving 6 assets that may not tell one coherent story
+
+Design:
+- Phase 1 (1 sequential call): canonical copy writer
+  - inputs: campaign brief, brand voice, event
+  - outputs: { headline, core_body, exact_cta, key_fact }
+  - this is the verbatim source of truth for the campaign message
+- Phase 2 (6 parallel calls): platform adapters
+  - inputs: canonical copy + platform-specific instructions
+  - each adapter tailors format, length, tone only
+  - cannot reinterpret the headline, CTA, or key fact
+  - platform-specific fields (subject line for email, bullet points for ambassador WhatsApp) still vary
+
+Scope:
+- introduce canonical copy writer step in `resumePipelineCRun`
+- pass canonical output as input to all 6 platform adapter calls
+- run phase 2 as `Promise.all` instead of sequential `for` loop
+- update platform adapter prompts to lock the verbatim core
+- keep all downstream DB writes, Inbox inserts, and approval flow unchanged
+
+Benefits:
+- message consistency guaranteed across all platforms
+- faster resume: parallel phase 2 vs current sequential 6-call loop
+- 7 total LLM calls (1 + 6 parallel) instead of 6 sequential
+
+Do not include:
+- self-critique or multi-shot refinement loops (deferred to Milestone 8)
+- changes to the human approval gate or Inbox flow
+- changes to Pipeline A or Pipeline B
+
+Verification:
+- all 6 copy assets share the same headline, CTA, and key fact verbatim
+- platform-specific formatting still differs correctly per platform
+- resume time is visibly faster
+- draft approvals still land in Inbox correctly
+- Operations run still transitions to `success`
+
+Commit policy:
+- one stable commit after browser verification of the two-phase output
 
 ## Milestone 8: Onboarding And Capability Templates
 Goal:
