@@ -6,10 +6,24 @@ export const supabase = createClient(
   import.meta.env.VITE_SUPABASE_ANON_KEY
 );
 
-export const ORG_ID = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11";
+const DEV_ORG_ID = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11";
+
+let _orgId: string = DEV_ORG_ID;
+
+supabase.auth.onAuthStateChange((_event, session) => {
+  _orgId = session?.user?.app_metadata?.org_id ?? DEV_ORG_ID;
+});
+
+export function getOrgId(): string {
+  return _orgId;
+}
 
 export async function signIn(email: string, password: string) {
   return supabase.auth.signInWithPassword({ email, password });
+}
+
+export async function signUp(email: string, password: string) {
+  return supabase.auth.signUp({ email, password });
 }
 
 export async function signOut() {

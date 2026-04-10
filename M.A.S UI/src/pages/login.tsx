@@ -17,7 +17,7 @@ import operatorMonitorImage from "@/assets/login/operator-monitor.jpg";
 import ownerWorkflowImage from "@/assets/login/owner-workflow.jpg";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { signIn } from "@/lib/supabase";
+import { getAccessToken, signIn, signUp, supabase } from "@/lib/supabase";
 
 const audienceTiles = [
   {
@@ -48,15 +48,68 @@ const audienceTiles = [
 
 export default function Login() {
   const [, setLocation] = useLocation();
+  const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState("ops@tsh.com");
   const [password, setPassword] = useState("password123");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  function toggleMode() {
+    setIsSignUp((prev) => !prev);
+    setEmail("");
+    setPassword("");
+    setError(null);
+  }
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
     setIsSubmitting(true);
+
+    if (isSignUp) {
+      const { data, error: signUpError } = await signUp(email, password);
+
+      if (signUpError) {
+        setError(signUpError.message);
+        setIsSubmitting(false);
+        return;
+      }
+
+      const userId = data.user?.id;
+      if (!userId) {
+        setError("Signup succeeded but no user ID returned. Check your email to confirm your account.");
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Provision org — creates org_config + stamps org_id into app_metadata
+      const token = await getAccessToken();
+      const provisionRes = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/provision-org`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token ?? import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          },
+          body: JSON.stringify({ userId, email }),
+        }
+      );
+
+      if (!provisionRes.ok) {
+        const detail = await provisionRes.text();
+        setError(`Org setup failed: ${detail}`);
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Refresh session so the JWT contains the new org_id from app_metadata
+      await supabase.auth.refreshSession();
+
+      setLocation("/inbox");
+      setIsSubmitting(false);
+      return;
+    }
 
     const { error: signInError } = await signIn(email, password);
 
@@ -147,9 +200,13 @@ export default function Login() {
 
               <div className="mt-6 text-center lg:mt-0 lg:text-left">
                 <p className="text-[11px] font-semibold lowercase tracking-[0.24em] text-foreground/72">samm</p>
-                <h2 className="mt-4 text-[2.1rem] font-semibold tracking-tight text-[#0b0b0c]">orchestrate the work</h2>
+                <h2 className="mt-4 text-[2.1rem] font-semibold tracking-tight text-[#0b0b0c]">
+                  {isSignUp ? "create your workspace" : "orchestrate the work"}
+                </h2>
                 <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                  Sign in to review approvals, coordinate execution, and keep your marketing flow aligned.
+                  {isSignUp
+                    ? "Set up your samm account. Your workspace and pipelines will be ready immediately."
+                    : "Sign in to review approvals, coordinate execution, and keep your marketing flow aligned."}
                 </p>
               </div>
 
@@ -187,7 +244,7 @@ export default function Login() {
                     <Input
                       className="h-11 rounded-xl border-black/10 bg-white pl-10 shadow-[0_1px_0_rgba(255,255,255,0.35)]"
                       type="password"
-                      autoComplete="current-password"
+                      autoComplete={isSignUp ? "new-password" : "current-password"}
                       value={password}
                       onChange={(event) => setPassword(event.target.value)}
                       placeholder="Enter your password"
@@ -208,9 +265,22 @@ export default function Login() {
                   type="submit"
                   disabled={isSubmitting}
                 >
-                  {isSubmitting ? "Signing in..." : "Sign in"}
+                  {isSubmitting
+                    ? isSignUp ? "Setting up workspace..." : "Signing in..."
+                    : isSignUp ? "Create workspace" : "Sign in"}
                 </Button>
               </form>
+
+              <p className="mt-5 text-center text-sm text-muted-foreground">
+                {isSignUp ? "Already have an account?" : "Don't have an account?"}{" "}
+                <button
+                  type="button"
+                  className="font-medium text-[#0b0b0c] underline underline-offset-4 hover:opacity-70"
+                  onClick={toggleMode}
+                >
+                  {isSignUp ? "Sign in" : "Create workspace"}
+                </button>
+              </p>
             </div>
           </div>
         </div>

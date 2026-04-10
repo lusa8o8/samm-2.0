@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { FunctionsHttpError } from "@supabase/supabase-js";
-import { getAccessToken, ORG_ID, supabase } from "@/lib/supabase";
+import { getAccessToken, getOrgId, supabase } from "@/lib/supabase";
 
 type QueryHookOptions = { query?: Record<string, any> };
 type MutationHookOptions = { mutation?: Record<string, any> };
@@ -329,7 +329,7 @@ function toStoredBrandVoice(brandVoice: OrgConfig["brand_voice"], current?: any)
 }
 
 async function requireSingleRow(table: string, id: string) {
-  const { data, error } = await supabase.from(table).select("*").eq("org_id", ORG_ID).eq("id", id).single();
+  const { data, error } = await supabase.from(table).select("*").eq("org_id", getOrgId()).eq("id", id).single();
   if (error) throw error;
   return data;
 }
@@ -371,7 +371,7 @@ async function requestPipelineBResume() {
       message: "resume pipeline b",
       history: [],
       confirmationAction: null,
-      orgId: ORG_ID,
+      orgId: getOrgId(),
     },
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -395,7 +395,7 @@ async function requestPipelineCResume() {
       message: "resume pipeline c",
       history: [],
       confirmationAction: null,
-      orgId: ORG_ID,
+      orgId: getOrgId(),
     },
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -408,27 +408,27 @@ async function requestPipelineCResume() {
 }
 
 export function getGetInboxSummaryQueryKey() {
-  return ["inbox-summary", ORG_ID] as const;
+  return ["inbox-summary", getOrgId()] as const;
 }
 
 export function getListInboxItemsQueryKey(params?: InboxFilter) {
-  return ["inbox-items", ORG_ID, params ?? {}] as const;
+  return ["inbox-items", getOrgId(), params ?? {}] as const;
 }
 
 export function getListContentQueryKey(params?: ContentFilter) {
-  return ["content-registry", ORG_ID, params ?? {}] as const;
+  return ["content-registry", getOrgId(), params ?? {}] as const;
 }
 
 export function getGetOrgConfigQueryKey() {
-  return ["org-config", ORG_ID] as const;
+  return ["org-config", getOrgId()] as const;
 }
 
 export function getListAmbassadorsQueryKey() {
-  return ["ambassadors", ORG_ID] as const;
+  return ["ambassadors", getOrgId()] as const;
 }
 
 export function getListCalendarEventsQueryKey() {
-  return ["calendar-events", ORG_ID] as const;
+  return ["calendar-events", getOrgId()] as const;
 }
 
 export function useGetInboxSummary(options?: QueryHookOptions) {
@@ -438,7 +438,7 @@ export function useGetInboxSummary(options?: QueryHookOptions) {
       const { count, error } = await supabase
         .from("human_inbox")
         .select("*", { count: "exact", head: true })
-        .eq("org_id", ORG_ID)
+        .eq("org_id", getOrgId())
         .eq("status", "pending");
 
       if (error) throw error;
@@ -455,7 +455,7 @@ export function useListInboxItems(params: InboxFilter = {}, options?: QueryHookO
       let query = supabase
         .from("human_inbox")
         .select("*")
-        .eq("org_id", ORG_ID)
+        .eq("org_id", getOrgId())
         .order("created_at", { ascending: false });
 
       if (params.status) query = query.eq("status", params.status);
@@ -491,7 +491,7 @@ export function useActionInboxItem(options?: MutationHookOptions) {
           actioned_by: "ui",
         })
         .eq("id", id)
-        .eq("org_id", ORG_ID);
+        .eq("org_id", getOrgId());
 
       if (inboxError) throw inboxError;
 
@@ -507,7 +507,7 @@ export function useActionInboxItem(options?: MutationHookOptions) {
             .from("content_registry")
             .update(contentPatch)
             .eq("id", contentId)
-            .eq("org_id", ORG_ID);
+            .eq("org_id", getOrgId());
 
           if (contentError) throw contentError;
         }
@@ -534,7 +534,7 @@ export function useListContent(params: ContentFilter = {}, options?: QueryHookOp
       let query = supabase
         .from("content_registry")
         .select("*")
-        .eq("org_id", ORG_ID)
+        .eq("org_id", getOrgId())
         .order("scheduled_at", { ascending: true })
         .order("created_at", { ascending: false });
 
@@ -564,7 +564,7 @@ export function useRetryContent(options?: MutationHookOptions) {
           status: "pending_approval",
         })
         .eq("id", id)
-        .eq("org_id", ORG_ID);
+        .eq("org_id", getOrgId());
 
       if (error) throw error;
       return { id };
@@ -581,7 +581,7 @@ export function useActionContent(options?: MutationHookOptions) {
           ? { status: "scheduled" }
           : { status: "rejected", rejection_note: data.note ?? null };
 
-      const { error } = await supabase.from("content_registry").update(patch).eq("id", id).eq("org_id", ORG_ID);
+      const { error } = await supabase.from("content_registry").update(patch).eq("id", id).eq("org_id", getOrgId());
       if (error) throw error;
 
       // Pipeline B resume: check for linked weekly draft_approval inbox rows
@@ -590,7 +590,7 @@ export function useActionContent(options?: MutationHookOptions) {
         .select("id, created_by_pipeline")
         .eq("ref_id", id)
         .eq("item_type", "draft_approval")
-        .eq("org_id", ORG_ID);
+        .eq("org_id", getOrgId());
 
       if ((relatedInboxRows ?? []).some((row: any) => row.created_by_pipeline === "pipeline-b-weekly")) {
         await requestPipelineBResume();
@@ -609,7 +609,7 @@ export function useActionContent(options?: MutationHookOptions) {
             .eq("pipeline_run_id", pipelineRunId)
             .eq("status", "draft")
             .neq("platform", "design_brief")
-            .eq("org_id", ORG_ID);
+            .eq("org_id", getOrgId());
 
           if ((count ?? 0) === 0) {
             await requestPipelineCResume();
@@ -632,7 +632,7 @@ export function useBatchApproveContent(options?: MutationHookOptions) {
         .eq("pipeline_run_id", pipelineRunId)
         .eq("status", "draft")
         .neq("platform", "design_brief")
-        .eq("org_id", ORG_ID);
+        .eq("org_id", getOrgId());
 
       if (error) throw error;
 
@@ -658,7 +658,7 @@ export function useEditContent(options?: MutationHookOptions) {
         .update(patch)
         .eq("id", id)
         .in("status", ["draft", "rejected"])
-        .eq("org_id", ORG_ID);
+        .eq("org_id", getOrgId());
 
       if (error) throw error;
       return { id };
@@ -671,7 +671,7 @@ export function useUploadContentImage(options?: MutationHookOptions) {
   return useMutation({
     mutationFn: async ({ id, file }: { id: string; file: File }) => {
       const ext = file.name.split(".").pop() ?? "jpg";
-      const path = `${ORG_ID}/${id}.${ext}`;
+      const path = `${getOrgId()}/${id}.${ext}`;
 
       const { error: uploadError } = await supabase.storage
         .from("content-media")
@@ -687,7 +687,7 @@ export function useUploadContentImage(options?: MutationHookOptions) {
         .from("content_registry")
         .update({ media_url: publicUrl })
         .eq("id", id)
-        .eq("org_id", ORG_ID);
+        .eq("org_id", getOrgId());
 
       if (updateError) throw updateError;
 
@@ -699,12 +699,12 @@ export function useUploadContentImage(options?: MutationHookOptions) {
 
 export function useGetPipelinesStatus(options?: QueryHookOptions) {
   return useQuery({
-    queryKey: options?.query?.queryKey ?? ["pipeline-status", ORG_ID],
+    queryKey: options?.query?.queryKey ?? ["pipeline-status", getOrgId()],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("pipeline_runs")
         .select("*")
-        .eq("org_id", ORG_ID)
+        .eq("org_id", getOrgId())
         .order("started_at", { ascending: false })
         .limit(40);
 
@@ -742,12 +742,12 @@ function formatPipelineStatus(key: string, row?: any) {
 
 export function useListPipelineRuns(params: PipelineRunsFilter = {}, options?: QueryHookOptions) {
   return useQuery({
-    queryKey: options?.query?.queryKey ?? ["pipeline-runs", ORG_ID, params],
+    queryKey: options?.query?.queryKey ?? ["pipeline-runs", getOrgId(), params],
     queryFn: async () => {
       let query = supabase
         .from("pipeline_runs")
         .select("*")
-        .eq("org_id", ORG_ID)
+        .eq("org_id", getOrgId())
         .order("started_at", { ascending: false });
 
       if (params.limit) query = query.limit(params.limit);
@@ -772,7 +772,7 @@ export function useGetOrgConfig(options?: QueryHookOptions) {
   return useQuery({
     queryKey: options?.query?.queryKey ?? getGetOrgConfigQueryKey(),
     queryFn: async () => {
-      const { data, error } = await supabase.from("org_config").select("*").eq("org_id", ORG_ID).single();
+      const { data, error } = await supabase.from("org_config").select("*").eq("org_id", getOrgId()).single();
       if (error) throw error;
       return normalizeOrgConfig(data);
     },
@@ -786,7 +786,7 @@ export function useUpdateOrgConfig(options?: MutationHookOptions) {
       const { data: current, error: currentError } = await supabase
         .from("org_config")
         .select("*")
-        .eq("org_id", ORG_ID)
+        .eq("org_id", getOrgId())
         .single();
 
       if (currentError) throw currentError;
@@ -817,7 +817,7 @@ export function useUpdateOrgConfig(options?: MutationHookOptions) {
       const { data: updated, error } = await supabase
         .from("org_config")
         .update(patch)
-        .eq("org_id", ORG_ID)
+        .eq("org_id", getOrgId())
         .select("*")
         .single();
 
@@ -835,7 +835,7 @@ export function useListAmbassadors(options?: QueryHookOptions) {
       const { data, error } = await supabase
         .from("ambassador_registry")
         .select("*")
-        .eq("org_id", ORG_ID)
+        .eq("org_id", getOrgId())
         .order("weekly_reach", { ascending: false });
 
       if (error) throw error;
@@ -852,7 +852,7 @@ export function useUpdateAmbassador(options?: MutationHookOptions) {
         .from("ambassador_registry")
         .update(data)
         .eq("id", id)
-        .eq("org_id", ORG_ID)
+        .eq("org_id", getOrgId())
         .select("*")
         .single();
 
@@ -866,7 +866,7 @@ export function useUpdateAmbassador(options?: MutationHookOptions) {
 export function useDeleteAmbassador(options?: MutationHookOptions) {
   return useMutation({
     mutationFn: async ({ id }: { id: string }) => {
-      const { error } = await supabase.from("ambassador_registry").delete().eq("id", id).eq("org_id", ORG_ID);
+      const { error } = await supabase.from("ambassador_registry").delete().eq("id", id).eq("org_id", getOrgId());
       if (error) throw error;
       return { id };
     },
@@ -879,7 +879,7 @@ export function useCreateAmbassador(options?: MutationHookOptions) {
     mutationFn: async ({ data }: { data: { name: string; university: string; weekly_reach: number } }) => {
       const payload = {
         ...data,
-        org_id: ORG_ID,
+        org_id: getOrgId(),
         status: "active",
       };
 
@@ -903,7 +903,7 @@ export function useListCalendarEvents(options?: QueryHookOptions) {
       const { data, error } = await supabase
         .from("academic_calendar")
         .select("*")
-        .eq("org_id", ORG_ID)
+        .eq("org_id", getOrgId())
         .order("event_date", { ascending: true });
 
       if (error) throw error;
@@ -922,7 +922,7 @@ export function useCreateCalendarEvent(options?: MutationHookOptions) {
     }) => {
       const payload = {
         ...data,
-        org_id: ORG_ID,
+        org_id: getOrgId(),
         triggered: false,
         lead_days: 21,
         pipeline_trigger: "pipeline_c",
@@ -943,12 +943,12 @@ export function useCreateCalendarEvent(options?: MutationHookOptions) {
 
 export function useListMetrics(options?: QueryHookOptions) {
   return useQuery({
-    queryKey: options?.query?.queryKey ?? ["platform-metrics", ORG_ID],
+    queryKey: options?.query?.queryKey ?? ["platform-metrics", getOrgId()],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("platform_metrics")
         .select("*")
-        .eq("org_id", ORG_ID)
+        .eq("org_id", getOrgId())
         .order("snapshot_date", { ascending: false })
         .limit(40);
 
@@ -993,12 +993,12 @@ export function useListMetrics(options?: QueryHookOptions) {
 
 export function useGetMetricsSparklines(options?: QueryHookOptions) {
   return useQuery({
-    queryKey: options?.query?.queryKey ?? ["platform-metric-sparklines", ORG_ID],
+    queryKey: options?.query?.queryKey ?? ["platform-metric-sparklines", getOrgId()],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("platform_metrics")
         .select("platform, signups, snapshot_date")
-        .eq("org_id", ORG_ID)
+        .eq("org_id", getOrgId())
         .order("snapshot_date", { ascending: false })
         .limit(80);
 
@@ -1068,7 +1068,7 @@ export function useCoordinatorChat(options?: MutationHookOptions) {
             message,
             history,
             confirmationAction,
-            orgId: ORG_ID,
+            orgId: getOrgId(),
           },
           headers: accessToken
             ? {
