@@ -10,8 +10,8 @@ import { Switch } from "@/components/ui/switch";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { SiFacebook, SiWhatsapp, SiYoutube, SiLinkedin, SiTiktok, SiSlack, SiTelegram } from "react-icons/si";
-import { Mail, Monitor } from "lucide-react";
+import { SiFacebook, SiWhatsapp, SiYoutube } from "react-icons/si";
+import { Mail, Monitor, Linkedin, Music2, Hash, Send } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const INTEGRATIONS = [
@@ -20,11 +20,11 @@ const INTEGRATIONS = [
   { id: "youtube",   name: "YouTube Channel",           Icon: SiYoutube,   color: "#FF0000", live: true },
   { id: "email",     name: "Email (SendGrid)",           Icon: Mail,        color: "#000",    live: true },
   { id: "studyhub",  name: "StudyHub App",              Icon: Building,    color: "#000",    live: true },
-  { id: "linkedin",  name: "LinkedIn Page",             Icon: SiLinkedin,  color: "#0A66C2", live: false },
-  { id: "tiktok",    name: "TikTok Account",            Icon: SiTiktok,    color: "#010101", live: false },
-  { id: "slack",     name: "Slack Workspace",           Icon: SiSlack,     color: "#4A154B", live: false },
+  { id: "linkedin",  name: "LinkedIn Page",             Icon: Linkedin,    color: "#0A66C2", live: false },
+  { id: "tiktok",    name: "TikTok Account",            Icon: Music2,      color: "#010101", live: false },
+  { id: "slack",     name: "Slack Workspace",           Icon: Hash,        color: "#4A154B", live: false },
   { id: "teams",     name: "Microsoft Teams",           Icon: Monitor,     color: "#6264A7", live: false },
-  { id: "telegram",  name: "Telegram Channel",          Icon: SiTelegram,  color: "#26A5E4", live: false },
+  { id: "telegram",  name: "Telegram Channel",          Icon: Send,        color: "#26A5E4", live: false },
 ];
 
 export default function AgentSettings() {
