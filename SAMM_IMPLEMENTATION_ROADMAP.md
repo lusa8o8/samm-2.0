@@ -378,6 +378,74 @@ Verification:
 Commit policy:
 - one stable commit after browser verification
 
+## Milestone 7C: Batch Approval In Content Registry
+Status:
+- next slice
+
+Goal:
+- allow a marketer to approve all drafts from a single campaign in one action
+- single-item approve/reject remains unchanged alongside batch
+
+Why:
+- 6 drafts from one campaign run are a coherent set — reviewing them individually is friction
+- batch should be scoped to one campaign's assets only, not everything on the Drafts tab
+
+Design:
+- store `campaign_name` and `pipeline_run_id` on each `content_registry` row at insert time
+- group Drafts tab by campaign when campaign assets are present
+- each campaign group gets a "Approve all" button that batch-approves only that group
+- individual Approve/Reject buttons remain on each card unchanged
+- non-campaign drafts (no `pipeline_run_id`) are ungrouped and handled individually as before
+
+Scope:
+- backend: add `campaign_name` and `pipeline_run_id` fields to content_registry inserts in pipeline-c-campaign
+- frontend: group draft cards by campaign in content.tsx, add batch approve action per group
+- api.ts: add `useBatchApproveContent` mutation that approves by `pipeline_run_id`
+
+Do not include:
+- batch reject (single rejection should be deliberate)
+- changes to Inbox or pipeline resume behavior
+
+Verification:
+- 6 campaign drafts appear grouped under the campaign name in the Drafts tab
+- "Approve all" button approves all 6 and moves them to Scheduled
+- individual Approve/Reject still works on each card
+- non-campaign drafts are unaffected
+
+Commit policy:
+- one stable commit after browser verification
+
+## Milestone 7D: Marketer Approval Gate For Campaign Copy
+Status:
+- planned
+
+Goal:
+- make draft approval in Content Registry a real pipeline gate, not a silent action
+- rejection should feed back to the pipeline so copy can be revised or the run closed
+
+Design:
+- when all drafts from a campaign run are approved: pipeline run moves to the next phase (monitor + report)
+- when any draft is rejected: pipeline run returns to `waiting_human` with a revision request in Inbox
+- the marketer gate replaces the current silent approve/reject that has no pipeline consequence
+
+Scope:
+- track approval state per `pipeline_run_id` in content_registry
+- when last draft is approved, trigger pipeline-c-campaign resume for the monitor + report phase
+- when a draft is rejected, create a revision inbox item and return the run to `waiting_human`
+- keep the current DEMO MODE monitor + report execution — just gate it behind real approval
+
+Do not include:
+- copy rewriting by the model on rejection (that is Milestone 8 refinement)
+- changes to the CEO brief gate or Pipeline B
+
+Verification:
+- approving all drafts triggers monitor + post-campaign report to run
+- rejecting a draft creates a revision item in Inbox and pauses the run
+- Operations reflects the correct status throughout
+
+Commit policy:
+- one stable commit after the approval-to-resume and rejection-to-pause paths are both verified
+
 ## Milestone 8: Onboarding And Capability Templates
 Goal:
 - make multi-client onboarding a first-class system path
