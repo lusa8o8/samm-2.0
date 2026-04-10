@@ -68,8 +68,8 @@ Current product stance:
 - Milestone 7: Pipeline C CEO brief gate complete and browser-verified
 - Milestone 7A: two-phase copy generation for Pipeline C complete and browser-verified
 - Milestone 7B: copy assets land in Content Registry as drafts, not in Inbox — complete and browser-verified
-- Milestone 7C: batch approval in Content Registry — planned, not yet implemented
-- Milestone 7D: marketer approval gate — planned, not yet implemented
+- Milestone 7C: batch approval in Content Registry — complete and browser-verified
+- Milestone 7D: marketer approval gate with inline edit and rejection loop — complete and browser-verified
 
 ### Architecture Docs
 Committed and pushed:
@@ -80,31 +80,42 @@ Committed and pushed:
 - `SAMM_FULL_SYSTEM_ARCHITECTURE.md`
 
 ## Latest Important Commits
+- `49decf2 feat: marketer approval gate with inline edit and rejection loop (Milestone 7D)`
+- `40592f0 feat: batch approval in Content Registry (Milestone 7C)`
+- `405500c fix: boost suggestion priority fyi, document Pipeline A stubs and Milestone 5B`
 - `82fea3f feat: content registry as approval surface for copy assets (Milestone 7B)`
 - `803b9b0 feat: two-phase copy generation for Pipeline C (Milestone 7A)`
-- `700a91c docs: mark Milestone 7 complete, add Milestone 7A two-phase copy generation`
-- `c3cd0af fix: fire-and-forget pipeline resume in coordinator-chat`
-- `a127214 fix: query waiting_human run directly in scheduler resume path`
 
-All pushed to `main`.
+All committed to `main`. Push to remote with: `/mingw64/bin/git -C "C:/Users/Lusa/tsh-marketing-system" push origin main`
 
 ## Current Status
-Stable through Milestone 7B.
+Stable through Milestone 7D.
 
 ### Pipeline C end-to-end verified flow:
 1. `/samm` triggers Pipeline C → `running`
 2. Research phase (parallel) + campaign planner → campaign brief created
 3. Run pauses at `waiting_human` — campaign brief lands in Inbox
 4. CEO approves → approval completes in under 5 seconds (fire-and-forget)
-5. Background resume: canonical copy → 6 parallel platform assets → design brief suggestion → monitor → report
-6. 6 copy assets land in Content Registry as `draft` (not in Inbox)
+5. Background resume: canonical copy (phase 1) → 6 parallel platform assets (phase 2) → design brief suggestion → pauses
+6. 6 copy assets land in Content Registry as `draft`, grouped by campaign (not in Inbox)
 7. Design brief suggestion lands in Inbox as FYI
-8. Campaign report lands in Inbox
-9. Operations transitions `waiting_human` → `resumed` → `success` in real time
+8. **Marketer gate**: all drafts must be approved in Content Registry before monitor + report phase begins
+9. Approve all (batch or individual) → pipeline resumes → monitor + report → campaign report in Inbox → `success`
+10. Reject a draft → revision request in Inbox → marketer edits and resubmits in Content Registry → approve → resume
+
+### Three verified approval paths:
+1. Batch approve → resume → success
+2. Reject → revision request → edit & resubmit → approve → resume → success
+3. Inline edit (no reject) → save → approve → resume → success
 
 ### Approval surface boundary (established and stable):
-- **Inbox**: workflow decisions only — campaign brief, campaign report, escalations, suggestions, ambassador flags
-- **Content Registry**: content review only — all copy assets land here as `draft` for approval
+- **Inbox**: workflow decisions only — campaign brief, campaign report, escalations, suggestions, revision requests
+- **Content Registry**: content review only — all copy assets land here as `draft`; rejected cards editable with "Edit & resubmit"
+
+### Content Registry draft tab includes:
+- `draft` status rows
+- `pending_approval` rows
+- `rejected` rows (editable with "Edit & resubmit"; orange badge)
 
 ## Known Pipeline A Stubs (critical — must not be forgotten)
 Pipeline A classification and reply generation are NOT using the LLM. Both `classifyComment` and `draftReply` have `void anthropic` placeholders — Claude is explicitly discarded.
@@ -123,34 +134,34 @@ Already fixed this session:
 - boost suggestion priority changed from `normal` to `fyi` — shows "Mark read" instead of Approve/Reject, since the reply is already written before the inbox item is created
 
 ## Exact Next Slice
-### Milestone 7C: Batch Approval In Content Registry
+### Milestone 8: Onboarding And Capability Templates
+
+Milestones 7 through 7D are all complete. The next slice is Milestone 8.
 
 ### Goal
-Allow a marketer to approve all drafts from a single campaign run in one action alongside individual approve/reject.
+Make multi-client onboarding a first-class system path so a new org can be provisioned without manual table surgery.
 
-### Locked plan
-Backend changes to `pipeline-c-campaign/index.ts`:
-- add `campaign_name` and `pipeline_run_id` fields to each `content_registry` insert at asset creation time
+### Scope
+- org bootstrap template
+- default `org_config` values
+- default capability flags per plan tier
+- default KPI targets
+- default pipeline enablement
+- default adapter registrations per plan tier
 
-Frontend changes to `M.A.S UI/src/pages/content.tsx` and `M.A.S UI/src/lib/api.ts`:
-- group Drafts tab by `campaign_name` / `pipeline_run_id` when campaign assets are present
-- add "Approve all" button per campaign group that calls a new `useBatchApproveContent` mutation
-- `useBatchApproveContent` approves all `draft` rows matching the `pipeline_run_id`
-- individual Approve/Reject buttons remain unchanged on each card
-- non-campaign drafts (no `pipeline_run_id`) remain ungrouped
-
-### After 7C
-- Milestone 7D: marketer approval gate — rejection feeds back into pipeline resume / waiting_human
-- Milestone 8: onboarding and capability templates
+### After Milestone 8
 - Milestone 9: usage metering and billing enforcement
+- Milestone 5B (can be done any time): enable real LLM classification and reply generation in Pipeline A
 - Milestone 10: live API swaps behind adapters (includes real comment fetching for Pipeline A)
-- Milestone 5B (can be done before 10): enable real LLM classification and reply generation in Pipeline A
+
+### Architecture vision to carry forward
+The user has confirmed the system should be "super modular — lego set up and plugin modular." Every new capability should be addable without touching existing pipelines. Inbox is the routing surface for workflow decisions; Content Registry is the review surface for content. Do not blur this boundary.
 
 ## Relevant Files
 ### Frontend
 - `M.A.S UI/src/pages/content.tsx` — Content Registry UI, has Drafts tab with Approve/Reject
 - `M.A.S UI/src/pages/inbox.tsx` — Inbox UI
-- `M.A.S UI/src/lib/api.ts` — all mutations: useActionContent, useActionInboxItem, useBatchApproveContent (to be added)
+- `M.A.S UI/src/lib/api.ts` — all mutations: useActionContent, useActionInboxItem, useBatchApproveContent, useEditContent
 - `M.A.S UI/src/lib/supabase.ts` — ORG_ID constant
 
 ### Supabase

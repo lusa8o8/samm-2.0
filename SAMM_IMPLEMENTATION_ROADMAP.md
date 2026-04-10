@@ -347,7 +347,8 @@ Commit policy:
 
 ## Milestone 7A: Two-Phase Copy Generation For Pipeline C
 Status:
-- next slice
+- complete
+- canonical writer (phase 1) and parallel platform adapters (phase 2) implemented and browser-verified
 
 Goal:
 - ensure consistent core messaging across all 6 campaign copy assets before platform adaptation
@@ -422,7 +423,8 @@ Commit policy:
 
 ## Milestone 7C: Batch Approval In Content Registry
 Status:
-- next slice
+- complete
+- campaign grouping in Drafts tab and "Approve all" batch action implemented and browser-verified
 
 Goal:
 - allow a marketer to approve all drafts from a single campaign in one action
@@ -459,7 +461,8 @@ Commit policy:
 
 ## Milestone 7D: Marketer Approval Gate For Campaign Copy
 Status:
-- planned
+- complete
+- approval-to-resume, rejection-to-pause, and inline-edit/resubmit paths all browser-verified end-to-end
 
 Goal:
 - make draft approval in Content Registry a real pipeline gate, not a silent action
@@ -476,17 +479,24 @@ Scope:
 - when a draft is rejected, create a revision inbox item and return the run to `waiting_human`
 - keep the current DEMO MODE monitor + report execution — just gate it behind real approval
 
-Do not include:
-- copy rewriting by the model on rejection (that is Milestone 8 refinement)
-- changes to the CEO brief gate or Pipeline B
+Delivered:
+- Pipeline C stage 2 checks all draft statuses for the run's `pipeline_run_id`
+- rejected items pause the pipeline and create a revision request in Inbox
+- all approved items resume pipeline → monitor + report → success
+- `useEditContent` mutation resets rejected/draft items to `draft`, clears `rejection_note`
+- inline edit on draft/rejected Content Registry cards; "Edit & resubmit" label on rejected
+- reject reason text input; orange badge for `rejected` status
+- `getContentStatusFilter('draft')` includes `rejected` so edited cards appear in Drafts tab
+- `toUiContentStatus` no longer maps `rejected` → `failed`
+- migration: `rejection_note text` added to `content_registry`
 
-Verification:
-- approving all drafts triggers monitor + post-campaign report to run
-- rejecting a draft creates a revision item in Inbox and pauses the run
-- Operations reflects the correct status throughout
+Three verified paths:
+1. Approve all drafts → pipeline resumes → monitor + report → success
+2. Reject a draft → revision request in Inbox → edit & resubmit in Content Registry → approve → resume → success
+3. Inline edit a draft → save → remains draft → approve → resume → success
 
 Commit policy:
-- one stable commit after the approval-to-resume and rejection-to-pause paths are both verified
+- stable commit `49decf2` after browser verification of all three paths
 
 ## Milestone 8: Onboarding And Capability Templates
 Goal:
