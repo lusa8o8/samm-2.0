@@ -500,7 +500,8 @@ Commit policy:
 
 ## Milestone 7E: Design Brief To Content Registry + Image Upload + Share
 Status:
-- next slice
+- complete
+- design brief in Content Registry, image upload on copy cards, share dropdown, all browser-verified
 
 Goal:
 - move design brief out of Inbox and into Content Registry alongside the campaign copy cards

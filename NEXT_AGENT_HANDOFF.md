@@ -70,6 +70,7 @@ Current product stance:
 - Milestone 7B: copy assets land in Content Registry as drafts, not in Inbox — complete and browser-verified
 - Milestone 7C: batch approval in Content Registry — complete and browser-verified
 - Milestone 7D: marketer approval gate with inline edit and rejection loop — complete and browser-verified
+- Milestone 7E: design brief to Content Registry, image upload on copy cards, share button — complete and browser-verified
 
 ### Architecture Docs
 Committed and pushed:
@@ -80,16 +81,17 @@ Committed and pushed:
 - `SAMM_FULL_SYSTEM_ARCHITECTURE.md`
 
 ## Latest Important Commits
+- `c06ba39 fix: design brief prompt enforces plain text, no markdown formatting`
+- `cb6b32d fix: design brief card strip markdown in preview, hide actions when collapsed`
+- `19c61bd fix: design brief card full width, markdown rendering, platform constraint migration`
+- `eec038d feat: design brief to Content Registry, image upload, share button (Milestone 7E)`
 - `2d7db3a fix: map fyi mark-read action to actioned status (not read)`
 - `49decf2 feat: marketer approval gate with inline edit and rejection loop (Milestone 7D)`
-- `40592f0 feat: batch approval in Content Registry (Milestone 7C)`
-- `405500c fix: boost suggestion priority fyi, document Pipeline A stubs and Milestone 5B`
-- `82fea3f feat: content registry as approval surface for copy assets (Milestone 7B)`
 
-All committed to `main`. Push to remote with: `/mingw64/bin/git -C "C:/Users/Lusa/tsh-marketing-system" push origin main`
+All pushed to `main`.
 
 ## Current Status
-Stable through Milestone 7D + mark-read fix.
+Stable through Milestone 7E.
 
 ### Pipeline C end-to-end verified flow:
 1. `/samm` triggers Pipeline C → `running`
@@ -97,9 +99,9 @@ Stable through Milestone 7D + mark-read fix.
 3. Run pauses at `waiting_human` — campaign brief lands in Inbox
 4. CEO approves → approval completes in under 5 seconds (fire-and-forget)
 5. Background resume: canonical copy (phase 1) → 6 parallel platform assets (phase 2) → design brief suggestion → pauses
-6. 6 copy assets land in Content Registry as `draft`, grouped by campaign (not in Inbox)
-7. Design brief suggestion lands in Inbox as FYI
-8. **Marketer gate**: all drafts must be approved in Content Registry before monitor + report phase begins
+6. 6 copy cards + 1 design brief card land in Content Registry as `draft`, grouped by campaign
+7. Design brief: full-width violet card with Edit, Share (WhatsApp/Telegram/Email/clipboard), Approve
+8. **Marketer gate**: all copy drafts must be approved before monitor + report phase (design brief approval is independent)
 9. Approve all (batch or individual) → pipeline resumes → monitor + report → campaign report in Inbox → `success`
 10. Reject a draft → revision request in Inbox → marketer edits and resubmits in Content Registry → approve → resume
 
@@ -134,52 +136,25 @@ Already fixed this session:
 - boost suggestion priority changed from `normal` to `fyi` — shows "Mark read" instead of Approve/Reject, since the reply is already written before the inbox item is created
 
 ## Exact Next Slice
-### Milestone 7E: Design Brief To Content Registry + Image Upload + Share
+### Milestone 8: Onboarding And Capability Templates
+
+Milestones 7 through 7E are all complete. The next slice is Milestone 8.
 
 ### Goal
-- Move design brief out of Inbox into Content Registry alongside the campaign copy cards
-- Harden the Inbox boundary to workflow gates, reports, escalations, and suggestions only
-- Allow image attachment on draft copy cards
-- Add share action on design brief cards
+Make multi-client onboarding a first-class system path so a new org can be provisioned without manual table surgery.
 
-### Locked plan
+### Scope
+- org bootstrap template
+- default `org_config` values
+- default capability flags per plan tier
+- default KPI targets
+- default pipeline enablement
+- default adapter registrations per plan tier
 
-**`supabase/functions/pipeline-c-campaign/index.ts`**
-- Change design brief insert from `human_inbox` to `content_registry`
-- Use `platform: 'design_brief'`, same `pipeline_run_id` and `campaign_name` as copy cards
-- Status: `draft` (appears in Drafts tab alongside copy cards)
-- Keep insert in stage 2 (after copy approval, in the resume → monitor → report phase) — NOT before the marketer gate
-
-**Migration**
-- Add `media_url text` to `content_registry`
-
-**`M.A.S UI/src/lib/api.ts`**
-- Add `useUploadContentImage`: uploads file to Supabase Storage, patches `media_url` on the row
-- Storage bucket: `content-media` (create if not exists, public read)
-
-**`M.A.S UI/src/pages/content.tsx`**
-- Design brief card: detect `platform === 'design_brief'`, render Edit + Share + Approve (not Approve/Reject pair)
-- Share dropdown: WhatsApp (`wa.me/?text=...`), email (`mailto:?subject=...&body=...`), Telegram (`t.me/share/url?text=...`), copy to clipboard — all static, no API
-- Copy cards: add image upload button (file input) → calls `useUploadContentImage` → shows thumbnail on card
-- Image upload available on `draft` and `scheduled` cards
-
-### Inbox boundary after this slice
-Only these item types route to Inbox:
-- `campaign_brief` — CEO approval gate
-- `campaign_report` — post-run report
-- `weekly_report` — Pipeline B report
-- `escalation` — complaint escalation from Pipeline A
-- `suggestion` — performance suggestions (boost, underperforming) — FYI priority
-- `revision_request` — rejection feedback loop signal
-- `ambassador_flag` — ambassador check-in
-
-Design brief (`suggestion` with `payload.type === 'design_brief'`) no longer routes to Inbox.
-
-### After Milestone 7E
-- Milestone 8: onboarding and capability templates
+### After Milestone 8
 - Milestone 9: usage metering and billing enforcement
 - Milestone 5B (any time): real LLM in Pipeline A
-- Milestone 10: live API swaps
+- Milestone 10: live API swaps behind adapters
 
 ### Architecture vision to carry forward
 The system is "super modular — lego set up and plugin modular." Inbox = workflow decisions and signals. Content Registry = all content assets including briefs. Design tool integrations (Canva, Adobe Express) add named buttons to the design brief card when connected — they do not repurpose generic Approve/Reject.
@@ -188,7 +163,7 @@ The system is "super modular — lego set up and plugin modular." Inbox = workfl
 ### Frontend
 - `M.A.S UI/src/pages/content.tsx` — Content Registry UI, has Drafts tab with Approve/Reject
 - `M.A.S UI/src/pages/inbox.tsx` — Inbox UI
-- `M.A.S UI/src/lib/api.ts` — all mutations: useActionContent, useActionInboxItem, useBatchApproveContent, useEditContent
+- `M.A.S UI/src/lib/api.ts` — all mutations: useActionContent, useActionInboxItem, useBatchApproveContent, useEditContent, useUploadContentImage
 - `M.A.S UI/src/lib/supabase.ts` — ORG_ID constant
 
 ### Supabase
