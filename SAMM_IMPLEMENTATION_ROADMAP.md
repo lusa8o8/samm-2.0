@@ -354,6 +354,30 @@ Verification:
 Commit policy:
 - one stable commit after browser verification of the two-phase output
 
+## Milestone 7B: Content Registry As The Approval Surface For Copy Assets
+Status:
+- complete
+
+Goal:
+- all content that requires approval lands in Content Registry, not Inbox
+- Inbox is reserved for workflow decisions (campaign brief, reports, escalations, suggestions)
+- copy assets produced by Pipeline C are reviewed and approved from the Drafts tab in Content Registry
+
+Scope:
+- change content_registry insert status from `pending_approval` to `draft`
+- remove `human_inbox` draft_approval inserts from the copy asset loop
+- remove DEMO MODE auto-approval block
+- design brief suggestion remains in Inbox as an FYI to designers (not a content asset)
+
+Verification:
+- after Pipeline C resume, Inbox shows only: campaign brief (actioned), design brief suggestion, campaign report
+- Content Registry Drafts tab shows 6 copy assets with Approve/Reject buttons
+- approving an asset in Content Registry moves it to Scheduled
+- no draft_approval items appear in Inbox
+
+Commit policy:
+- one stable commit after browser verification
+
 ## Milestone 8: Onboarding And Capability Templates
 Goal:
 - make multi-client onboarding a first-class system path

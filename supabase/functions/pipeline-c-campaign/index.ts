@@ -346,41 +346,18 @@ async function resumePipelineCRun(params: { supabase: any; anthropic: Anthropic;
     results.copy_assets_created = copyAssets.length
 
     for (const asset of copyAssets) {
-      const { data: regRow } = await supabase
+      await supabase
         .from('content_registry')
         .insert({
           org_id: context.orgId,
           platform: asset.platform,
           body: asset.body,
           subject_line: asset.subject_line ?? null,
-          status: 'pending_approval',
+          status: 'draft',
           is_campaign_post: true,
           scheduled_at: getScheduledTime(asset.day_offset, context.today),
           created_by: 'pipeline-c-campaign'
         })
-        .select('id')
-        .single()
-
-      await supabase.from('human_inbox').insert({
-        org_id: context.orgId,
-        item_type: 'draft_approval',
-        priority: 'normal',
-        payload: {
-          title: `${campaignBrief.name} — ${asset.platform}`,
-          preview: asset.body ? asset.body.slice(0, 120) : '',
-          campaign_name: campaignBrief.name,
-          platform: asset.platform,
-          body: asset.body,
-          subject_line: asset.subject_line,
-          day_offset: asset.day_offset,
-          content_registry_id: regRow?.id,
-          pipeline_run_id: runId
-        },
-        created_by_pipeline: 'pipeline-c-campaign',
-        created_by_agent: getAgentDefinition('copy_writer').id,
-        ref_table: 'content_registry',
-        ref_id: regRow?.id
-      })
     }
 
     await supabase.from('human_inbox').insert({
@@ -393,24 +370,8 @@ async function resumePipelineCRun(params: { supabase: any; anthropic: Anthropic;
     })
 
     results.design_brief_sent = true
-    console.log(`${copyAssets.length} copy assets sent for approval`)
+    console.log(`${copyAssets.length} copy assets landed in Content Registry as drafts`)
     console.log('Design brief sent to human inbox')
-
-    console.log('DEMO MODE: auto-approving copy assets...')
-
-    const { data: pendingPosts } = await supabase
-      .from('content_registry')
-      .select('*')
-      .eq('org_id', context.orgId)
-      .eq('status', 'pending_approval')
-      .eq('is_campaign_post', true)
-
-    for (const post of (pendingPosts ?? [])) {
-      await supabase.from('content_registry').update({ status: 'scheduled' }).eq('id', post.id)
-      results.posts_scheduled++
-    }
-
-    console.log(`${results.posts_scheduled} campaign posts scheduled`)
 
     console.log('Running campaign monitor check...')
     await runMonitor(supabase, anthropic, context, campaignBrief, config.kpi_targets)
