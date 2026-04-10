@@ -339,13 +339,27 @@ async function schedulePipelineRun(supabase: any, pipeline: PipelineTarget, orgI
 }
 
 async function resumePipelineRun(supabase: any, pipeline: PipelineTarget, orgId: string, runs: any[]): Promise<ChatResponse> {
-  const latestRun = getLatestPipelineRun(runs, pipeline.id)
+  // Query directly for the most recent waiting_human run for this pipeline.
+  // Do not rely on the pre-loaded runs snapshot: it is limited to 8 rows across all
+  // pipelines and may not contain this pipeline's waiting run, or may contain a more
+  // recent run in a different terminal state, causing the resume to silently no-op.
+  const { data: waitingRows } = await supabase
+    .from('pipeline_runs')
+    .select('*')
+    .eq('org_id', orgId)
+    .eq('pipeline', pipeline.id)
+    .eq('status', PIPELINE_RUN_STATUS.WAITING_HUMAN)
+    .order('started_at', { ascending: false })
+    .limit(1)
 
-  if (latestRun?.status !== PIPELINE_RUN_STATUS.WAITING_HUMAN) {
+  const waitingRun = waitingRows?.[0] ?? null
+
+  if (!waitingRun) {
+    const latestRun = getLatestPipelineRun(runs, pipeline.id)
     return formatPipelineStatusResponse(pipeline, latestRun)
   }
 
-  await invokePipeline(supabase, pipeline.id, orgId, { resume_run_id: latestRun.id })
+  await invokePipeline(supabase, pipeline.id, orgId, { resume_run_id: waitingRun.id })
   const refreshedRun = await fetchLatestPipelineRun(supabase, orgId, pipeline.id)
 
   if (refreshedRun?.status === PIPELINE_RUN_STATUS.WAITING_HUMAN) {
