@@ -421,7 +421,7 @@ async function resumePipelineCRun(params: { supabase: any; anthropic: Anthropic;
         })
     }
 
-    await supabase.from('content_registry').insert({
+    const { error: briefInsertError } = await supabase.from('content_registry').insert({
       org_id: context.orgId,
       platform: 'design_brief',
       body: designBrief,
@@ -432,7 +432,12 @@ async function resumePipelineCRun(params: { supabase: any; anthropic: Anthropic;
       created_by: 'pipeline-c-campaign'
     })
 
-    results.design_brief_sent = true
+    if (briefInsertError) {
+      console.error('Design brief insert failed:', briefInsertError)
+      results.errors.push(`design_brief insert: ${briefInsertError.message}`)
+    } else {
+      results.design_brief_sent = true
+    }
     console.log(`${copyAssets.length} copy assets landed in Content Registry as drafts — waiting for marketer approval`)
 
     // Pause here — monitor and report run only after marketer approves all drafts (stage 2)

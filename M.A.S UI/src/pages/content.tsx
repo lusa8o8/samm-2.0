@@ -404,9 +404,9 @@ function DesignBriefCard({
   return (
     <div
       className={cn(
-        "rounded-xl border bg-card transition-all duration-200",
+        "col-span-full rounded-xl border bg-card transition-all duration-200",
         "border-violet-200/60",
-        isExpanded ? "col-span-full shadow-sm" : "cursor-pointer hover:border-foreground/20 hover:shadow-sm"
+        isExpanded ? "shadow-sm" : "cursor-pointer hover:border-foreground/20 hover:shadow-sm"
       )}
       onClick={!isExpanded ? onToggle : undefined}
     >
@@ -457,7 +457,7 @@ function DesignBriefCard({
             </div>
           ) : (
             <div className="rounded-lg border bg-muted/40 p-4">
-              <p className="whitespace-pre-wrap text-[13px] leading-relaxed">{item.body}</p>
+              <MarkdownBody content={item.body} />
             </div>
           )}
         </div>
