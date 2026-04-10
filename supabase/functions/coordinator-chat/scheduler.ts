@@ -4,6 +4,9 @@ import {
   isPipelineRunExecuting,
 } from '../_shared/pipeline-run-status.ts'
 
+// EdgeRuntime is a Supabase Edge Runtime global — not in standard Deno types.
+declare const EdgeRuntime: { waitUntil: (promise: Promise<unknown>) => void }
+
 const PIPELINE_TARGETS: Record<string, string> = {
   coordinator: 'coordinator',
   'pipeline-a-engagement': 'pipeline-a-engagement',
@@ -359,69 +362,31 @@ async function resumePipelineRun(supabase: any, pipeline: PipelineTarget, orgId:
     return formatPipelineStatusResponse(pipeline, latestRun)
   }
 
-  await invokePipeline(supabase, pipeline.id, orgId, { resume_run_id: waitingRun.id })
-  const refreshedRun = await fetchLatestPipelineRun(supabase, orgId, pipeline.id)
+  // Fire the pipeline resume in the background. The resume does significant work
+  // (multiple LLM calls) that would block coordinator-chat from responding to the
+  // browser. Return immediately after scheduling so the approval mutation completes
+  // cleanly. EdgeRuntime.waitUntil keeps the edge function alive until the resume
+  // finishes, even after the HTTP response is sent.
+  const resumeTask = invokePipeline(supabase, pipeline.id, orgId, { resume_run_id: waitingRun.id })
+    .catch((err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error(`Background resume of ${pipeline.id} run ${waitingRun.id} failed: ${msg}`)
+    })
 
-  if (refreshedRun?.status === PIPELINE_RUN_STATUS.WAITING_HUMAN) {
-    return {
-      message: `${pipeline.title} is still waiting on human approval before it can continue.`,
-      suggestions: ['What needs my approval?', 'Check pipeline results', 'Summarize this week'],
-      invoked_action: {
-        type: 'run_pipeline',
-        pipeline: pipeline.id,
-        status: PIPELINE_RUN_STATUS.WAITING_HUMAN,
-        run_id: refreshedRun.id ?? null,
-      },
-    }
-  }
-
-  if (refreshedRun?.status === PIPELINE_RUN_STATUS.SUCCESS) {
-    return {
-      message: `${pipeline.title} resumed and completed successfully. ${refreshedRun.result_summary ?? refreshedRun.result?.error ?? 'The latest run is now reflected in workspace state.'}`,
-      suggestions: ['Check pipeline results', 'What needs my approval?', 'Summarize this week'],
-      invoked_action: {
-        type: 'run_pipeline',
-        pipeline: pipeline.id,
-        status: 'completed',
-        run_id: refreshedRun.id ?? null,
-      },
-    }
-  }
-
-  if (refreshedRun?.status === PIPELINE_RUN_STATUS.CANCELLED) {
-    return {
-      message: `${pipeline.title} resumed and exited without approved drafts. ${refreshedRun.result_summary ?? 'All review items were rejected.'}`,
-      suggestions: ['Check pipeline results', 'What needs my approval?', 'Summarize this week'],
-      invoked_action: {
-        type: 'run_pipeline',
-        pipeline: pipeline.id,
-        status: PIPELINE_RUN_STATUS.CANCELLED,
-        run_id: refreshedRun.id ?? null,
-      },
-    }
-  }
-
-  if (refreshedRun?.status === PIPELINE_RUN_STATUS.FAILED) {
-    return {
-      message: `${pipeline.title} failed while resuming. ${refreshedRun.result?.error ?? 'No failure summary recorded.'}`,
-      suggestions: ['Check pipeline results', 'What needs my approval?', 'Summarize this week'],
-      invoked_action: {
-        type: 'run_pipeline',
-        pipeline: pipeline.id,
-        status: PIPELINE_RUN_STATUS.FAILED,
-        run_id: refreshedRun.id ?? null,
-      },
-    }
+  try {
+    EdgeRuntime.waitUntil(resumeTask)
+  } catch {
+    // EdgeRuntime not available in non-Supabase environments — promise still runs
   }
 
   return {
-    message: `${pipeline.title} has resumed and is now running.`,
+    message: `${pipeline.title} resume has been triggered. Check Operations for progress.`,
     suggestions: ['Check pipeline results', 'What needs my approval?', 'Summarize this week'],
     invoked_action: {
       type: 'run_pipeline',
       pipeline: pipeline.id,
-      status: refreshedRun?.status ?? PIPELINE_RUN_STATUS.RESUMED,
-      run_id: refreshedRun?.id ?? null,
+      status: PIPELINE_RUN_STATUS.RESUMED,
+      run_id: waitingRun.id,
     },
   }
 }
