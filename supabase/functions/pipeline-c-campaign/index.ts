@@ -332,6 +332,65 @@ async function resumePipelineCRun(params: { supabase: any; anthropic: Anthropic;
     const event = results.calendar_event
     if (!campaignBrief || !event) throw new Error('Pipeline C resume is missing stored campaign brief or calendar event context')
 
+    // ── STAGE 2: marketer approval gate ───────────────────────────────
+    // If copy assets have already been created, this is the second resume.
+    // Check the state of all content_registry rows for this run.
+    if (results.copy_assets_created > 0) {
+      const { data: draftRows } = await supabase
+        .from('content_registry')
+        .select('id, status, platform, body, rejection_note')
+        .eq('pipeline_run_id', runId)
+        .eq('org_id', context.orgId)
+
+      const rejected = (draftRows ?? []).filter((r: any) => r.status === 'rejected')
+      const stillDraft = (draftRows ?? []).filter((r: any) => r.status === 'draft')
+
+      if (rejected.length > 0) {
+        // At least one draft was rejected — create revision request and pause
+        const rejectionSummary = rejected.map((r: any) =>
+          `${r.platform}: ${r.rejection_note ? `"${r.rejection_note}"` : 'no reason given'}`
+        ).join('\n')
+
+        await supabase.from('human_inbox').insert({
+          org_id: context.orgId,
+          item_type: 'suggestion',
+          priority: 'urgent',
+          payload: {
+            title: `Revision requested — ${campaignBrief.name}`,
+            preview: `${rejected.length} draft${rejected.length > 1 ? 's' : ''} rejected. Review the reasons and resubmit.`,
+            type: 'revision_request',
+            campaign_name: campaignBrief.name,
+            rejected_count: rejected.length,
+            rejection_summary: rejectionSummary,
+            pipeline_run_id: runId,
+          },
+          created_by_pipeline: 'pipeline-c-campaign',
+          created_by_agent: getAgentDefinition('copy_writer').id,
+        })
+
+        await updatePipelineCRun(supabase, runId, PIPELINE_RUN_STATUS.WAITING_HUMAN, results)
+        return new Response(JSON.stringify({ ok: true, waiting_human: true, revision_requested: true, run_id: runId, ...results }), { headers: { 'Content-Type': 'application/json' } })
+      }
+
+      if (stillDraft.length > 0) {
+        // Not all approved yet — stay paused
+        await updatePipelineCRun(supabase, runId, PIPELINE_RUN_STATUS.WAITING_HUMAN, results)
+        return new Response(JSON.stringify({ ok: true, waiting_human: true, run_id: runId, ...results }), { headers: { 'Content-Type': 'application/json' } })
+      }
+
+      // All drafts approved — run monitor and report
+      console.log('All drafts approved — running monitor and post-campaign report...')
+      await runMonitor(supabase, anthropic, context, campaignBrief, config.kpi_targets)
+      results.monitor_check_run = true
+
+      await runPostCampaignReport(supabase, anthropic, context, campaignBrief, results)
+      results.report_generated = true
+
+      await updatePipelineCRun(supabase, runId, PIPELINE_RUN_STATUS.SUCCESS, results)
+      return new Response(JSON.stringify({ ok: true, resumed: true, run_id: runId, ...results }), { headers: { 'Content-Type': 'application/json' } })
+    }
+
+    // ── STAGE 1: CEO brief approved — create copy assets and pause ────
     console.log('Writing canonical campaign message...')
     const canonicalCopy = await runCanonicalCopyWriter(anthropic, campaignBrief, event, config.brand_voice)
     console.log(`Canonical message locked: "${canonicalCopy.headline}"`)
@@ -372,19 +431,11 @@ async function resumePipelineCRun(params: { supabase: any; anthropic: Anthropic;
     })
 
     results.design_brief_sent = true
-    console.log(`${copyAssets.length} copy assets landed in Content Registry as drafts`)
-    console.log('Design brief sent to human inbox')
+    console.log(`${copyAssets.length} copy assets landed in Content Registry as drafts — waiting for marketer approval`)
 
-    console.log('Running campaign monitor check...')
-    await runMonitor(supabase, anthropic, context, campaignBrief, config.kpi_targets)
-    results.monitor_check_run = true
-
-    console.log('Generating post-campaign report...')
-    await runPostCampaignReport(supabase, anthropic, context, campaignBrief, results)
-    results.report_generated = true
-
-    await updatePipelineCRun(supabase, runId, PIPELINE_RUN_STATUS.SUCCESS, results)
-    return new Response(JSON.stringify({ ok: true, resumed: true, run_id: runId, ...results }), { headers: { 'Content-Type': 'application/json' } })
+    // Pause here — monitor and report run only after marketer approves all drafts (stage 2)
+    await updatePipelineCRun(supabase, runId, PIPELINE_RUN_STATUS.WAITING_HUMAN, results)
+    return new Response(JSON.stringify({ ok: true, waiting_human: true, marketer_gate: true, run_id: runId, ...results }), { headers: { 'Content-Type': 'application/json' } })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     results.errors.push(message)

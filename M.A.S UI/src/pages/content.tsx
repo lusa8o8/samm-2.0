@@ -5,6 +5,7 @@ import {
   useRetryContent,
   useActionContent,
   useBatchApproveContent,
+  useEditContent,
   getListContentQueryKey,
 } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
@@ -21,7 +22,10 @@ import {
   Images,
   Check,
   X,
+  Pencil,
 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -87,24 +91,16 @@ function getContentType(item: { platform: string; subject_line?: string | null }
 }
 
 interface ContentCardProps {
-  item: {
-    id: string;
-    platform: string;
-    platforms?: string[] | null;
-    body: string;
-    subject_line?: string | null;
-    status: string;
-    scheduled_at?: string | null;
-    published_at?: string | null;
-    error_message?: string | null;
-  };
+  item: ContentItem;
   isExpanded: boolean;
   onToggle: () => void;
   onRetry: (id: string) => void;
-  onApprove: (id: string) => void;
-  onReject: (id: string) => void;
+  onApprove: (id: string, pipelineRunId?: string | null) => void;
+  onReject: (id: string, pipelineRunId?: string | null, note?: string) => void;
+  onEdit: (id: string, body: string, subjectLine?: string | null) => void;
   retryPending: boolean;
   actionPending: boolean;
+  editPending: boolean;
 }
 
 function MarkdownBody({ content }: { content?: string | null }) {
@@ -124,11 +120,20 @@ function ContentCard({
   onRetry,
   onApprove,
   onReject,
+  onEdit,
   retryPending,
   actionPending,
+  editPending,
 }: ContentCardProps) {
+  const [rejectReason, setRejectReason] = useState("");
+  const [showRejectInput, setShowRejectInput] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editBody, setEditBody] = useState(item.body);
+  const [editSubjectLine, setEditSubjectLine] = useState(item.subject_line ?? "");
+
   const isFailed = item.status === "failed";
   const isDraft = item.status === "draft";
+  const isRejected = item.status === "rejected";
   const contentType = getContentType(item);
   const TypeIcon = contentType.icon;
 
@@ -163,7 +168,8 @@ function ContentCard({
               item.status === "published" && "bg-green-100 text-green-800",
               item.status === "scheduled" && "bg-blue-50 text-blue-700",
               item.status === "failed" && "bg-red-100 text-red-700",
-              item.status === "draft" && "bg-amber-50 text-amber-700"
+              item.status === "draft" && "bg-amber-50 text-amber-700",
+              item.status === "rejected" && "bg-orange-100 text-orange-700"
             )}
           >
             {item.status}
@@ -182,11 +188,50 @@ function ContentCard({
 
       {isExpanded && (
         <div className="space-y-4 border-t border-dashed px-5 pb-5 pt-4">
-          <div className="rounded-lg border bg-muted/40 p-4">
-            <MarkdownBody content={item.body} />
-          </div>
+          {isEditing ? (
+            <div className="space-y-3">
+              {item.subject_line !== null && item.subject_line !== undefined && (
+                <div>
+                  <p className="mb-1 text-[11px] font-medium text-muted-foreground">Subject line</p>
+                  <Input
+                    value={editSubjectLine}
+                    onChange={(e) => setEditSubjectLine(e.target.value)}
+                    className="text-sm"
+                  />
+                </div>
+              )}
+              <div>
+                <p className="mb-1 text-[11px] font-medium text-muted-foreground">Body</p>
+                <Textarea
+                  value={editBody}
+                  onChange={(e) => setEditBody(e.target.value)}
+                  className="min-h-[120px] text-sm"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  className="h-7 text-xs"
+                  disabled={editPending}
+                  onClick={() => {
+                    onEdit(item.id, editBody, item.subject_line !== undefined ? editSubjectLine || null : undefined);
+                    setIsEditing(false);
+                  }}
+                >
+                  Save
+                </Button>
+                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setEditBody(item.body); setEditSubjectLine(item.subject_line ?? ""); setIsEditing(false); }}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-lg border bg-muted/40 p-4">
+              <MarkdownBody content={item.body} />
+            </div>
+          )}
 
-          {item.platforms && item.platforms.length > 1 && (
+          {!isEditing && item.platforms && item.platforms.length > 1 && (
             <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
               <div className="flex items-center gap-1">
                 {item.platforms.map((p) => {
@@ -200,10 +245,12 @@ function ContentCard({
             </div>
           )}
 
-          <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-            <Images className="h-3.5 w-3.5" />
-            <span>No attachments � graphics and carousels will appear here</span>
-          </div>
+          {!isEditing && (
+            <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+              <Images className="h-3.5 w-3.5" />
+              <span>No attachments — graphics and carousels will appear here</span>
+            </div>
+          )}
         </div>
       )}
 
@@ -222,17 +269,47 @@ function ContentCard({
         </div>
 
         <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-          {isDraft && (
+          {(isDraft || isRejected) && !isEditing && !showRejectInput && (
             <>
-              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => onReject(item.id)} disabled={actionPending}>
-                <X className="mr-1 h-3.5 w-3.5" />
-                Reject
+              <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground" onClick={() => { setIsEditing(true); if (!isExpanded) onToggle(); }} disabled={actionPending}>
+                <Pencil className="mr-1 h-3.5 w-3.5" />
+                {isRejected ? "Edit & resubmit" : "Edit"}
               </Button>
-              <Button size="sm" className="h-7 bg-green-600 text-xs text-white hover:bg-green-700" onClick={() => onApprove(item.id)} disabled={actionPending}>
-                <Check className="mr-1 h-3.5 w-3.5" />
-                Approve
-              </Button>
+              {isDraft && (
+                <>
+                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowRejectInput(true)} disabled={actionPending}>
+                    <X className="mr-1 h-3.5 w-3.5" />
+                    Reject
+                  </Button>
+                  <Button size="sm" className="h-7 bg-green-600 text-xs text-white hover:bg-green-700" onClick={() => onApprove(item.id, item.pipeline_run_id)} disabled={actionPending}>
+                    <Check className="mr-1 h-3.5 w-3.5" />
+                    Approve
+                  </Button>
+                </>
+              )}
             </>
+          )}
+
+          {isDraft && showRejectInput && (
+            <div className="flex w-full flex-wrap items-center gap-2">
+              <Input
+                placeholder="Reason for rejection..."
+                className="h-8 min-w-[160px] flex-1 text-xs"
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") { onReject(item.id, item.pipeline_run_id, rejectReason); setShowRejectInput(false); setRejectReason(""); }
+                  if (e.key === "Escape") setShowRejectInput(false);
+                }}
+              />
+              <Button size="sm" variant="destructive" className="h-8 shrink-0 px-3 text-xs" onClick={() => { onReject(item.id, item.pipeline_run_id, rejectReason); setShowRejectInput(false); setRejectReason(""); }} disabled={actionPending}>
+                Confirm
+              </Button>
+              <Button size="sm" variant="ghost" className="h-8 shrink-0 px-2" onClick={() => setShowRejectInput(false)}>
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
           )}
 
           {isFailed && (
@@ -316,15 +393,18 @@ export default function Content() {
 
   const retryMutation = useRetryContent({ mutation: { onSuccess: invalidate } });
   const actionMutation = useActionContent({
-    mutation: {
-      onSuccess: () => { invalidate(); setExpandedId(null); }
-    }
+    mutation: { onSuccess: () => { invalidate(); setExpandedId(null); } }
   });
   const batchApproveMutation = useBatchApproveContent({ mutation: { onSuccess: invalidate } });
+  const editMutation = useEditContent({ mutation: { onSuccess: invalidate } });
 
   const handleToggle = (id: string) => setExpandedId((prev) => (prev === id ? null : id));
-  const handleApprove = (id: string) => actionMutation.mutate({ id, data: { action: "approve" } });
-  const handleReject = (id: string) => actionMutation.mutate({ id, data: { action: "reject" } });
+  const handleApprove = (id: string, pipelineRunId?: string | null) =>
+    actionMutation.mutate({ id, pipelineRunId, data: { action: "approve" } });
+  const handleReject = (id: string, pipelineRunId?: string | null, note?: string) =>
+    actionMutation.mutate({ id, pipelineRunId, data: { action: "reject", note } });
+  const handleEdit = (id: string, body: string, subjectLine?: string | null) =>
+    editMutation.mutate({ id, body, subjectLine });
 
   const renderCard = (item: ContentItem) => (
     <ContentCard
@@ -335,8 +415,10 @@ export default function Content() {
       onRetry={(id) => retryMutation.mutate({ id })}
       onApprove={handleApprove}
       onReject={handleReject}
+      onEdit={handleEdit}
       retryPending={retryMutation.isPending}
       actionPending={actionMutation.isPending}
+      editPending={editMutation.isPending}
     />
   );
 

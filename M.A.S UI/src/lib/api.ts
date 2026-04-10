@@ -90,15 +90,14 @@ function toPipelineKey(value?: string | null) {
 function toUiContentStatus(status?: string | null) {
   if (status === "pending_approval") return "draft";
   if (status === "approved") return "scheduled";
-  if (status === "rejected") return "failed";
   return status ?? "draft";
 }
 
 function getContentStatusFilter(status?: string) {
-  if (status === "draft") return ["pending_approval", "draft"];
+  if (status === "draft") return ["pending_approval", "draft", "rejected"];
   if (status === "scheduled") return ["scheduled", "approved"];
   if (status === "published") return ["published"];
-  if (status === "failed") return ["failed", "rejected"];
+  if (status === "failed") return ["failed"];
   return [];
 }
 
@@ -576,43 +575,45 @@ export function useRetryContent(options?: MutationHookOptions) {
 
 export function useActionContent(options?: MutationHookOptions) {
   return useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: { action: "approve" | "reject" } }) => {
-      const { data: relatedInboxRows, error: relatedInboxError } = await supabase
+    mutationFn: async ({ id, pipelineRunId, data }: { id: string; pipelineRunId?: string | null; data: { action: "approve" | "reject"; note?: string } }) => {
+      const patch: Record<string, unknown> =
+        data.action === "approve"
+          ? { status: "scheduled" }
+          : { status: "rejected", rejection_note: data.note ?? null };
+
+      const { error } = await supabase.from("content_registry").update(patch).eq("id", id).eq("org_id", ORG_ID);
+      if (error) throw error;
+
+      // Pipeline B resume: check for linked weekly draft_approval inbox rows
+      const { data: relatedInboxRows } = await supabase
         .from("human_inbox")
         .select("id, created_by_pipeline")
         .eq("ref_id", id)
         .eq("item_type", "draft_approval")
         .eq("org_id", ORG_ID);
 
-      if (relatedInboxError) throw relatedInboxError;
-
-      const patch =
-        data.action === "approve"
-          ? { status: "scheduled" }
-          : { status: "rejected" };
-
-      const { error } = await supabase.from("content_registry").update(patch).eq("id", id).eq("org_id", ORG_ID);
-      if (error) throw error;
-
-      const inboxPatch = {
-        status: data.action === "approve" ? "approved" : "rejected",
-        action_note: data.action === "approve" ? null : "Rejected from content registry",
-        actioned_at: new Date().toISOString(),
-        actioned_by: "ui",
-      };
-
-      const { error: inboxError } = await supabase
-        .from("human_inbox")
-        .update(inboxPatch)
-        .eq("ref_id", id)
-        .eq("item_type", "draft_approval")
-        .eq("status", "pending")
-        .eq("org_id", ORG_ID);
-
-      if (inboxError) throw inboxError;
-
-      if ((relatedInboxRows ?? []).some((row) => row.created_by_pipeline === "pipeline-b-weekly")) {
+      if ((relatedInboxRows ?? []).some((row: any) => row.created_by_pipeline === "pipeline-b-weekly")) {
         await requestPipelineBResume();
+      }
+
+      // Pipeline C resume gate
+      if (pipelineRunId) {
+        if (data.action === "reject") {
+          // Rejection always triggers resume so pipeline can create revision item
+          await requestPipelineCResume();
+        } else {
+          // Approve: only trigger if no draft rows remain for this run
+          const { count } = await supabase
+            .from("content_registry")
+            .select("id", { count: "exact", head: true })
+            .eq("pipeline_run_id", pipelineRunId)
+            .eq("status", "draft")
+            .eq("org_id", ORG_ID);
+
+          if ((count ?? 0) === 0) {
+            await requestPipelineCResume();
+          }
+        }
       }
 
       return { id, action: data.action };
@@ -632,7 +633,33 @@ export function useBatchApproveContent(options?: MutationHookOptions) {
         .eq("org_id", ORG_ID);
 
       if (error) throw error;
+
+      // All drafts approved — trigger pipeline resume
+      await requestPipelineCResume();
+
       return { pipelineRunId };
+    },
+    ...options?.mutation,
+  });
+}
+
+export function useEditContent(options?: MutationHookOptions) {
+  return useMutation({
+    mutationFn: async ({ id, body, subjectLine }: { id: string; body: string; subjectLine?: string | null }) => {
+      // Always reset to draft and clear rejection note so the edited asset
+      // can be approved normally. Works for both draft and rejected items.
+      const patch: Record<string, unknown> = { body, status: "draft", rejection_note: null };
+      if (subjectLine !== undefined) patch.subject_line = subjectLine;
+
+      const { error } = await supabase
+        .from("content_registry")
+        .update(patch)
+        .eq("id", id)
+        .in("status", ["draft", "rejected"])
+        .eq("org_id", ORG_ID);
+
+      if (error) throw error;
+      return { id };
     },
     ...options?.mutation,
   });
