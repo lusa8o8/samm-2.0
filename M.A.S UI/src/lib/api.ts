@@ -480,7 +480,7 @@ export function useActionInboxItem(options?: MutationHookOptions) {
       const inboxRow = await requireSingleRow("human_inbox", id);
 
       const nextStatus =
-        data.action === "approve" ? "approved" : data.action === "reject" ? "rejected" : "read";
+        data.action === "approve" ? "approved" : data.action === "reject" ? "rejected" : "actioned";
 
       const { error: inboxError } = await supabase
         .from("human_inbox")
