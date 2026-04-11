@@ -55,6 +55,8 @@ export default function AgentSettings() {
       setVisualData({
         ...(config.brand_visual ?? {}),
         markdown_design_spec: config.markdown_design_spec ?? "",
+        social_handles: config.social_handles ?? {},
+        primary_cta_url: config.primary_cta_url ?? "",
       });
       setKpiData(config.kpi_targets);
       setPipelineData(config.pipeline_config);
@@ -126,9 +128,16 @@ export default function AgentSettings() {
   };
 
   const handleSaveVisualBrand = () => {
-    const { markdown_design_spec, ...brandVisualFields } = visualData;
+    const { markdown_design_spec, social_handles, primary_cta_url, ...brandVisualFields } = visualData;
     updateMutation.mutate(
-      { data: { brand_visual: brandVisualFields, markdown_design_spec: markdown_design_spec ?? "" } },
+      {
+        data: {
+          brand_visual: brandVisualFields,
+          markdown_design_spec: markdown_design_spec ?? "",
+          social_handles: social_handles ?? {},
+          primary_cta_url: primary_cta_url ?? "",
+        },
+      },
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getGetOrgConfigQueryKey() });
@@ -377,6 +386,61 @@ export default function AgentSettings() {
                     <div className="space-y-2">
                       <Label className="text-xs">Layout Preference</Label>
                       <Textarea value={visualData.layout_preference || ""} onChange={(e) => setVisualData({ ...visualData, layout_preference: e.target.value })} placeholder="e.g. Mobile-first, key info above fold, CTA at bottom right" className="h-20 resize-none text-sm" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs">Logo File Location <span className="text-muted-foreground">(optional)</span></Label>
+                    <Input
+                      value={visualData.logo_file_note || ""}
+                      onChange={(e) => setVisualData({ ...visualData, logo_file_note: e.target.value })}
+                      placeholder="e.g. TSH_Logo_White.png — Google Drive /Brand Assets/"
+                      className="h-9"
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Injected into design briefs so designers know where to find the logo file. Upload to Canva manually — logo file uploads require M-vision.
+                    </p>
+                  </div>
+
+                  <div className="rounded-md border bg-background p-4">
+                    <div className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">Social Handles &amp; Links</div>
+                    <p className="mb-4 text-[11px] text-muted-foreground">
+                      Injected into every design brief so Canva AI can place accurate social icons and handles. Also used for QR code generation.
+                    </p>
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                      {[
+                        { key: "youtube", label: "YouTube", placeholder: "@TranscendedStudyHub" },
+                        { key: "facebook", label: "Facebook", placeholder: "Transcended Study Hub" },
+                        { key: "whatsapp", label: "WhatsApp", placeholder: "+260 97X XXXXXX or wa.me link" },
+                        { key: "instagram", label: "Instagram", placeholder: "@tsh_zambia" },
+                        { key: "tiktok", label: "TikTok", placeholder: "@tsh_zambia" },
+                        { key: "studyhub_url", label: "StudyHub URL", placeholder: "https://studyhub.tsh.co.zm" },
+                      ].map(({ key, label, placeholder }) => (
+                        <div key={key} className="space-y-1.5">
+                          <Label className="text-xs">{label}</Label>
+                          <Input
+                            value={(visualData.social_handles ?? {})[key] || ""}
+                            onChange={(e) => setVisualData({
+                              ...visualData,
+                              social_handles: { ...(visualData.social_handles ?? {}), [key]: e.target.value }
+                            })}
+                            placeholder={placeholder}
+                            className="h-9"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-4 space-y-1.5">
+                      <Label className="text-xs">Primary CTA URL <span className="text-muted-foreground">(QR code destination)</span></Label>
+                      <Input
+                        value={visualData.primary_cta_url || ""}
+                        onChange={(e) => setVisualData({ ...visualData, primary_cta_url: e.target.value })}
+                        placeholder="https://studyhub.tsh.co.zm"
+                        className="h-9"
+                      />
+                      <p className="text-[11px] text-muted-foreground">
+                        The single link all QR codes and design CTAs will point to. Override per-campaign in the design brief if needed.
+                      </p>
                     </div>
                   </div>
 

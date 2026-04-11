@@ -48,11 +48,21 @@ type OrgConfig = {
     font_heading: string;
     font_body: string;
     logo_usage_rules: string;
+    logo_file_note: string;
     visual_style: string;
     photography_style: string;
     layout_preference: string;
   };
   markdown_design_spec: string;
+  social_handles: {
+    youtube: string;
+    facebook: string;
+    whatsapp: string;
+    instagram: string;
+    tiktok: string;
+    studyhub_url: string;
+  };
+  primary_cta_url: string;
   platform_connections: Record<string, unknown>;
   pipeline_config: {
     pipeline_a_enabled: boolean;
@@ -305,11 +315,21 @@ function normalizeOrgConfig(row: any): OrgConfig {
       font_heading: row?.brand_visual?.font_heading ?? "",
       font_body: row?.brand_visual?.font_body ?? "",
       logo_usage_rules: row?.brand_visual?.logo_usage_rules ?? "",
+      logo_file_note: row?.brand_visual?.logo_file_note ?? "",
       visual_style: row?.brand_visual?.visual_style ?? "",
       photography_style: row?.brand_visual?.photography_style ?? "",
       layout_preference: row?.brand_visual?.layout_preference ?? "",
     },
     markdown_design_spec: row?.markdown_design_spec ?? "",
+    social_handles: {
+      youtube: row?.social_handles?.youtube ?? "",
+      facebook: row?.social_handles?.facebook ?? "",
+      whatsapp: row?.social_handles?.whatsapp ?? "",
+      instagram: row?.social_handles?.instagram ?? "",
+      tiktok: row?.social_handles?.tiktok ?? "",
+      studyhub_url: row?.social_handles?.studyhub_url ?? "",
+    },
+    primary_cta_url: row?.primary_cta_url ?? "",
     platform_connections: row?.platform_connections ?? {},
     pipeline_config: {
       pipeline_a_enabled: pipelineConfig.pipeline_a_enabled ?? pipelineConfig.pipeline_a?.enabled ?? false,
@@ -870,6 +890,14 @@ export function useUpdateOrgConfig(options?: MutationHookOptions) {
 
       if (data.markdown_design_spec !== undefined) {
         patch.markdown_design_spec = data.markdown_design_spec;
+      }
+
+      if (data.social_handles !== undefined) {
+        patch.social_handles = data.social_handles;
+      }
+
+      if (data.primary_cta_url !== undefined) {
+        patch.primary_cta_url = data.primary_cta_url;
       }
 
       const { data: updated, error } = await supabase

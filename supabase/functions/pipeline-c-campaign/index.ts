@@ -417,7 +417,7 @@ async function resumePipelineCRun(params: { supabase: any; anthropic: Anthropic;
 
     const [copyAssets, designBrief] = await Promise.all([
       runCopyWriter(anthropic, campaignBrief, event, config.brand_voice, canonicalCopy),
-      runDesignBriefAgent(anthropic, campaignBrief, event, config.brand_visual ?? {}, config.markdown_design_spec ?? null)
+      runDesignBriefAgent(anthropic, campaignBrief, event, config.brand_visual ?? {}, config.markdown_design_spec ?? null, config.social_handles ?? {}, config.primary_cta_url ?? null)
     ])
 
     results.copy_assets_created = copyAssets.length
@@ -744,7 +744,9 @@ async function runDesignBriefAgent(
   brief: CampaignBrief,
   event: CalendarEvent,
   brandVisual: any,
-  markdownDesignSpec: string | null
+  markdownDesignSpec: string | null,
+  socialHandles: any,
+  primaryCtaUrl: string | null
 ): Promise<string> {
 
   const hasVisual = brandVisual && Object.keys(brandVisual).some(k => brandVisual[k])
@@ -758,10 +760,26 @@ Background: ${brandVisual.background_color || 'not set'}
 Heading font: ${brandVisual.font_heading || 'not set'}
 Body font: ${brandVisual.font_body || 'not set'}
 Logo rules: ${brandVisual.logo_usage_rules || 'not specified'}
+Logo file: ${brandVisual.logo_file_note || 'not configured — must be added manually in design tool'}
 Visual style: ${brandVisual.visual_style || 'not specified'}
 Photography: ${brandVisual.photography_style || 'not specified'}
 Layout: ${brandVisual.layout_preference || 'not specified'}`
     : ''
+
+  const hasHandles = socialHandles && Object.values(socialHandles).some(v => v)
+  const socialBlock = hasHandles
+    ? `\nSOCIAL HANDLES (place these accurately on the design — do not invent or substitute)
+${socialHandles.youtube ? `- YouTube: ${socialHandles.youtube}` : ''}
+${socialHandles.facebook ? `- Facebook: ${socialHandles.facebook}` : ''}
+${socialHandles.whatsapp ? `- WhatsApp: ${socialHandles.whatsapp}` : ''}
+${socialHandles.instagram ? `- Instagram: ${socialHandles.instagram}` : ''}
+${socialHandles.tiktok ? `- TikTok: ${socialHandles.tiktok}` : ''}
+${socialHandles.studyhub_url ? `- StudyHub: ${socialHandles.studyhub_url}` : ''}`.replace(/\n-\s*$\n/gm, '')
+    : '\nSOCIAL HANDLES: Not configured — ask the brand manager before placing social icons.'
+
+  const ctaBlock = primaryCtaUrl
+    ? `\nQR CODE / PRIMARY CTA LINK: ${primaryCtaUrl}`
+    : '\nQR CODE / PRIMARY CTA LINK: Not configured — confirm with brand manager before generating QR code.'
 
   const platformDimensionsBlock = `\nPLATFORM DIMENSIONS (use exact dimensions for each deliverable)
 - Facebook post: 1200×628 (landscape) or 1080×1080 (square)
@@ -779,10 +797,10 @@ Layout: ${brandVisual.layout_preference || 'not specified'}`
 
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-5',
-    max_tokens: 400,
-    system: `Write a concise design brief for a student-focused EdTech campaign asset.
-Plain text only. No markdown, no asterisks, no bold, no headers. Use plain bullet points with a dash (-). Under 200 words.
-You MUST include the exact brand colors, font names, logo rules, and platform dimensions as specified. Do not substitute or invent values.`,
+    max_tokens: 500,
+    system: `Write a concise design brief for a campaign visual asset.
+Plain text only. No markdown, no asterisks, no bold, no headers. Use plain bullet points with a dash (-). Under 250 words.
+You MUST include: exact brand colors, font names, logo file location, exact social handles, exact CTA URL, and platform dimensions exactly as specified. Do not substitute, invent, or omit any of these values.`,
     messages: [{
       role: 'user',
       content: `Campaign: ${brief.name}
@@ -790,6 +808,8 @@ Key message: ${brief.key_message}
 Platforms: ${brief.platforms.join(', ')}
 Target: ${brief.target_audience} at ${event.universities.join(', ')}
 ${brandVisualBlock}
+${socialBlock}
+${ctaBlock}
 ${platformDimensionsBlock}
 ${creativeBlock}
 ${designSpecBlock}
