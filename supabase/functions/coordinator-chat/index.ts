@@ -77,6 +77,7 @@ function summarizeMetrics(rows: any[]) {
 
 function summarizeEvents(rows: any[]) {
   return rows.map((row) => ({
+    id: row.id,
     label: row.label,
     event_type: row.event_type,
     event_date: row.event_date,
@@ -199,13 +200,18 @@ Deno.serve(async (req) => {
 ActionObject is one of:
 - {"type":"run_pipeline","pipeline":"pipeline-a-engagement"|"pipeline-b-weekly"|"pipeline-c-campaign"|"coordinator","needs_confirmation": boolean, "title": string, "description": string}
 - {"type":"create_calendar_event","label": string, "event_date": "YYYY-MM-DD", "event_type": "exam"|"registration"|"holiday"|"orientation"|"graduation"|"other", "universities": string[], "run_pipeline_c": boolean, "needs_confirmation": boolean, "title": string, "description": string}
+- {"type":"edit_calendar_event","event_id": string, "label"?: string, "event_date"?: string, "event_type"?: string, "needs_confirmation": boolean, "title": string, "description": string}
+- {"type":"delete_calendar_event","event_id": string, "label": string, "needs_confirmation": boolean, "title": string, "description": string}
 
 Rules:
-- Only propose run_pipeline when the user is clearly asking to run or trigger work.
+- Only propose run_pipeline when the user is clearly asking to run or trigger work with no event creation involved.
 - Use create_calendar_event when the user asks to schedule, add, or create a calendar event.
   - Infer the date from the user message (e.g. "next Friday" relative to today ${today}).
-  - Set run_pipeline_c to true only if the user also asks to draft or create content for that event.
+  - If the user says "schedule a campaign for [event] on [date] and run the pipeline" — use create_calendar_event with run_pipeline_c: true. Do NOT use run_pipeline for this; the event must be created first.
+  - Set run_pipeline_c to true only if the user also asks to draft, create, or run a campaign for that event.
   - universities defaults to ["UNZA","CBU","MU","ZCAS","DMI"] if none are specified.
+- Use edit_calendar_event when the user asks to update, change, rename, or reschedule an existing event. Match the event by label or date from the upcoming_events list and use its id.
+- Use delete_calendar_event when the user asks to remove or delete an existing event. Match from upcoming_events and use its id.
 - For status questions, summaries, metrics, approvals, and calendar reads, answer directly.
 - Keep suggestions short and actionable.`
     }
@@ -290,6 +296,59 @@ Rules:
         message: `Added "${action.label}" on ${action.event_date} to the calendar.`,
         suggestions,
       })
+    }
+
+    if (action?.type === 'edit_calendar_event') {
+      if (!action.event_id) {
+        return jsonResponse({ message: "I couldn't identify which event to edit. Please specify the event name and date.", suggestions })
+      }
+
+      if (action.needs_confirmation && !confirmationAction) {
+        return jsonResponse({ message: parsed.message || action.description || `Update "${action.label}"?`, suggestions, action })
+      }
+
+      const patch: Record<string, unknown> = {}
+      if (action.label) patch.label = action.label
+      if (action.event_date) patch.event_date = action.event_date
+      if (action.event_type) patch.event_type = action.event_type
+
+      const { error: editError } = await supabase
+        .from('academic_calendar')
+        .update(patch)
+        .eq('id', action.event_id)
+        .eq('org_id', orgId)
+
+      if (editError) {
+        return jsonResponse({ error: `Failed to update calendar event: ${editError.message}` }, 500)
+      }
+
+      return jsonResponse({ message: parsed.message || `Updated the event.`, suggestions })
+    }
+
+    if (action?.type === 'delete_calendar_event') {
+      if (!action.event_id) {
+        return jsonResponse({ message: "I couldn't identify which event to delete. Please specify the event name and date.", suggestions })
+      }
+
+      if (action.needs_confirmation && !confirmationAction) {
+        return jsonResponse({ message: parsed.message || `Delete "${action.label}"?`, suggestions, action })
+      }
+
+      if (confirmationAction === 'cancel') {
+        return jsonResponse({ message: 'Cancelled. The event has not been deleted.', suggestions })
+      }
+
+      const { error: deleteError } = await supabase
+        .from('academic_calendar')
+        .delete()
+        .eq('id', action.event_id)
+        .eq('org_id', orgId)
+
+      if (deleteError) {
+        return jsonResponse({ error: `Failed to delete calendar event: ${deleteError.message}` }, 500)
+      }
+
+      return jsonResponse({ message: parsed.message || `Deleted "${action.label}" from the calendar.`, suggestions })
     }
 
     const modelSchedulerResult = await resolveModelPipelineAction({

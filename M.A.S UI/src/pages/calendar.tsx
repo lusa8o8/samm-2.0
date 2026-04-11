@@ -7,6 +7,7 @@ import {
   getListCalendarEventsQueryKey,
 } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 import { CalendarDays, CheckCircle2, Clock, Plus, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -137,6 +138,7 @@ const BLANK_FORM: EventFormData = {
 export default function Calendar() {
   const { data: events, isLoading } = useListCalendarEvents();
   const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: getListCalendarEventsQueryKey() });
@@ -148,7 +150,10 @@ export default function Calendar() {
     mutation: { onSuccess: () => { invalidate(); setEditEvent(null); } },
   });
   const deleteMutation = useDeleteCalendarEvent({
-    mutation: { onSuccess: () => { invalidate(); setDeleteId(null); } },
+    mutation: {
+      onSuccess: () => { invalidate(); setDeleteId(null); },
+      onError: (err: any) => toast({ title: "Failed to delete event", description: err?.message ?? "Unknown error", variant: "destructive" }),
+    },
   });
 
   const [createOpen, setCreateOpen] = useState(false);
