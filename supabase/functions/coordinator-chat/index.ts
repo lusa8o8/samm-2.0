@@ -2,6 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.27.0'
 import {
   expireStaleRuns,
+  invokePipeline,
   resolveExplicitSchedulerRequest,
   resolveModelPipelineAction,
   type CalendarEventContext,
@@ -224,12 +225,14 @@ Deno.serve(async (req) => {
 
 ActionObject is one of:
 - {"type":"run_pipeline","pipeline":"pipeline-a-engagement"|"pipeline-b-weekly"|"pipeline-c-campaign"|"coordinator","needs_confirmation": boolean, "title": string, "description": string}
+- {"type":"write_post","topic": string, "platforms": string[]|null, "event_ref": string|null, "title": string, "description": string}
 - {"type":"create_calendar_event","label": string, "event_date": "YYYY-MM-DD", "event_type": "exam"|"registration"|"holiday"|"orientation"|"graduation"|"other", "universities": string[], "run_pipeline_c": boolean, "needs_confirmation": boolean, "title": string, "description": string}
 - {"type":"edit_calendar_event","event_id": string, "label"?: string, "event_date"?: string, "event_type"?: string, "needs_confirmation": boolean, "title": string, "description": string}
 - {"type":"delete_calendar_event","event_id": string, "label": string, "needs_confirmation": boolean, "title": string, "description": string}
 
 Rules:
-- Only propose run_pipeline when the user is clearly asking to run or trigger work with no event creation involved.
+- Only propose run_pipeline when the user is clearly asking to run or trigger a full pipeline with no event creation involved.
+- Use write_post when the user asks to write, draft, or create a single post or message about a topic. This is NOT a campaign — no brief, no CEO gate, no research. Extract the topic from the user message. platforms defaults to null (all platforms). event_ref is optional context. write_post never requires confirmation — it is fast and reversible.
 - Use create_calendar_event when the user asks to schedule, add, or create a calendar event.
   - Infer the date from the user message (e.g. "next Friday" relative to today ${today}).
   - If the user says "schedule a campaign for [event] on [date] and run the pipeline" — use create_calendar_event with run_pipeline_c: true. Do NOT use run_pipeline for this; the event must be created first.
@@ -372,6 +375,49 @@ Rules:
           title: `Delete "${action.label}"`,
           description: `Permanently removes this event from the calendar. Any pipeline schedules tied to it will no longer fire.`,
           action: `calendar_delete:${action.event_id}`,
+        },
+      })
+    }
+
+    if (action?.type === 'write_post') {
+      const topic = String(action.topic ?? '').trim()
+      if (!topic) {
+        return jsonResponse({ message: "I couldn't work out what to write about. Could you be more specific?", suggestions })
+      }
+
+      const postBody: Record<string, unknown> = { topic }
+      if (Array.isArray(action.platforms) && action.platforms.length > 0) {
+        postBody.platforms = action.platforms
+      }
+      if (action.event_ref) {
+        postBody.event_ref = String(action.event_ref)
+      }
+
+      // Fire pipeline-d in the background — it completes in a few seconds.
+      // The user will see drafts appear in Content Registry shortly after.
+      const postTask = invokePipeline(supabase, 'pipeline-d-post', orgId, postBody)
+        .catch((err: unknown) => {
+          console.error('Pipeline D background invocation failed:', err instanceof Error ? err.message : String(err))
+        })
+
+      try {
+        EdgeRuntime.waitUntil(postTask)
+      } catch {
+        // EdgeRuntime not available outside Supabase — promise still runs
+      }
+
+      const platformNote = Array.isArray(action.platforms) && action.platforms.length > 0
+        ? ` for ${action.platforms.join(', ')}`
+        : ''
+
+      return jsonResponse({
+        message: parsed.message || `Writing a post about "${topic}"${platformNote} now — drafts will appear in Content Registry in a few seconds.`,
+        suggestions: ['Check Content Registry', 'What needs my approval?', 'Summarize this week'],
+        invoked_action: {
+          type: 'run_pipeline',
+          pipeline: 'pipeline-d-post',
+          status: 'running',
+          run_id: null,
         },
       })
     }

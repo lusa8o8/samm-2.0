@@ -12,6 +12,7 @@ const PIPELINE_TARGETS: Record<string, string> = {
   'pipeline-a-engagement': 'pipeline-a-engagement',
   'pipeline-b-weekly': 'pipeline-b-weekly',
   'pipeline-c-campaign': 'pipeline-c-campaign',
+  'pipeline-d-post': 'pipeline-d-post',
 }
 
 const STALE_RUN_MINUTES = 10
@@ -161,7 +162,7 @@ export async function expireStaleRuns(supabase: any, rows: any[]) {
   )
 }
 
-async function invokePipeline(supabase: any, pipelineId: string, orgId: string, body: Record<string, unknown> = {}) {
+export async function invokePipeline(supabase: any, pipelineId: string, orgId: string, body: Record<string, unknown> = {}) {
   const functionName = PIPELINE_TARGETS[pipelineId]
   if (!functionName) {
     throw new Error(`Unknown pipeline target: ${pipelineId}`)

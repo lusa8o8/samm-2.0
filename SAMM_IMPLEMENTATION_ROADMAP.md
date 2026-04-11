@@ -91,10 +91,22 @@ Living record of what has been browser-verified vs pending. Update this when a t
 ### M11F — Platform Cadence Policy
 | Test | Status |
 |------|--------|
-| Launch blast — all platforms scheduled on day 0 within preferred_time_utc window | 🔲 |
-| Sustaining cadence — no two platforms share the same post day after day 0 | 🔲 |
-| Max post cap — no platform exceeds max_posts_per_campaign | 🔲 |
-| Post schedule in Inbox card shows staggered timestamps, not uniform sequential times | 🔲 |
+| Launch blast — all platforms scheduled on day 0 within preferred_time_utc window | ⬜ |
+| Sustaining cadence — no two platforms share the same post day after day 0 | ⬜ |
+| Max post cap — no platform exceeds max_posts_per_campaign | ⬜ |
+| Post schedule in Inbox card shows staggered timestamps, not uniform sequential times | ⬜ |
+
+---
+
+### M12 — Pipeline D (One-Off Post)
+| Test | Status |
+|------|--------|
+| NL trigger — "Write a post about X" → samm routes to Pipeline D (not Pipeline C) | ⬜ |
+| NL trigger — "Draft a WhatsApp message about X" → drafts appear in Content Registry for WhatsApp only | ⬜ |
+| Content Registry — drafts land with is_campaign_post: false, status: draft | ⬜ |
+| Draft count — correct number of drafts created (1 per requested platform) | ⬜ |
+| Brand voice — copy uses brand tone, approved hashtags, and CTA style | ⬜ |
+| No pipeline_runs row created (Pipeline D is not tracked in Operations) | ⬜ |
 
 ---
 
@@ -1088,43 +1100,73 @@ Commit policy:
 
 ## Milestone 12: One-Off Post Pipeline (Pipeline D)
 Status:
-- design locked 2026-04-11 (see PIPELINE_C_DESIGN.md — One-Off Post Gap section)
-- not started — scope to be detailed before implementation
+- complete 2026-04-11
 
 Goal:
 - handle ad-hoc "write a post about X" requests without the full campaign workflow
 - no brief, no CEO gate, no research phase, no monitor
-- 1-3 platform drafts → Content Registry → marketer review → done
+- platform drafts → Content Registry → marketer review → done
 
-Design notes:
-- canonical_copy_writer + copy_writer only (2 LLM calls max)
-- accepts: topic, platform list (optional, defaults to all), event reference (optional)
-- completes in < 10 seconds
-- no WAITING_HUMAN gate for brief — goes straight to Content Registry as drafts
-- samm routing rule: "write a post about X" / "draft a post for [platform]" → Pipeline D
-- samm response until Pipeline D exists: "I can run a full campaign for that. For a single quick post, you can add it directly in the Content Registry — one-off post pipeline is on the roadmap."
+Scope:
+- `supabase/functions/pipeline-d-post/index.ts`: new edge function
+  - Accepts: `topic` (required), `platforms` (optional array, defaults all), `event_ref` (optional)
+  - 2 LLM call phases: canonical copy writer → parallel platform adapters
+  - Inserts drafts into `content_registry` with `is_campaign_post: false`, `status: 'draft'`
+  - No `pipeline_runs` row — lightweight utility, not a tracked workflow
+  - Completes in < 10 seconds
+- `coordinator-chat/scheduler.ts`: add `pipeline-d-post` to `PIPELINE_TARGETS`
+- `coordinator-chat/index.ts`:
+  - Add `write_post` ActionObject type to model instruction
+  - Handler invokes pipeline-d-post in background, returns "drafts will be in Content Registry shortly"
+  - Routing guard: "write/draft/create a post/message about X" → write_post action, not run_pipeline
+
+Do not include:
+- Research phase, competitor analysis, ambassador data (those are Pipeline C)
+- CEO brief gate (Pipeline D goes straight to Content Registry)
+- Monitor or post-campaign report
+- pipeline_runs row (no tracking — too fast, not a long workflow)
 
 ---
 
 ## Milestone 13: Live Platform Publishing
 Status:
-- planned (previously Milestone 11)
+- planned
+- depends on M11E (brand_visual injected into briefs) and M11F (cadence policy baked in) — both complete
+- must be one provider family per release — never batch all live integrations
 
 Goal:
 - replace mock publish actions with real platform API calls behind the existing adapter interfaces
 - no scheduler or runtime rewrite required — adapters swap mocks for real calls
+- drafted + approved content in Content Registry publishes to live platforms on scheduled_at time
 
 Scope:
-- Facebook Graph API
-- WhatsApp Business API
-- YouTube Data API
-- email provider (SendGrid or equivalent)
-- StudyHub metrics feed
+- Supabase cron job: poll `content_registry` for rows where `status = 'approved'` and `scheduled_at <= now()` → publish
+- Publish adapters (one per release):
+  - Facebook Graph API — page post publish
+  - WhatsApp Business API — broadcast or status update
+  - YouTube Data API — community post
+  - email provider (SendGrid) — campaign send
+- On publish success: update `content_registry.status = 'published'`, set `published_at`
+- On publish failure: update `status = 'failed'`, log error to `content_registry.metadata`
+
+Do not include in first release:
+- Analytics pull-back from live platforms (separate milestone)
+- A/B publish variants
+- Retry queue (handle in v2)
+
+Verification:
+- Approved Facebook draft publishes to the connected page on schedule
+- published_at timestamp set in Content Registry after successful publish
+- Failed publish sets status: failed with error logged in metadata
+- No double-publish: cron does not re-process already-published rows
 
 Commit policy:
-- one provider family at a time — never batch all live integrations into one release
+- migration for publish columns (published_at, failure reason) first
+- one provider adapter per stable commit — never batch multiple live APIs
 
-## Milestone 12: Multi-Channel Samm Access
+---
+
+## Milestone 14: Multi-Channel Samm Access
 Status:
 - planned
 
@@ -1143,7 +1185,7 @@ Architecture note:
 - each channel is a plugin in the integration registry — adding a new channel does not touch the core scheduler or pipelines
 - approval actions (approve/reject inbox items) routable via channel buttons/reactions where the platform supports it
 
-## Milestone 13: Voice Interface
+## Milestone 15: Voice Interface
 Status:
 - planned
 
@@ -1157,7 +1199,7 @@ Scope:
 - voice-compatible response formatting (no markdown in spoken output)
 - available in the samm web UI first, then as a channel adapter for WhatsApp voice notes
 
-## Milestone 14: Dashless Operation + External Tool Integrations
+## Milestone 16: Dashless Operation + External Tool Integrations
 Status:
 - planned
 
@@ -1170,7 +1212,7 @@ Scope:
 - Google Docs integration: copy assets drafted into a doc for review
 - samm runs entirely via channel access (Slack, Teams, WhatsApp) for users who prefer no additional interface
 
-## Milestone 15: Visual Plugin Builder
+## Milestone 17: Visual Plugin Builder
 Status:
 - long-term vision
 
@@ -1184,7 +1226,7 @@ Scope:
 - capability flag management per org from the visual builder
 - custom trigger and action definitions
 
-## Milestone 16: Sales and CRM Integration
+## Milestone 18: Sales and CRM Integration
 Status:
 - long-term vision, gated by plan tier
 
@@ -1238,14 +1280,12 @@ Reason:
 - new agents and channels must plug into the same architecture, not fork it
 
 ## Recommended Immediate Next Slice
-The next concrete implementation slice should be:
-1. complete Pipeline B discovery from the stabilized baseline
-2. define the smallest persisted `waiting_human` / `resumed` contract for Pipeline B
-3. wire Content and Inbox approval actions to scheduler-backed resume behavior
-4. verify the run pauses, resumes, and exits cleanly without regressing current content-review UX
-5. commit the resumable human-gate slice only after hosted verification
+Milestones M11A through M11F and M12 are complete. All brand, scheduling, and one-off post infrastructure is in place.
 
-This is now the highest-leverage move because Pipeline A is already engine-backed and parity-verified, and Pipeline B is the first real workflow that exercises persisted human-gate resumability.
+Next highest-leverage work:
+1. **M13 Live Platform Publishing** — run the first real post from Content Registry to a live platform. Start with Facebook Graph API (most documented, most used channel). One provider per stable commit.
+2. **Canva AI close-the-loop test** — run a campaign with brand_visual + social handles filled in Settings → verify Canva AI completes a design without follow-up questions.
+3. **Pending test queue** — work through the ⬜ items in the Test Status section above; update each to ✅ as verified.
 
 ## Commit Strategy
 Recommended commit pattern:
