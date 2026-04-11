@@ -7,217 +7,226 @@
 - GitHub repo: `https://github.com/lusa8o8/tsh-marketing-system.git`
 
 ## Working Discipline
-Carry this forward exactly.
+Carry this forward exactly. This is not optional — it is the reason the build is clean.
 
-1. Do discovery first.
-2. State diagnosis explicitly.
-3. State a concrete plan before editing.
+1. Do discovery first. Read before editing.
+2. State diagnosis explicitly before proposing a fix.
+3. Lock a plan in the docs before writing any code.
 4. Keep changes narrow and reversible.
-5. Commit every stable slice.
+5. Commit every stable slice with a descriptive message.
 6. Push stable checkpoints to `main` when requested.
-7. Avoid speculative cleanup.
+7. Avoid speculative cleanup or scope creep.
 
-This discipline has kept the product clean and lean. Do not regress into broad exploratory edits without a locked plan.
+The product has stayed clean because every session followed: **discovery → diagnosis → plan → narrow execution → verification → commit**. Do not deviate.
 
 ## If The Session Breaks Or Rate Limits Hit
-Before touching code again, reread the relevant docs for full context:
-- `NEXT_AGENT_HANDOFF.md`
+Before touching code, reread the relevant docs for full context:
+- `NEXT_AGENT_HANDOFF.md` (this file)
 - `SAMM_IMPLEMENTATION_ROADMAP.md`
 - `SAMM_FULL_SYSTEM_ARCHITECTURE.md`
 - `SAMM_RUNTIME_SPEC.md`
 - `SAMM_SCHEDULER_CONTRACT.md`
 - `SAMM_CODEBASE_MAPPING.md`
 
-Then continue with the same discipline:
-- discovery
-- diagnosis
-- plan
-- narrow execution
-- verification
-- commit
+Then continue with the same discipline.
+
+---
 
 ## Product State
-Brand and product direction are now centered on `samm`.
+`samm` is the product anchor. Hybrid control-plane model is the intended architecture.
 
-Current product stance:
-- `samm` is the product anchor.
-- Hybrid control-plane model is the intended architecture.
-- Full `samm` workspace redesign is deferred until after user feedback.
-- Near-term UI changes, if any, should stay narrow and focus on Inbox and Content Registry.
-- Optional modules like `Calendar` and `Ambassadors` are planned for onboarding/capability gating later, not implemented yet.
+Current stance:
+- Full workspace redesign is deferred until after user feedback.
+- Near-term UI changes stay narrow: Inbox and Content Registry only.
+- Optional modules (Calendar, Ambassadors) planned for onboarding/capability gating later.
 
-## Key Completed Slices
-### Branding and UI
-- login rebrand to `samm`
-- human-centered login imagery
-- dashboard shell rebrand
-- `samm` promoted to top-level nav
-- `Operations` replaces `Agent Manager`
+---
 
-### Backend / Infra
-- auth wired through Supabase
-- cron slice completed manually in Supabase dashboard
-- `coordinator-chat` edge function implemented, committed, pushed, deployed, and browser-verified
-- scheduler extraction completed
-- normalized pipeline run status contract introduced in shared runtime code
-- agent registry slice completed
-- integration registry slice completed, committed, pushed, deployed, and parity-verified
-- Pipeline A rebuilt on the shared engine, committed, pushed, deployed, and parity-verified
-- Pipeline B and Pipeline C invocation baseline restored and pushed in the Milestone 5A checkpoint
-- Milestone 6: Pipeline B resumable human gate complete and browser-verified
-- Milestone 7: Pipeline C CEO brief gate complete and browser-verified
-- Milestone 7A: two-phase copy generation for Pipeline C complete and browser-verified
-- Milestone 7B: copy assets land in Content Registry as drafts, not in Inbox — complete and browser-verified
-- Milestone 7C: batch approval in Content Registry — complete and browser-verified
-- Milestone 7D: marketer approval gate with inline edit and rejection loop — complete and browser-verified
-- Milestone 7E: design brief to Content Registry, image upload on copy cards, share button — complete and browser-verified
-- Milestone 8: multi-tenant infrastructure — session-derived org resolution + provision-org — complete, sign-in verified
-- Milestone 5B: real LLM classification and reply generation in Pipeline A — deployed, NOT yet browser-verified
+## Current Build Status
+**Stable through Milestone 10 + Milestone 8C (all fixes deployed, browser verification in progress as of 2026-04-11).**
 
-### Architecture Docs
-Committed and pushed:
-- `SAMM_RUNTIME_SPEC.md`
-- `SAMM_SCHEDULER_CONTRACT.md`
-- `SAMM_CODEBASE_MAPPING.md`
-- `SAMM_IMPLEMENTATION_ROADMAP.md`
-- `SAMM_FULL_SYSTEM_ARCHITECTURE.md`
-
-## Latest Important Commits
-- `080fc52 fix: org details save failing — missing full_name column + silent error on save`
-- `6a99688 feat: editable calendar + NL calendar commands (Milestone 10)`
-- `6d1c9e6 fix: design_brief blocking Pipeline C resume at marketer gate`
-- `2791ec3 fix: platform_connections not written on integration toggle (Milestone 8A)`
-- `ac0909d fix: replace unresolved react-icons brand imports with lucide equivalents`
-- `e91da84 feat: wire Operations overview + settings — manual triggers, connection toggles, full integration list`
-- `33477a9 feat: real LLM classification and reply generation in Pipeline A (Milestone 5B)`
-- `4c816f7 feat: multi-tenant infrastructure — session-derived org resolution + provision-org (Milestone 8)`
+### Latest Commits (most recent first)
+- `4de7bda` — fix(8C-E): strip markdown fences from classifier output before JSON.parse
+- `bc868d2` — fix(8C-E): simplify classifier prompt + force JSON via assistant prefill (superseded by 4de7bda)
+- `3e36f74` — fix(8C-F): show routine intent tag on comments cards too
+- `07f799d` — fix(8C-F/G/H): intent tags, batch grouping, inbox escalation display + insert fix
+- `4fa1984` — fix(8C-E): correct classifier disambiguation and fix name extraction in draftReply
+- `652ada9` — fix(8C-E): sharpen spam classifier to prevent misclassification on scam-URL links
+- `67c6b2c` — docs: 2026-04-11 verification session results + Milestone 8C lock
+- `6a99688` — feat: editable calendar + NL calendar commands (Milestone 10)
+- `080fc52` — fix: org details save failing — missing full_name column + silent error on save
+- `6d1c9e6` — fix: design_brief blocking Pipeline C resume at marketer gate
 
 All pushed to `main`.
 
-## Current Status
-Stable through Milestone 10. Build passes clean.
+---
 
-### Verification results (2026-04-11 session)
-- Test 1 (sign-in, org resolution): PASS — renamed org to "Lusa Works", samm recognized it
-- Test 2 (Settings → Integrations toggle): PASS — badge flips, toast fires. Note: Connect/Disconnect button is redundant alongside Switch; fix queued in 8C.
-- Test 3 (Run now → toast): PARTIAL — run succeeds, toast does not fire reliably. Root cause: coordinator-chat awaits full pipeline execution before returning; fix queued in 8C.
-- Test 4 (Pipeline A result summary): PASS — run starts, summary shows comments/replies/escalations count
-- Test 5 (escalation in Inbox): UNVERIFIED — no escalations received. Investigate: run `SELECT result FROM pipeline_runs WHERE pipeline = 'pipeline-a-engagement' ORDER BY started_at DESC LIMIT 3` and check `escalations` field. If 0 → LLM misclassification. If >0 → inbox insert failed (check `human_inbox` for `item_type = 'escalation'`).
-- Test 6 (Content Registry Published replies): PASS — replies are natural LLM prose
+## Milestone 8C: Content Routing Corrections + UX Polish
+**Status: All fixes deployed. Browser verification in progress.**
 
-### Untested slices (require browser verification after 8C deploy):
-- Fix A: Settings → Integrations — redundant Connect/Disconnect button removed, Switch-only
-- Fix B: Run now toast fires immediately (fire-and-forget pipeline invocation)
-- Fix C: Pipeline B drafts land in Content Registry, not Inbox
-- Fix D: Content Registry "Comments" tab shows Pipeline A engagement replies
+### What was fixed and why (full institutional memory — do not re-investigate these)
 
-### Locked plan: Milestone 8C — Content Routing Corrections + UX Polish
-Locked 2026-04-11. Implement before any new feature work.
-
-**A — Settings Integrations: remove redundant button**
-- Remove the Connect/Disconnect `<Button>` from each integration row; keep only the `<Switch>`
+**A — Settings Integrations button** ✓
+- Removed redundant Connect/Disconnect `<Button>` from each integration row; Switch-only now.
 - File: `M.A.S UI/src/pages/agent/settings.tsx`
 
-**B — Run now toast: fire-and-forget pipeline invocation**
-- `schedulePipelineRun` in `scheduler.ts` currently awaits full pipeline execution, making coordinator-chat hold the HTTP connection open for 20-60s
-- Fix: wrap `invokePipeline` call in `EdgeRuntime.waitUntil`, return `running` status immediately
+**B — Run now toast timing** ✓
+- `schedulePipelineRun` was awaiting full pipeline execution synchronously (20-60s before returning).
+- Fix: wrapped `invokePipeline` in `EdgeRuntime.waitUntil`, returns `running` status immediately.
 - File: `supabase/functions/coordinator-chat/scheduler.ts`
 
-**C — Pipeline B content routing**
-- Pipeline B inserts a `draft_approval` item to `human_inbox` for every draft (lines 229–246 of `pipeline-b-weekly/index.ts`) — this is the pre-Milestone 7B pattern
-- Drafts already land in `content_registry`; inbox insert must be removed
-- Also: add `pipeline_run_id: runId` to content_registry inserts so the resume gate works
-- In `api.ts → useActionContent`: replace inbox-based Pipeline B resume check with pipeline_runs lookup (same pattern as Pipeline C)
+**C — Pipeline B content routing** ✓
+- Pipeline B had a pre-M7B `human_inbox.insert` block for every draft — removed.
+- Added `pipeline_run_id: runId` to `content_registry` inserts in pipeline-b-weekly.
+- Updated `useActionContent` in `api.ts`: Pipeline B resume now uses `pipeline_runs` table lookup (same pattern as Pipeline C), not inbox ref_id lookup.
 - Files: `supabase/functions/pipeline-b-weekly/index.ts`, `M.A.S UI/src/lib/api.ts`
 
-**D — Content Registry "Comments" tab**
-- Pipeline A engagement replies (routine + boost + polls) land in `content_registry` with `status: 'published'`, `created_by: 'pipeline-a-engagement'`
-- Add a "Comments" tab to Content Registry showing only these items
+**D — Content Registry "Comments" tab** ✓
+- Added "Comments" tab to Content Registry showing `created_by = 'pipeline-a-engagement'` published items.
+- Added `created_by` filter to `ContentFilter` type and `useListContent` query.
 - Files: `M.A.S UI/src/pages/content.tsx`, `M.A.S UI/src/lib/api.ts`
 
-**E — Test 5 escalation investigation (blocked on DB check)**
-- Diagnose via: `SELECT result FROM pipeline_runs WHERE pipeline = 'pipeline-a-engagement' ORDER BY started_at DESC LIMIT 3`
-- `escalations: 0` → LLM classification bug (likely "scam" keyword causing spam misclassification despite LLM rewrite)
-- `escalations > 0` → inbox insert failure (RLS or missing `status` default on `human_inbox`)
-- Fix scoped after root cause is confirmed
+**E — Classifier: all comments falling to `routine`** ✓ (deployed, pending verification run)
+- Root cause 1: classifier prompt too complex for Haiku → model returned valid JSON wrapped in ` ```json ... ``` ` code fences → `JSON.parse` failed → all fell to `routine` fallback (no errors, just silent fallback).
+- Root cause 2 (earlier): `ref_table: 'content_registry'` in the `human_inbox` insert does not exist as a column → Supabase JS client returned `{error}` silently → counter incremented after failed insert because there was no error check.
+- Fix E-1: removed `ref_table` from complaint insert; added destructured error checks to ALL `human_inbox` and `content_registry` inserts so failures surface in `results.errors`.
+- Fix E-2: rewrote classifier prompt to compact, directive format Haiku follows reliably.
+- Fix E-3: stripped markdown code fences from raw LLM output before `JSON.parse` (model always wraps in fences despite instructions; strip with regex, not prefill trick — assistant prefill via messages array does NOT reliably suppress fences in this SDK version).
+- Fix E-4: removed mechanical `author.split(' ')[0]` first-name extraction; LLM now receives full author name and decides greeting naturally.
+- File: `supabase/functions/pipeline-a-engagement/index.ts`
 
-### Pipeline C end-to-end verified flow (still valid):
-1. `/samm` triggers Pipeline C → `running`
-2. Research phase (parallel) + campaign planner → campaign brief created
-3. Run pauses at `waiting_human` — campaign brief lands in Inbox
-4. CEO approves → approval completes in under 5 seconds (fire-and-forget)
-5. Background resume: canonical copy (phase 1) → 6 parallel platform assets (phase 2) → design brief suggestion → pauses
-6. 6 copy cards + 1 design brief card land in Content Registry as `draft`, grouped by campaign
-7. Design brief: full-width violet card with Edit, Share (WhatsApp/Telegram/Email/clipboard), Approve
-8. **Marketer gate**: all copy drafts must be approved before monitor + report phase (design brief approval is independent)
-9. Approve all (batch or individual) → pipeline resumes → monitor + report → campaign report in Inbox → `success`
-10. Reject a draft → revision request in Inbox → marketer edits and resubmits in Content Registry → approve → resume
+**F — Intent tags on Comments cards** ✓
+- Added `metadata jsonb` column to `content_registry` (migration `20260411110000_content_registry_metadata.sql`).
+- Pipeline A now stores `metadata: { intent: 'routine' | 'boost' }` on every `content_registry` insert.
+- Comments cards show amber **Boost** badge for boost intent; quiet **Reply** badge for routine.
+- File: `M.A.S UI/src/pages/content.tsx`
 
-## Known Pipeline A Stubs (updated)
-- `classifyComment`: NOW uses real LLM (claude-haiku) — returns `{intent, reasoning}` JSON, fallback to routine on parse error
-- `draftReply`: NOW uses real LLM — brand-voice-aware, uses tone/audience/always_say/never_say/preferred_cta/good_post_example
-- comment source: `getMockComments()` — 7 hardcoded mock comments, no live platform API reads (Milestone 11)
-- spam/complaint ordering bug: FIXED — LLM handles intent, no keyword ordering issue
+**G — Batch freshness in Comments tab** ✓
+- Date display now includes time (`toLocaleString` with hour:minute instead of `toLocaleDateString`).
+- Comments tab groups items by `published_at` day (Today / Yesterday / date label).
+- Items published within last 2 hours get a pulsing green **Fresh batch** pill on the group header.
+- File: `M.A.S UI/src/pages/content.tsx`
 
-Milestone placement:
-- **Milestone 11**: real comment fetching from Facebook, WhatsApp, YouTube APIs
+**H — Inbox escalation display** ✓
+- `inbox.tsx` was reading `item.payload.original_comment` but pipeline-a inserts as `comment_text`. Fixed to `comment_text ?? original_comment`.
+- Author name now shown in escalation card header.
+- File: `M.A.S UI/src/pages/inbox.tsx`
 
-## Multi-Tenancy State (Milestone 8)
-### What is live:
-- `supabase.ts`: hardcoded `ORG_ID` replaced with reactive `getOrgId()` backed by `onAuthStateChange`
-- `api.ts`: all 40+ `org_id` references use `getOrgId()` — live session always used
-- `provision-org` edge function: deployed — creates default `org_config` + stamps `org_id` into `app_metadata`
-- `login.tsx`: signup toggle — `signUp` → `provision-org` → `refreshSession()` → inbox
-- Dev fallback: `DEV_ORG_ID = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"` used when `app_metadata.org_id` is absent
+### Verification checklist (run after 8C deploy)
+- [ ] Run Pipeline A → DB result: `escalations: 1, spam_ignored: 1, boosts_suggested: 2, errors: []`
+- [ ] Inbox → one Escalation card for "Angry Student"; original comment text visible; suggested response visible
+- [ ] Content Registry Comments tab → Natasha K and Chanda Mwale cards show amber **Boost** badge; Brian Mwanza, Mutale Banda, Lombe Phiri show quiet **Reply** badge
+- [ ] Comments tab → items grouped by day; "Fresh batch" pill appears on today's group; time visible on each card
+- [ ] Settings → Integrations: Switch-only, no redundant button
+- [ ] Run now via samm chat: toast fires in under 2 seconds
 
-### Existing TSH user:
-- `ops@tsh.com` does NOT have `org_id` in `app_metadata` — falls back to `DEV_ORG_ID` automatically
-- All their data is already scoped to that UUID — fallback is correct
-- Optional: stamp it manually via Supabase SQL editor if you want JWT parity:
-  ```sql
-  UPDATE auth.users
-  SET raw_app_meta_data = jsonb_set(COALESCE(raw_app_meta_data, '{}'::jsonb), '{org_id}', '"a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"')
-  WHERE email = 'ops@tsh.com';
-  ```
+---
 
-## Exact Next Slice
-### Complete Milestone 8C fixes (locked above) and resolve Test 5 (escalation investigation)
-After 8C is browser-verified and Test 5 is resolved, proceed to Milestone 11.
+## Institutional Memory: Bugs Found This Session (Do Not Re-Investigate)
 
-### Remaining milestone queue (8B and 9 deferred):
-- **M8C**: Content Routing Corrections + UX Polish — IN PROGRESS (locked 2026-04-11)
-- **M10**: Editable Calendar + NL Commands — COMPLETE (deployed, browser verification pending)
-- **M11**: Live Platform Publishing (Facebook, WhatsApp, YouTube, Email real API calls)
+### Supabase JS insert error pattern
+`supabase.from(...).insert({...})` does NOT throw on failure — it returns `{ data, error }`.
+If you `await` it without destructuring, the call silently fails and any counter/state below it still runs.
+**Rule: always destructure `const { error } = await supabase.from(...).insert(...)` and throw/log if `error` exists.**
+
+### Claude Haiku markdown fence behaviour
+Haiku wraps JSON responses in ` ```json ... ``` ` code fences regardless of instructions like "no markdown".
+**Rule: always strip fences before `JSON.parse`: `raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/m, '').trim()`**
+The assistant prefill trick (`{ role: 'assistant', content: '{' }`) does NOT reliably suppress this in `@anthropic-ai/sdk@0.27.0` — the model outputs ` ```json\n{...}` after the prefill `{`, making parse worse.
+
+### `ref_table` is not a column on `human_inbox`
+The insert had `ref_table: 'content_registry'` — this column does not exist. Removed. Do not add it back.
+
+---
+
+## Milestone Queue (Next Agent Starts Here)
+
+### Immediate (after 8C verification passes)
+Proceed to **Milestone 11: Live Platform Publishing**
+- Replace `getMockComments()` in `pipeline-a-engagement/index.ts` with real API reads from Facebook, WhatsApp, YouTube
+- No schema changes needed — the content pipeline and intent classification are already in place
+- Milestone 11 scope is in `SAMM_IMPLEMENTATION_ROADMAP.md`
+
+### Queue after Milestone 11
 - **M12**: Multi-Channel samm Access (Slack, Teams, WhatsApp, Telegram, email inbound)
 - **M13**: Voice Interface
 - **M14**: Dashless Operation (Google Sheets, Docs, Excel)
 - **M15**: Visual Plugin Builder
 - **M16**: Sales and CRM Integration
 
-### Deferred (revisit after broad integration coverage):
+### Deferred (revisit after broad integration coverage)
 - **M8B**: Onboarding Flow UI (4-5 screen wizard)
-- **M9**: Copy Quality Check (Pipeline C phase 3 critic)
+- **M9**: Copy Quality Check (Pipeline C phase 3 critic pass)
 
-## Relevant Files
+---
+
+## Pipeline A: Full Classification Flow (as of 2026-04-11)
+
+Mock comments (7, hardcoded in `getMockComments()`):
+| Comment ID | Author | Expected intent | Expected action |
+|---|---|---|---|
+| fb_001 | Chanda Mwale | boost | Suggestion to Inbox + reply to Content Registry |
+| fb_002 | Mutale Banda | routine | Reply to Content Registry |
+| fb_003 | Angry Student | complaint | Escalation to Inbox (no content_registry row) |
+| yt_001 | Lombe Phiri | routine | Reply to Content Registry |
+| yt_002 | Natasha K | boost | Suggestion to Inbox + reply to Content Registry |
+| wa_001 | Brian Mwanza | routine | Reply to Content Registry |
+| wa_002 | Spam Account | spam | Silently ignored — no DB insert |
+
+Expected result: `comments_processed:7, replies_sent:5, escalations:1, spam_ignored:1, boosts_suggested:2, errors:[]`
+
+---
+
+## Pipeline C End-to-End Verified Flow (still valid)
+1. `/samm` triggers Pipeline C → `running`
+2. Research phase (parallel) + campaign planner → campaign brief in Inbox (`waiting_human`)
+3. CEO approves → fire-and-forget resume, returns in <5s
+4. Canonical copy (phase 1) → 6 parallel platform assets (phase 2) → design brief → pauses
+5. 6 copy cards + 1 design brief card in Content Registry as `draft`, grouped by campaign
+6. Design brief is excluded from marketer gate (approval independent)
+7. Approve all copy → pipeline resumes → monitor + report → campaign report in Inbox → `success`
+8. Reject a draft → revision request in Inbox → edit + resubmit → approve → resume
+
+---
+
+## Multi-Tenancy State
+- `getOrgId()` in `supabase.ts` — reactive, backed by `onAuthStateChange`, `app_metadata.org_id`
+- Dev fallback: `DEV_ORG_ID = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"` when `app_metadata.org_id` absent
+- `provision-org` edge function creates `org_config` row on signup
+- `ops@tsh.com` uses `DEV_ORG_ID` fallback (no `app_metadata.org_id`) — all data already scoped correctly
+
+---
+
+## Key Files
+
 ### Frontend
-- `M.A.S UI/src/pages/content.tsx` — Content Registry UI
-- `M.A.S UI/src/pages/inbox.tsx` — Inbox UI
-- `M.A.S UI/src/pages/agent/overview.tsx` — Operations Overview, pipeline status cards + run table + Run now buttons
-- `M.A.S UI/src/pages/agent/settings.tsx` — Org config, brand voice, integrations (wired), pipeline automation (with Run now)
-- `M.A.S UI/src/lib/api.ts` — all mutations including `useTriggerPipeline`, `useActionContent`, `useUploadContentImage`
-- `M.A.S UI/src/lib/supabase.ts` — `getOrgId()` reactive function, `signUp()`, dev fallback constant
+- `M.A.S UI/src/pages/content.tsx` — Content Registry: Comments tab, batch grouping, intent tags, date/time display
+- `M.A.S UI/src/pages/inbox.tsx` — Inbox: escalation card display (comment_text field)
+- `M.A.S UI/src/pages/agent/overview.tsx` — Operations Overview: pipeline status, run table, Run now buttons
+- `M.A.S UI/src/pages/agent/settings.tsx` — Org config, brand voice, integrations (Switch-only), pipeline automation
+- `M.A.S UI/src/lib/api.ts` — all mutations: `useTriggerPipeline`, `useActionContent`, `useListContent` (created_by filter), `useUpdateOrgConfig`, `useUpdateCalendarEvent`, `useDeleteCalendarEvent`
+- `M.A.S UI/src/lib/supabase.ts` — `getOrgId()`, `signUp()`, `DEV_ORG_ID`
 
-### Supabase
-- `supabase/functions/pipeline-a-engagement/index.ts` — Pipeline A; classifyComment and draftReply now use real LLM
-- `supabase/functions/pipeline-b-weekly/index.ts`
-- `supabase/functions/pipeline-c-campaign/index.ts`
-- `supabase/functions/coordinator-chat/index.ts`
-- `supabase/functions/coordinator-chat/scheduler.ts`
+### Supabase Edge Functions
+- `supabase/functions/pipeline-a-engagement/index.ts` — classifier (Haiku, fence-stripped JSON parse), draftReply (full author name), metadata on content_registry inserts, error-checked inbox inserts
+- `supabase/functions/pipeline-b-weekly/index.ts` — content_registry with pipeline_run_id, no human_inbox inserts for drafts
+- `supabase/functions/pipeline-c-campaign/index.ts` — design_brief excluded from marketer gate filter
+- `supabase/functions/coordinator-chat/index.ts` — create_calendar_event action handler
+- `supabase/functions/coordinator-chat/scheduler.ts` — fire-and-forget via EdgeRuntime.waitUntil
 - `supabase/functions/_shared/pipeline-engine.ts`
 - `supabase/functions/_shared/agent-registry.ts`
 - `supabase/functions/_shared/integration-registry.ts`
 - `supabase/functions/_shared/pipeline-run-status.ts`
-- `supabase/functions/provision-org/index.ts` — new: org provisioning on signup
+- `supabase/functions/provision-org/index.ts`
+
+### Migrations
+- `20260409161000_pipeline_runs_status_states.sql`
+- `20260410120000_content_registry_campaign_fields.sql`
+- `20260410130000_content_registry_rejection_note.sql`
+- `20260410140000_content_registry_media_url.sql`
+- `20260410150000_content_registry_design_brief_platform.sql`
+- `20260411100000_org_config_extended_fields.sql` — full_name, country, contact_email
+- `20260411110000_content_registry_metadata.sql` — metadata jsonb column
 
 ### Architecture Source Of Truth
 - `SAMM_RUNTIME_SPEC.md`
@@ -226,34 +235,25 @@ After 8C is browser-verified and Test 5 is resolved, proceed to Milestone 11.
 - `SAMM_IMPLEMENTATION_ROADMAP.md`
 - `SAMM_FULL_SYSTEM_ARCHITECTURE.md`
 
-## Important Operational Notes
-- `ANTHROPIC_API_KEY` already exists in hosted Supabase Edge Function secrets
-- supabase CLI is at `C:/Users/Lusa/.scoop/shims/supabase.exe` (not in the bash PATH; use that path directly)
-- git is at `/c/Program\ Files/Git/cmd/git.exe` (not in bash PATH) — use `"C:/Program Files/Git/cmd/git.exe"`
-- npm is at `"/c/Program Files/nodejs/npm.cmd"` — use full path, run from `M.A.S UI` directory
-- Python is at `/c/Python314/python.exe`
-- `cat`, `ls`, `head`, `grep`, `find`, `dir` are not available in bash — use Read, Glob, Grep tools instead
-- local environment does not have `deno` installed — no local `deno check` available
-- the schema slice for Milestone 6 exists in `supabase/migrations/20260409161000_pipeline_runs_status_states.sql`
-- content_registry status lifecycle: `draft` → `scheduled` (on approval) or `rejected`; `published` is written directly by Pipeline B mock publisher
+---
+
+## Operational Notes
+- `ANTHROPIC_API_KEY` already set in hosted Supabase Edge Function secrets
+- supabase CLI: `C:/Users/Lusa/.scoop/shims/supabase.exe`
+- git: `/c/Program\ Files/Git/cmd/git.exe` (not in bash PATH)
+- npm: `"/c/Program Files/nodejs/npm.cmd"` — run from `M.A.S UI` directory
+- Python: `/c/Python314/python.exe`
+- `cat`, `ls`, `head`, `grep`, `find`, `dir` — not available in bash; use Read, Glob, Grep tools
+- Local `deno` not installed — no local `deno check`; deploy to verify Deno-side changes
+- content_registry status lifecycle: `draft` → `scheduled` (approval) or `rejected`; `published` written directly by pipeline
 - pipeline_runs status lifecycle: `running` → `waiting_human` → `resumed` → `success` / `failed` / `cancelled`
-- the 54-second Pipeline C resume runs in background via `EdgeRuntime.waitUntil` — coordinator-chat returns immediately
-- build command: `cd "C:/Users/Lusa/tsh-marketing-system/M.A.S UI" && "/c/Program Files/nodejs/npm.cmd" run build`
+- Pipeline C resume runs in background via `EdgeRuntime.waitUntil` — coordinator-chat returns immediately
+
+---
 
 ## Constraints To Preserve
 - Do not do a broad `samm` workspace redesign yet.
-- Do not widen scope into optional-module implementation yet.
-- Do not add external API work before the engine-backed execution core is stable.
-- Keep the product professional and restrained; avoid overdesigned UI changes.
-- Inbox = workflow decisions only. Content Registry = content review only. Do not blur this boundary.
-
-## Last Known Good Principle
-The work has gone well because every slice followed:
-- discovery
-- diagnosis
-- plan
-- narrow execution
-- verification
-- commit
-
-That is the method to continue with.
+- Do not widen scope into optional modules yet.
+- Do not add external API work before 8C is browser-verified.
+- Keep the product professional and restrained.
+- **Inbox = workflow decisions only. Content Registry = content review only. Do not blur this boundary.**
