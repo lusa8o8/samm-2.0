@@ -169,6 +169,11 @@ function ContentCard({
                   Boost
                 </span>
               )}
+              {item.metadata?.intent === "routine" && (
+                <span className="rounded-full border border-border bg-muted/60 px-2 py-0.5 text-[11px] text-muted-foreground">
+                  Reply
+                </span>
+              )}
             </div>
             {item.subject_line && <p className="mt-0.5 truncate text-sm font-medium">{item.subject_line}</p>}
           </div>
