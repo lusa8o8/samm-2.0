@@ -43,9 +43,11 @@ Current stance:
 ---
 
 ## Current Build Status
-**Stable through Milestone 10 + Milestone 8C (all fixes deployed, browser verification in progress as of 2026-04-11).**
+**Stable through Milestone 10 + Milestone 8C (all fixes deployed and browser-verified 2026-04-11).**
 
 ### Latest Commits (most recent first)
+- `3603c50` — fix(M10): widen academic_calendar event_type constraint to include graduation
+- `e6f6e0f` — fix(M10): compound schedule+run intent bypass + NL edit always executes
 - `495ad29` — fix(inbox): show original comment in boost suggestion cards
 - `cdd0f11` — feat(8C-F): show original comment + drafted reply on Comments tab cards
 - `4de7bda` — fix(8C-E): strip markdown fences from classifier output before JSON.parse
@@ -137,6 +139,18 @@ The assistant prefill trick (`{ role: 'assistant', content: '{' }`) does NOT rel
 ### `ref_table` is not a column on `human_inbox`
 The insert had `ref_table: 'content_registry'` — this column does not exist. Removed. Do not add it back.
 
+### Pipeline C does not receive event context when triggered
+When `coordinator-chat` fires Pipeline C after a calendar event creation ("schedule a campaign for X and run the pipeline"), it calls `schedulePipelineRun` with no event context. Pipeline C reads `academic_calendar` independently at runtime and targets whatever is the next due event — not the one just created. This is expected behavior; the message samm returns now says "queued — will run for your next due event" to be accurate. Do not assume the triggered pipeline is scoped to the specific event the user named.
+
+### `academic_calendar event_type` constraint did not include 'graduation'
+Original DB constraint on `event_type` allowed: exam, registration, holiday, orientation, other. Did not include 'graduation'. Frontend form added 'graduation' as an option without a migration. Fixed with `20260411120000` (NOT VALID to skip legacy rows). If a new event_type value is added to the frontend form, always write a migration to widen the constraint.
+
+### NL edit needs `needs_confirmation: false`
+Model instruction must explicitly say `needs_confirmation: false` for `edit_calendar_event`. Without this, the model returns `needs_confirmation: true`, the handler returns the action as a confirmation prompt, and the edit never executes. Edits are reversible — no confirmation needed. Only deletes require `needs_confirmation: true`.
+
+### `resolveExplicitSchedulerRequest` intercepts before LLM for any pipeline keyword + run verb
+If a message contains a pipeline keyword (e.g. "campaign") AND a run verb (run/start/trigger), the explicit scheduler fires that pipeline immediately — the LLM never gets called. Added `isCalendarCreateSignal` guard in `scheduler.ts:374` to exempt messages matching "schedule ... for ... on ... [date]" patterns so the LLM can choose `create_calendar_event` instead.
+
 ---
 
 ## Remaining Verification Tests (run before proceeding to M11)
@@ -144,18 +158,24 @@ The insert had `ref_table: 'content_registry'` — this column does not exist. R
 8C is verified. The following features are implemented but not yet browser-verified. Do not start M11 until these pass or known issues are documented.
 
 ### Milestone 10 — Editable Calendar + NL Commands
-These were built in commit `6a99688` but not verified.
+**Status: VERIFIED 2026-04-11.**
 
-**Calendar UI (calendar.tsx)**
-- Add event: click Add Event, fill fields, save → event appears in calendar list
-- Edit event: click Edit on existing event → prefilled dialog → change name/date → save → event updates in place
-- Delete event: click Delete → confirm dialog → event removed from list
+**Calendar UI (calendar.tsx)** ✓
+- Add event: works
+- Edit event: works (prefilled dialog, saves correctly)
+- Delete event: works (confirmation dialog)
 
-**NL calendar commands via samm chat**
-- "Add a [topic] event on [date]" → samm inserts to `academic_calendar`, replies with confirmation, event visible in Calendar
-- "Schedule a campaign for [event name] on [date]" → event created, Pipeline C **not** triggered (no `run_pipeline_c` flag)
-- "Schedule a campaign for [event name] on [date] and run the pipeline" → event created AND Pipeline C triggered → campaign brief lands in Inbox within ~60s
-- Ambiguous input ("schedule something soon") → samm asks for clarification rather than hallucinating a date
+**NL calendar commands via samm chat** ✓
+- "Add a [topic] event on [date]" → inserts to `academic_calendar`, confirmation returned, visible in Calendar
+- "Schedule a campaign for [event name] on [date]" → event created, Pipeline C not triggered
+- "Schedule a campaign for [event name] on [date] and run the pipeline" → event created AND Pipeline C queued ✓
+- Edit: "Move [event] to [date]" → samm executes update directly (needs_confirmation: false for edits)
+- Delete: "Delete the [event]" → samm confirms before deleting (needs_confirmation: true for deletes)
+
+**Known behavioral note — Pipeline C context after calendar trigger:**
+When triggered from "schedule + run", Pipeline C does NOT receive the specific event as context. Pipeline C reads `academic_calendar` independently at runtime and targets whatever is the next due event at that moment. This is by design (pipeline is stateless re: trigger source). The confirmation message samm returns now says "Campaign pipeline queued — it will run for your next due event" to make this explicit. If you want Pipeline C to campaign for a *specific* event, trigger it when that event is the next one due on the calendar.
+
+**Future work (not yet scoped):** Pass `event_id` override to pipeline-c at trigger time so it can campaign for a specific event regardless of calendar ordering. This requires pipeline-c to accept an optional event context parameter.
 
 ### Pipeline B — Full Round-Trip (not yet verified end-to-end)
 Pipeline B was fixed in 8C-C but the full approval→resume flow has not been verified.
@@ -187,6 +207,21 @@ These NL patterns are handled by `coordinator-chat/scheduler.ts` and have not al
 ### Deferred
 - **M8B**: Onboarding Flow UI (4-5 screen wizard)
 - **M9**: Copy Quality Check (Pipeline C phase 3 critic pass)
+
+---
+
+## Pipeline Taxonomy (canonical reference)
+
+| Pipeline | Intent | Output | Approval gates | When to use |
+|---|---|---|---|---|
+| **A — Engagement** | Process social comments | Comment replies in Content Registry; escalations + boost suggestions in Inbox | None (runs to completion) | On a schedule or manually when comments need processing |
+| **B — Weekly Content** | Generate weekly content batch | Draft posts in Content Registry (Drafts tab), grouped by campaign | Marketer gate per draft; rejection → revision request in Inbox | Weekly cadence; not event-triggered |
+| **C — Campaign** | Full campaign for an event | Brief in Inbox → 6 platform copy cards + design brief in Content Registry | CEO approves brief; marketer approves each copy card | Major events (graduation, open days, registration drives) — anything that warrants a brief, research, and multi-platform assets |
+
+**The one-off post gap:**
+"Write a quick Facebook post about X" sits between Pipeline B (batch/weekly) and Pipeline C (full campaign). No pipeline handles it today. Pipeline C is overbuilt for a single ad-hoc post; Pipeline B is not event-triggered. This is a known gap — not a bug. Future: Pipeline B v2 or a new lightweight pipeline that accepts a topic/event and returns 1–2 platform drafts without a brief phase.
+
+**Rule of thumb:** If the user says "campaign", "run a campaign", or "schedule a campaign for X" → Pipeline C is correct. If the user says "write a post" or "quick post about X" → that's the one-off gap (no pipeline today; tell the user what's available).
 
 ---
 
@@ -257,6 +292,7 @@ Expected result: `comments_processed:7, replies_sent:5, escalations:1, spam_igno
 - `20260410150000_content_registry_design_brief_platform.sql`
 - `20260411100000_org_config_extended_fields.sql` — full_name, country, contact_email
 - `20260411110000_content_registry_metadata.sql` — metadata jsonb column
+- `20260411120000_academic_calendar_event_type_graduation.sql` — widened event_type check constraint to include 'graduation' (NOT VALID — skips existing rows)
 
 ### Architecture Source Of Truth
 - `SAMM_RUNTIME_SPEC.md`

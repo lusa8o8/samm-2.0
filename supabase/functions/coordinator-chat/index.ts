@@ -286,7 +286,7 @@ Rules:
           orgId,
           runs: activeRuns,
           action: pipelineAction,
-          fallbackMessage: `Added "${action.label}" to the calendar and queued a campaign run.`,
+          fallbackMessage: `Added "${action.label}" to the calendar. Campaign pipeline queued — it will run for your next due event.`,
           suggestions,
         })
         if (pipelineResult) return jsonResponse(pipelineResult)
