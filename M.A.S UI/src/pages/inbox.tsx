@@ -265,8 +265,8 @@ function InboxItemCard({ item }: { item: any }) {
           {item.item_type === "escalation" && (
             <div className="space-y-3">
               <div className="rounded-md border border-red-100 bg-red-50/50 p-3">
-                <p className="mb-1 text-xs font-medium text-red-800">Original Comment ({item.payload.platform})</p>
-                <p className="text-sm italic">&quot;{item.payload.original_comment}&quot;</p>
+                <p className="mb-1 text-xs font-medium text-red-800">Original Comment ({item.payload.platform}){item.payload.author ? ` — ${item.payload.author}` : ""}</p>
+                <p className="text-sm italic">&quot;{item.payload.comment_text ?? item.payload.original_comment ?? ""}&quot;</p>
               </div>
               <div>
                 <p className="mb-1 text-xs font-medium text-muted-foreground">Suggested Response</p>

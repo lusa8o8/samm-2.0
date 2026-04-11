@@ -164,6 +164,11 @@ function ContentCard({
                 <TypeIcon className="h-3 w-3" />
                 {contentType.label}
               </span>
+              {item.metadata?.intent === "boost" && (
+                <span className="rounded-full border border-amber-200 bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">
+                  Boost
+                </span>
+              )}
             </div>
             {item.subject_line && <p className="mt-0.5 truncate text-sm font-medium">{item.subject_line}</p>}
           </div>
@@ -288,9 +293,14 @@ function ContentCard({
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <Clock className="h-3.5 w-3.5" />
           {item.status === "scheduled" && item.scheduled_at ? (
-            <span>Scheduled: {new Date(item.scheduled_at).toLocaleDateString()}</span>
+            <span>Scheduled: {new Date(item.scheduled_at).toLocaleString("en-ZA", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false })}</span>
           ) : item.status === "published" && item.published_at ? (
-            <span>Published: {new Date(item.published_at).toLocaleDateString()}</span>
+            <>
+              {Date.now() - new Date(item.published_at).getTime() < 2 * 60 * 60 * 1000 && (
+                <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" title="Published in the last 2 hours" />
+              )}
+              <span>Published: {new Date(item.published_at).toLocaleString("en-ZA", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false })}</span>
+            </>
           ) : item.status === "draft" ? (
             <span>Awaiting approval</span>
           ) : (
@@ -534,7 +544,40 @@ type ContentItem = {
   pipeline_run_id?: string | null;
   media_url?: string | null;
   rejection_note?: string | null;
+  metadata?: Record<string, unknown> | null;
 };
+
+function groupCommentsByDay(items: ContentItem[]) {
+  const now = Date.now()
+  const TWO_HOURS = 2 * 60 * 60 * 1000
+  const groups: { label: string; dateKey: string; items: ContentItem[] }[] = []
+
+  const today = new Date().toDateString()
+  const yesterday = new Date(now - 86400000).toDateString()
+
+  for (const item of items) {
+    const ts = item.published_at ?? item.scheduled_at
+    const d = ts ? new Date(ts) : null
+    const dateKey = d ? d.toDateString() : "unknown"
+    const label =
+      dateKey === today ? "Today" :
+      dateKey === yesterday ? "Yesterday" :
+      d ? d.toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" }) : "Unknown date"
+
+    let group = groups.find((g) => g.dateKey === dateKey)
+    if (!group) {
+      group = { label, dateKey, items: [] }
+      groups.push(group)
+    }
+    group.items.push(item)
+  }
+
+  return { groups, isRecent: (item: ContentItem) => {
+    const ts = item.published_at ?? item.scheduled_at
+    if (!ts) return false
+    return now - new Date(ts).getTime() < TWO_HOURS
+  }}
+}
 
 function groupDraftsByCampaign(items: ContentItem[]) {
   const groups: { pipeline_run_id: string; campaign_name: string; items: ContentItem[] }[] = [];
@@ -641,6 +684,10 @@ export default function Content() {
     ? groupDraftsByCampaign(displayItems as ContentItem[])
     : { groups: [], ungrouped: displayItems as ContentItem[] };
 
+  const { groups: commentGroups, isRecent } = status === "comments" && displayItems.length > 0
+    ? groupCommentsByDay(displayItems as ContentItem[])
+    : { groups: [], isRecent: () => false };
+
   return (
     <div className="flex h-full flex-col bg-[linear-gradient(180deg,rgba(244,241,235,0.45)_0%,rgba(244,241,235,0)_30%)]">
       <header className="shrink-0 border-b border-border/80 bg-background/95 px-4 py-4 backdrop-blur md:px-6">
@@ -687,11 +734,30 @@ export default function Content() {
                 </div>
               ))}
             </div>
-          ) : (groups.length === 0 && ungrouped.length === 0 && displayItems.length === 0) ? (
+          ) : displayItems.length === 0 ? (
             <div className="py-20 text-center text-muted-foreground">
               <LayoutList className="mx-auto mb-4 h-12 w-12 opacity-20" />
               <p>{status === "comments" ? "No engagement replies yet. Run the Engagement Pipeline to process comments." : `No ${status} content found.`}</p>
             </div>
+          ) : status === "comments" ? (
+            <>
+              {commentGroups.map((group) => (
+                <div key={group.dateKey}>
+                  <div className="mb-3 flex items-center gap-2">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{group.label}</p>
+                    {group.label === "Today" && group.items.some(isRecent) && (
+                      <span className="flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-[10px] font-medium text-green-700">
+                        <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
+                        Fresh batch
+                      </span>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    {group.items.map(renderCard)}
+                  </div>
+                </div>
+              ))}
+            </>
           ) : (
             <>
               {groups.map((group) => (

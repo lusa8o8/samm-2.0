@@ -639,7 +639,7 @@ Scope:
 
 ## Milestone 8C: Content Routing Corrections + UX Polish
 Status:
-- A–E implemented; E deployed 2026-04-10; browser verification pending
+- A–E implemented and deployed; extended with F–H post-verification 2026-04-11
 
 Goal:
 - close routing gaps and UX friction identified during Milestone 8A browser verification
@@ -647,49 +647,55 @@ Goal:
 
 Scope and locked plan:
 
-**A — Settings Integrations button**
+**A — Settings Integrations button** ✓
 - Remove the redundant Connect/Disconnect `<Button>` from each integration row; keep only the `<Switch>`
-- The button duplicates the switch and changes label/variant on state change (jarring UX)
 
-**B — Run now toast timing**
-- `schedulePipelineRun` in `coordinator-chat/scheduler.ts` awaits full pipeline execution synchronously
-- Pipeline A takes ~20-40s (7 LLM calls); Pipeline B takes ~30-60s (plan + copy writer loop)
-- Toast fires only after coordinator-chat returns — too late; user has already looked away
+**B — Run now toast timing** ✓
 - Fix: wrap `invokePipeline` in `EdgeRuntime.waitUntil`, return `running` status immediately
-- Coordinator-chat returns in <1s; toast fires promptly; pipeline runs in background
 
-**C — Pipeline B content routing**
-- Pipeline B inserts a `draft_approval` item to `human_inbox` per draft (pre-M7B pattern)
-- Boundary rule: Inbox = workflow decisions only; Content Registry = all content review
-- Fix: remove inbox inserts; add `pipeline_run_id` to content_registry inserts
-- Update `useActionContent` in `api.ts`: replace inbox-lookup Pipeline B resume trigger with
-  `pipeline_runs` table lookup (same pattern already used for Pipeline C)
+**C — Pipeline B content routing** ✓
+- Remove inbox inserts from pipeline-b-weekly; add `pipeline_run_id` to content_registry inserts
+- Update `useActionContent` in `api.ts`: pipeline_runs table lookup for B resume trigger
 
-**D — Content Registry "Comments" tab**
-- Pipeline A engagement replies (routine + boost + polls) land in `content_registry` with
-  `status: published`, `created_by: pipeline-a-engagement` — no label or filter separates them
-- Add a "Comments" tab showing only `created_by = pipeline-a-engagement` published items
-- Add `created_by` filter to `ContentFilter` type and `useListContent` query
+**D — Content Registry "Comments" tab** ✓
+- Add "Comments" tab showing `created_by = pipeline-a-engagement` published items
 
-**E — Spam misclassification fix** ✓ fixed 2026-04-10
-- Root cause confirmed via DB query: `spam_ignored: 0` across all runs; "Spam Account" comment with `bit.ly/scam123` link classified as `complaint` because "scam" in URL triggered complaint heuristic
-- Fix: sharpened `classifyComment` system prompt in `pipeline-a-engagement/index.ts` — added explicit disambiguation rule: classify as spam if unsolicited link is present (even if URL contains "scam"); classify as complaint only if a real customer describes a negative experience with THIS org
-- Redeploy `pipeline-a-engagement` and verify: `spam_ignored: 1`, `escalations: 1` on next run
+**E — Spam/complaint classifier** ✓ fixed 2026-04-11
+- Root cause: `ref_table` column does not exist on `human_inbox` → complaint insert silently fails; counter increments regardless. Classifier prompt also overly broad after first fix attempt (caught "scam" in text, not just URL).
+- Fix E-1: remove `ref_table` from complaint insert; add destructured error check that throws
+- Fix E-2: rewrite disambiguation rule — link/URL exception scoped to URL content only; added "personal grievance with THIS org → complaint" rule
+- Fix E-3: remove `author.split(' ')[0]` mechanical first-name extraction; instruct LLM to use full name and judge greeting naturally
+
+**F — Intent tags on Comments cards** — locked 2026-04-11
+- Diagnosis: `content_registry` has no `metadata` column; intent is not stored after classification
+- Fix:
+  1. Migration: `ALTER TABLE content_registry ADD COLUMN IF NOT EXISTS metadata jsonb DEFAULT '{}'::jsonb;`
+  2. `pipeline-a-engagement`: add `metadata: { intent: classified.intent }` to both routine and boost `content_registry` inserts
+  3. `content.tsx`: add `metadata?: Record<string, any> | null` to `ContentItem` type; render intent badge in card header (boost only — amber; routine hidden as noise)
+
+**G — Batch freshness in Comments tab** — locked 2026-04-11
+- Diagnosis: date shown without time (`toLocaleDateString()`); no visual grouping by run
+- Fix:
+  1. Change `toLocaleDateString()` → show date + time (toLocaleString with hour/minute)
+  2. Group Comments tab items by `published_at` day (Today / Yesterday / date label) — same batch = same day
+  3. Add pulse dot for items published within last 2 hours
+
+**H — Inbox escalation display fix** — locked 2026-04-11
+- Diagnosis: `inbox.tsx` line 269 reads `item.payload.original_comment` but pipeline-a inserts as `comment_text`. Items in DB but text never renders.
+- Fix: change `item.payload.original_comment` → `item.payload.comment_text ?? item.payload.original_comment`
 
 Do not include:
-- changes to Inbox layout or item types
-- changes to Pipeline C or Pipeline A business logic (except E if classification)
+- changes to Pipeline C or Pipeline A business logic beyond F–H above
 - new milestone features
 
 Verification:
-- Settings → Integrations: Switch toggles connection, no redundant button
-- Run now on any pipeline: toast fires in under 2 seconds
-- Pipeline B run: drafts land in Content Registry Drafts tab, not Inbox
-- Content Registry: "Comments" tab shows Pipeline A engagement replies
-- Inbox: receives Pipeline B weekly report; no draft_approval items
+- Run Pipeline A → `spam_ignored: 1, escalations: 1` in pipeline_runs result
+- Inbox → shows one escalation for "Angry Student"; original comment text visible
+- Content Registry Comments tab → each card shows "Boost" amber badge on boost cards; no badge on routine cards
+- Comments tab → items grouped by day; items from last 2h have pulse dot; time visible on each card
 
 Commit policy:
-- one commit per fix (A through E), each deployed before the next begins
+- one commit per fix group (E-fixes, F, G, H), each deployed before the next begins
 
 ## Milestone 9: Copy Quality Check (Pipeline C Phase 3)
 Status:

@@ -250,20 +250,23 @@ async function processComment(
 
     if (classified.intent === 'routine') {
       const reply = await draftReply(engineContext.anthropic, classified, engineContext.brandVoice)
-      await engineContext.supabase.from('content_registry').insert({
+      const { error: routineError } = await engineContext.supabase.from('content_registry').insert({
         org_id: engineContext.context.orgId,
         platform: comment.platform,
         body: reply,
         status: 'published',
         published_at: new Date().toISOString(),
         created_by: 'pipeline-a-engagement',
+        metadata: { intent: 'routine' },
       })
+      if (routineError) throw new Error(`Failed to insert routine reply: ${routineError.message}`)
       results.replies_sent += 1
       console.log(`  -> Reply drafted: "${reply.slice(0, 60)}..."`)
     }
 
     if (classified.intent === 'complaint') {
-      await engineContext.supabase.from('human_inbox').insert({
+      const suggestedResponse = await draftReply(engineContext.anthropic, classified, engineContext.brandVoice)
+      const { error: inboxError } = await engineContext.supabase.from('human_inbox').insert({
         org_id: engineContext.context.orgId,
         item_type: 'escalation',
         priority: 'urgent',
@@ -273,18 +276,18 @@ async function processComment(
           comment_text: comment.text,
           post_id: comment.post_id,
           reasoning: classified.reasoning,
-          suggested_response: await draftReply(engineContext.anthropic, classified, engineContext.brandVoice),
+          suggested_response: suggestedResponse,
         },
         created_by_pipeline: 'pipeline-a-engagement',
         created_by_agent: getAgentDefinition('classifier').id,
-        ref_table: 'content_registry',
       })
+      if (inboxError) throw new Error(`Failed to insert escalation: ${inboxError.message}`)
       results.escalations += 1
       console.log('  -> Escalated to human inbox (complaint)')
     }
 
     if (classified.intent === 'boost') {
-      await engineContext.supabase.from('human_inbox').insert({
+      const { error: boostInboxError } = await engineContext.supabase.from('human_inbox').insert({
         org_id: engineContext.context.orgId,
         item_type: 'suggestion',
         priority: 'fyi',
@@ -298,16 +301,19 @@ async function processComment(
         created_by_pipeline: 'pipeline-a-engagement',
         created_by_agent: getAgentDefinition('classifier').id,
       })
+      if (boostInboxError) throw new Error(`Failed to insert boost suggestion: ${boostInboxError.message}`)
 
       const reply = await draftReply(engineContext.anthropic, classified, engineContext.brandVoice)
-      await engineContext.supabase.from('content_registry').insert({
+      const { error: contentError } = await engineContext.supabase.from('content_registry').insert({
         org_id: engineContext.context.orgId,
         platform: comment.platform,
         body: reply,
         status: 'published',
         published_at: new Date().toISOString(),
         created_by: 'pipeline-a-engagement',
+        metadata: { intent: 'boost' },
       })
+      if (contentError) throw new Error(`Failed to insert boost reply: ${contentError.message}`)
       results.boosts_suggested += 1
       results.replies_sent += 1
       console.log('  -> Boost suggested + reply drafted')
