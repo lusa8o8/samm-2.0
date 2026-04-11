@@ -637,6 +637,61 @@ Scope:
 - first calendar event seed
 - writes to `org_config` and `academic_calendar` on completion
 
+## Milestone 8C: Content Routing Corrections + UX Polish
+Status:
+- in progress — locked 2026-04-11
+
+Goal:
+- close routing gaps and UX friction identified during Milestone 8A browser verification
+- all content approvals route through Content Registry; Inbox receives only workflow decisions
+
+Scope and locked plan:
+
+**A — Settings Integrations button**
+- Remove the redundant Connect/Disconnect `<Button>` from each integration row; keep only the `<Switch>`
+- The button duplicates the switch and changes label/variant on state change (jarring UX)
+
+**B — Run now toast timing**
+- `schedulePipelineRun` in `coordinator-chat/scheduler.ts` awaits full pipeline execution synchronously
+- Pipeline A takes ~20-40s (7 LLM calls); Pipeline B takes ~30-60s (plan + copy writer loop)
+- Toast fires only after coordinator-chat returns — too late; user has already looked away
+- Fix: wrap `invokePipeline` in `EdgeRuntime.waitUntil`, return `running` status immediately
+- Coordinator-chat returns in <1s; toast fires promptly; pipeline runs in background
+
+**C — Pipeline B content routing**
+- Pipeline B inserts a `draft_approval` item to `human_inbox` per draft (pre-M7B pattern)
+- Boundary rule: Inbox = workflow decisions only; Content Registry = all content review
+- Fix: remove inbox inserts; add `pipeline_run_id` to content_registry inserts
+- Update `useActionContent` in `api.ts`: replace inbox-lookup Pipeline B resume trigger with
+  `pipeline_runs` table lookup (same pattern already used for Pipeline C)
+
+**D — Content Registry "Comments" tab**
+- Pipeline A engagement replies (routine + boost + polls) land in `content_registry` with
+  `status: published`, `created_by: pipeline-a-engagement` — no label or filter separates them
+- Add a "Comments" tab showing only `created_by = pipeline-a-engagement` published items
+- Add `created_by` filter to `ContentFilter` type and `useListContent` query
+
+**E — Test 5 escalation (investigation gate)**
+- No escalations received in Inbox after Pipeline A runs
+- Diagnose via pipeline_runs result JSON (`escalations` field); fix scoped after root cause confirmed
+- If `escalations: 0` → LLM misclassification fix in `pipeline-a-engagement/index.ts`
+- If `escalations > 0` → inbox insert failure fix (RLS or schema)
+
+Do not include:
+- changes to Inbox layout or item types
+- changes to Pipeline C or Pipeline A business logic (except E if classification)
+- new milestone features
+
+Verification:
+- Settings → Integrations: Switch toggles connection, no redundant button
+- Run now on any pipeline: toast fires in under 2 seconds
+- Pipeline B run: drafts land in Content Registry Drafts tab, not Inbox
+- Content Registry: "Comments" tab shows Pipeline A engagement replies
+- Inbox: receives Pipeline B weekly report; no draft_approval items
+
+Commit policy:
+- one commit per fix (A through E), each deployed before the next begins
+
 ## Milestone 9: Copy Quality Check (Pipeline C Phase 3)
 Status:
 - planned

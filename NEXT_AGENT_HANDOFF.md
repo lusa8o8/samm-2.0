@@ -83,36 +83,63 @@ Committed and pushed:
 - `SAMM_FULL_SYSTEM_ARCHITECTURE.md`
 
 ## Latest Important Commits
+- `080fc52 fix: org details save failing — missing full_name column + silent error on save`
+- `6a99688 feat: editable calendar + NL calendar commands (Milestone 10)`
+- `6d1c9e6 fix: design_brief blocking Pipeline C resume at marketer gate`
+- `2791ec3 fix: platform_connections not written on integration toggle (Milestone 8A)`
 - `ac0909d fix: replace unresolved react-icons brand imports with lucide equivalents`
 - `e91da84 feat: wire Operations overview + settings — manual triggers, connection toggles, full integration list`
 - `33477a9 feat: real LLM classification and reply generation in Pipeline A (Milestone 5B)`
 - `4c816f7 feat: multi-tenant infrastructure — session-derived org resolution + provision-org (Milestone 8)`
-- `152023b docs: lock Milestone 8 plan and full product vision M8–M16 in roadmap`
-- `c06ba39 fix: design brief prompt enforces plain text, no markdown formatting`
-- `eec038d feat: design brief to Content Registry, image upload, share button (Milestone 7E)`
 
 All pushed to `main`.
 
 ## Current Status
-Stable through Milestone 8 (browser-verified sign-in). Build passes clean.
+Stable through Milestone 10. Build passes clean.
 
-### Untested slice — requires browser verification before treating as stable:
-**Operations wiring + Settings broadening** (`e91da84` + `ac0909d`)
-- Overview: "Run now" button per pipeline, result summary in runs table
-- Settings → Integrations: Connect/Disconnect writes to `platform_connections` in `org_config`, full integration list (5 live + 5 coming soon)
-- Settings → Pipeline Automation: "Run now" button per pipeline inline with schedule controls
-- `api.ts`: `useTriggerPipeline` mutation added
+### Verification results (2026-04-11 session)
+- Test 1 (sign-in, org resolution): PASS — renamed org to "Lusa Works", samm recognized it
+- Test 2 (Settings → Integrations toggle): PASS — badge flips, toast fires. Note: Connect/Disconnect button is redundant alongside Switch; fix queued in 8C.
+- Test 3 (Run now → toast): PARTIAL — run succeeds, toast does not fire reliably. Root cause: coordinator-chat awaits full pipeline execution before returning; fix queued in 8C.
+- Test 4 (Pipeline A result summary): PASS — run starts, summary shows comments/replies/escalations count
+- Test 5 (escalation in Inbox): UNVERIFIED — no escalations received. Investigate: run `SELECT result FROM pipeline_runs WHERE pipeline = 'pipeline-a-engagement' ORDER BY started_at DESC LIMIT 3` and check `escalations` field. If 0 → LLM misclassification. If >0 → inbox insert failed (check `human_inbox` for `item_type = 'escalation'`).
+- Test 6 (Content Registry Published replies): PASS — replies are natural LLM prose
 
-**Also needs verification:**
-- Milestone 5B: Pipeline A now uses real LLM (`classifyComment` + `draftReply`) — deployed, trigger from Overview or samm chat and check Inbox for escalations and Content Registry for replies
+### Untested slices (require browser verification after 8C deploy):
+- Fix A: Settings → Integrations — redundant Connect/Disconnect button removed, Switch-only
+- Fix B: Run now toast fires immediately (fire-and-forget pipeline invocation)
+- Fix C: Pipeline B drafts land in Content Registry, not Inbox
+- Fix D: Content Registry "Comments" tab shows Pipeline A engagement replies
 
-### Verification checklist (do before next feature work):
-1. Sign in → verify dashboard loads (Milestone 8 session-derived org)
-2. Settings → Integrations → Connect Facebook → verify toggle flips and badge updates
-3. Settings → Pipelines → "Run now" on Engagement Pipeline → verify toast + run appears in Overview
-4. Overview → "Run now" on Pipeline A → verify run starts, result summary shows comments/replies/escalations
-5. Inbox → check escalation for the complaint comment (Angry Student) has an LLM-drafted suggested response
-6. Content Registry → Published tab → check reply copy reads naturally (not a hardcoded template)
+### Locked plan: Milestone 8C — Content Routing Corrections + UX Polish
+Locked 2026-04-11. Implement before any new feature work.
+
+**A — Settings Integrations: remove redundant button**
+- Remove the Connect/Disconnect `<Button>` from each integration row; keep only the `<Switch>`
+- File: `M.A.S UI/src/pages/agent/settings.tsx`
+
+**B — Run now toast: fire-and-forget pipeline invocation**
+- `schedulePipelineRun` in `scheduler.ts` currently awaits full pipeline execution, making coordinator-chat hold the HTTP connection open for 20-60s
+- Fix: wrap `invokePipeline` call in `EdgeRuntime.waitUntil`, return `running` status immediately
+- File: `supabase/functions/coordinator-chat/scheduler.ts`
+
+**C — Pipeline B content routing**
+- Pipeline B inserts a `draft_approval` item to `human_inbox` for every draft (lines 229–246 of `pipeline-b-weekly/index.ts`) — this is the pre-Milestone 7B pattern
+- Drafts already land in `content_registry`; inbox insert must be removed
+- Also: add `pipeline_run_id: runId` to content_registry inserts so the resume gate works
+- In `api.ts → useActionContent`: replace inbox-based Pipeline B resume check with pipeline_runs lookup (same pattern as Pipeline C)
+- Files: `supabase/functions/pipeline-b-weekly/index.ts`, `M.A.S UI/src/lib/api.ts`
+
+**D — Content Registry "Comments" tab**
+- Pipeline A engagement replies (routine + boost + polls) land in `content_registry` with `status: 'published'`, `created_by: 'pipeline-a-engagement'`
+- Add a "Comments" tab to Content Registry showing only these items
+- Files: `M.A.S UI/src/pages/content.tsx`, `M.A.S UI/src/lib/api.ts`
+
+**E — Test 5 escalation investigation (blocked on DB check)**
+- Diagnose via: `SELECT result FROM pipeline_runs WHERE pipeline = 'pipeline-a-engagement' ORDER BY started_at DESC LIMIT 3`
+- `escalations: 0` → LLM classification bug (likely "scam" keyword causing spam misclassification despite LLM rewrite)
+- `escalations > 0` → inbox insert failure (RLS or missing `status` default on `human_inbox`)
+- Fix scoped after root cause is confirmed
 
 ### Pipeline C end-to-end verified flow (still valid):
 1. `/samm` triggers Pipeline C → `running`
@@ -154,19 +181,12 @@ Milestone placement:
   ```
 
 ## Exact Next Slice
-### Verify untested work first
-Run the verification checklist above. If anything is broken, fix it before proceeding to the next milestone.
-
-### After verification: Milestone 10 — Editable Calendar + NL Commands
-(Milestones 8B and 9 are deferred)
-
-What Milestone 10 delivers:
-1. Calendar becomes writable from the UI (add, edit, delete events — currently read-only)
-2. `coordinator-chat` extended to handle "schedule a post about X next Friday" — resolves event, queues Pipeline C
-3. On-demand Pipeline C trigger from a chat command, not just cron
+### Complete Milestone 8C fixes (locked above) and resolve Test 5 (escalation investigation)
+After 8C is browser-verified and Test 5 is resolved, proceed to Milestone 11.
 
 ### Remaining milestone queue (8B and 9 deferred):
-- **M10**: Editable Calendar + NL Commands
+- **M8C**: Content Routing Corrections + UX Polish — IN PROGRESS (locked 2026-04-11)
+- **M10**: Editable Calendar + NL Commands — COMPLETE (deployed, browser verification pending)
 - **M11**: Live Platform Publishing (Facebook, WhatsApp, YouTube, Email real API calls)
 - **M12**: Multi-Channel samm Access (Slack, Teams, WhatsApp, Telegram, email inbound)
 - **M13**: Voice Interface
