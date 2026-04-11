@@ -90,25 +90,32 @@ Deno.serve(async (req) => {
   })
 
   const payload = await req.json().catch(() => ({}))
-  const context: PipelineContext = {
-    orgId: payload?.orgId ?? payload?.org_id ?? 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
-    today: payload?.today ?? new Date().toISOString().split('T')[0],
-    calendarEvent: payload?.calendarEvent ?? {
-      id: 'demo-event',
-      event_type: 'exam_window',
-      event_date: '2026-05-11',
-      event_end_date: '2026-05-29',
-      label: 'UNZA semester 1 exams 2026',
-      universities: ['UNZA'],
-      lead_days: 21
-    }
-  }
+  const orgId: string = payload?.orgId ?? payload?.org_id ?? 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'
+  const today: string = payload?.today ?? new Date().toISOString().split('T')[0]
 
   const resumeRunId = typeof payload?.resume_run_id === 'string'
     ? payload.resume_run_id
     : typeof payload?.resumeRunId === 'string'
       ? payload.resumeRunId
       : null
+
+  // Resolve the calendar event context:
+  // 1. Use payload.calendarEvent if passed (NL calendar-triggered run)
+  // 2. Query academic_calendar for the next upcoming event (standalone "run the campaign pipeline")
+  // 3. Error — no upcoming event exists; do not silently fall back to a demo event
+  let resolvedCalendarEvent: CalendarEvent | undefined
+  if (payload?.calendarEvent) {
+    resolvedCalendarEvent = payload.calendarEvent as CalendarEvent
+  } else if (!resumeRunId) {
+    // Only query for next event on a fresh run; resume uses the stored event from pipeline_runs.result
+    resolvedCalendarEvent = await getNextCalendarEvent(supabase, orgId, today)
+  }
+
+  const context: PipelineContext = {
+    orgId,
+    today,
+    calendarEvent: resolvedCalendarEvent,
+  }
 
   const config = await getOrgConfig(supabase, context.orgId)
 
@@ -845,6 +852,37 @@ Current platform metrics: ${JSON.stringify(metrics?.slice(0, 4))}`
   })
 
   console.log('Post-campaign report sent to CEO inbox')
+}
+
+// ── next calendar event resolver ──────────────────────────────────────
+// Used when pipeline-c is triggered without an explicit event context
+// (e.g. standalone "run the campaign pipeline" command). Queries for the
+// nearest upcoming event rather than falling back to a hardcoded demo.
+async function getNextCalendarEvent(supabase: any, orgId: string, today: string): Promise<CalendarEvent> {
+  const { data, error } = await supabase
+    .from('academic_calendar')
+    .select('id, event_type, event_date, event_end_date, label, universities, lead_days')
+    .eq('org_id', orgId)
+    .gte('event_date', today)
+    .order('event_date', { ascending: true })
+    .limit(1)
+    .single()
+
+  if (error || !data) {
+    throw new Error(
+      'No upcoming calendar event found. Add an event to the Academic Calendar before running a campaign.'
+    )
+  }
+
+  return {
+    id: data.id,
+    event_type: data.event_type ?? 'other',
+    event_date: data.event_date,
+    event_end_date: data.event_end_date ?? null,
+    label: data.label,
+    universities: data.universities ?? [],
+    lead_days: data.lead_days ?? 21,
+  }
 }
 
 // ── helpers ───────────────────────────────────────────────────────────

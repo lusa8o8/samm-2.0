@@ -4,6 +4,7 @@ import {
   expireStaleRuns,
   resolveExplicitSchedulerRequest,
   resolveModelPipelineAction,
+  type CalendarEventContext,
   type ChatHistoryItem,
   type ChatResponse,
 } from './scheduler.ts'
@@ -279,15 +280,22 @@ Rules:
           pipeline: 'pipeline-c-campaign',
           needs_confirmation: false,
           title: `Campaign for ${action.label}`,
-          description: `Triggered by calendar event creation.`,
+          description: `Triggered by calendar event creation for "${action.label}" on ${action.event_date}.`,
+        }
+        const calendarContext: CalendarEventContext = {
+          label: action.label,
+          event_date: action.event_date,
+          event_type: action.event_type ?? 'other',
+          universities: action.universities ?? [],
         }
         const pipelineResult = await resolveModelPipelineAction({
           supabase,
           orgId,
           runs: activeRuns,
           action: pipelineAction,
-          fallbackMessage: `Added "${action.label}" to the calendar. Campaign pipeline queued — it will run for your next due event.`,
+          fallbackMessage: `Added "${action.label}" to the calendar and queued a campaign for it.`,
           suggestions,
+          eventContext: calendarContext,
         })
         if (pipelineResult) return jsonResponse(pipelineResult)
       }

@@ -63,6 +63,15 @@ type ExplicitSchedulerParams = {
   runs: any[]
 }
 
+// Passed from coordinator-chat when a calendar event was just created and Pipeline C
+// is triggered in the same request. Forwarded to pipeline-c as calendarEvent payload.
+export type CalendarEventContext = {
+  label: string
+  event_date: string
+  event_type: string
+  universities: string[]
+}
+
 type ModelSchedulerParams = {
   supabase: any
   orgId: string
@@ -70,6 +79,7 @@ type ModelSchedulerParams = {
   action: SchedulerAction
   fallbackMessage: string
   suggestions: string[]
+  eventContext?: CalendarEventContext
 }
 
 export function inferPipelineTarget(text: string): PipelineTarget | null {
@@ -264,7 +274,13 @@ function formatPipelineStatusResponse(pipeline: PipelineTarget, run: any): ChatR
   }
 }
 
-async function schedulePipelineRun(supabase: any, pipeline: PipelineTarget, orgId: string, runs: any[]): Promise<ChatResponse> {
+async function schedulePipelineRun(
+  supabase: any,
+  pipeline: PipelineTarget,
+  orgId: string,
+  runs: any[],
+  eventContext?: CalendarEventContext
+): Promise<ChatResponse> {
   const latestRun = getLatestPipelineRun(runs, pipeline.id)
 
   if (isPipelineRunBlocking(latestRun?.status)) {
@@ -287,10 +303,26 @@ async function schedulePipelineRun(supabase: any, pipeline: PipelineTarget, orgI
     }
   }
 
+  // Build the invoke body. When eventContext is provided (calendar-triggered run),
+  // pass it as calendarEvent so pipeline-c campaigns for the specific event named
+  // by the user rather than querying for the next due event from the DB.
+  const invokeBody: Record<string, unknown> = {}
+  if (eventContext) {
+    invokeBody.calendarEvent = {
+      id: 'from-nl-trigger',
+      label: eventContext.label,
+      event_date: eventContext.event_date,
+      event_type: eventContext.event_type,
+      event_end_date: null,
+      universities: eventContext.universities,
+      lead_days: 21,
+    }
+  }
+
   // Fire the pipeline in the background so coordinator-chat returns immediately.
   // The toast on the frontend fires as soon as this response lands (<1s).
   // Pipeline status and run rows are visible in Operations once the run starts.
-  const runTask = invokePipeline(supabase, pipeline.id, orgId)
+  const runTask = invokePipeline(supabase, pipeline.id, orgId, invokeBody)
     .catch((err: unknown) => {
       const msg = err instanceof Error ? err.message : String(err)
       console.error(`Background run of ${pipeline.id} failed: ${msg}`)
@@ -408,7 +440,7 @@ export async function resolveExplicitSchedulerRequest(params: ExplicitSchedulerP
 }
 
 export async function resolveModelPipelineAction(params: ModelSchedulerParams): Promise<ChatResponse | null> {
-  const { supabase, orgId, runs, action, fallbackMessage, suggestions } = params
+  const { supabase, orgId, runs, action, fallbackMessage, suggestions, eventContext } = params
 
   if (!action || action.type !== 'run_pipeline' || !action.pipeline) {
     return null
@@ -419,7 +451,7 @@ export async function resolveModelPipelineAction(params: ModelSchedulerParams): 
       id: action.pipeline,
       title: action.title ?? action.pipeline,
       description: action.description ?? '',
-    }, orgId, runs)
+    }, orgId, runs, eventContext)
 
     return {
       message: fallbackMessage || scheduled.message,
