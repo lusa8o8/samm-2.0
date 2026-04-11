@@ -144,6 +144,30 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: 'Message is required' }, 400)
     }
 
+    // Fast-path: calendar delete confirmation.
+    // When the frontend Confirm button is clicked on a delete card, it sends
+    // confirmationAction = 'calendar_delete:{event_id}'. Execute the delete
+    // directly without invoking the LLM — no hallucination possible.
+    if (confirmationAction?.startsWith('calendar_delete:')) {
+      const eventId = confirmationAction.replace('calendar_delete:', '').trim()
+      if (!eventId) {
+        return jsonResponse({ error: 'Invalid delete confirmation: missing event id' }, 400)
+      }
+      const supabaseEarly = createClient(supabaseUrl, serviceRoleKey)
+      const { error: fastDeleteError } = await supabaseEarly
+        .from('academic_calendar')
+        .delete()
+        .eq('id', eventId)
+        .eq('org_id', orgId)
+      if (fastDeleteError) {
+        return jsonResponse({ error: `Failed to delete calendar event: ${fastDeleteError.message}` }, 500)
+      }
+      return jsonResponse({
+        message: 'Done. The event has been removed from the calendar.',
+        suggestions: DEFAULT_SUGGESTIONS,
+      })
+    }
+
     const today = new Date().toISOString().slice(0, 10)
 
     const [orgConfigResult, metricsResult, runsResult, eventsResult, inboxCountResult, inboxResult] = await Promise.all([
@@ -338,25 +362,18 @@ Rules:
         return jsonResponse({ message: "I couldn't identify which event to delete. Please specify the event name and date.", suggestions })
       }
 
-      if (action.needs_confirmation && !confirmationAction) {
-        return jsonResponse({ message: parsed.message || `Delete "${action.label}"?`, suggestions, action })
-      }
-
-      if (confirmationAction === 'cancel') {
-        return jsonResponse({ message: 'Cancelled. The event has not been deleted.', suggestions })
-      }
-
-      const { error: deleteError } = await supabase
-        .from('academic_calendar')
-        .delete()
-        .eq('id', action.event_id)
-        .eq('org_id', orgId)
-
-      if (deleteError) {
-        return jsonResponse({ error: `Failed to delete calendar event: ${deleteError.message}` }, 500)
-      }
-
-      return jsonResponse({ message: parsed.message || `Deleted "${action.label}" from the calendar.`, suggestions })
+      // Return a confirmation card. The action string 'calendar_delete:{id}' is
+      // sent back as confirmationAction when the user clicks Confirm — handled by
+      // the fast-path above, which executes the delete without a second LLM call.
+      return jsonResponse({
+        message: parsed.message || `Delete "${action.label}" on ${action.event_date ?? 'that date'}? This cannot be undone.`,
+        suggestions,
+        confirmation: {
+          title: `Delete "${action.label}"`,
+          description: `Permanently removes this event from the calendar. Any pipeline schedules tied to it will no longer fire.`,
+          action: `calendar_delete:${action.event_id}`,
+        },
+      })
     }
 
     const modelSchedulerResult = await resolveModelPipelineAction({
