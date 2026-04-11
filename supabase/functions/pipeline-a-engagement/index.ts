@@ -348,17 +348,15 @@ JSON format: {"intent":"spam|complaint|boost|routine","reasoning":"one sentence"
         role: 'user',
         content: `Platform: ${comment.platform}\nAuthor: ${comment.author}\nComment: ${comment.text}`,
       },
-      // Pre-fill assistant turn to force JSON output without preamble
-      {
-        role: 'assistant',
-        content: '{',
-      },
     ],
   })
 
   const raw = response.content[0].type === 'text' ? response.content[0].text.trim() : ''
-  // Re-attach the pre-filled opening brace, strip any trailing markdown fence
-  const jsonStr = ('{' + raw).replace(/```[\s\S]*$/m, '').trim()
+  // Strip markdown code fences — model sometimes wraps JSON in ```json ... ``` despite instructions
+  const jsonStr = raw
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```\s*$/m, '')
+    .trim()
 
   try {
     const parsed = JSON.parse(jsonStr) as { intent: Intent; reasoning: string }
