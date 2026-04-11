@@ -296,22 +296,11 @@ export default function AgentSettings() {
                             <Badge variant="outline" className="h-5 px-1.5 text-[10px] text-muted-foreground">Not connected</Badge>
                           )}
                         </div>
-                        <div className="flex items-center gap-3">
-                          <Switch
-                            checked={isConnected}
-                            disabled={updateMutation.isPending}
-                            onCheckedChange={() => handleToggleConnection(id, isConnected)}
-                          />
-                          <Button
-                            size="sm"
-                            variant={isConnected ? "outline" : "default"}
-                            className="h-8 w-28 text-xs"
-                            disabled={updateMutation.isPending}
-                            onClick={() => handleToggleConnection(id, isConnected)}
-                          >
-                            {isConnected ? "Disconnect" : "Connect"}
-                          </Button>
-                        </div>
+                        <Switch
+                          checked={isConnected}
+                          disabled={updateMutation.isPending}
+                          onCheckedChange={() => handleToggleConnection(id, isConnected)}
+                        />
                       </div>
                     );
                   })}
