@@ -17,6 +17,7 @@ import Calendar from "@/pages/calendar";
 import AgentOverview from "@/pages/agent/overview";
 import AgentChat from "@/pages/agent/chat";
 import AgentSettings from "@/pages/agent/settings";
+import AgentManual from "@/pages/agent/manual";
 
 const queryClient = new QueryClient();
 
@@ -50,6 +51,7 @@ function Router() {
         </Route>
         <Route path="/operations/overview" component={AgentOverview} />
         <Route path="/operations/settings" component={AgentSettings} />
+        <Route path="/operations/manual" component={AgentManual} />
         <Route component={NotFound} />
       </Switch>
     </Layout>

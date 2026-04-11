@@ -1128,6 +1128,61 @@ Do not include:
 
 ---
 
+## Milestone 12A: Operations Manual Page
+Status:
+- complete 2026-04-11
+
+Goal:
+- give every user a single reference page in the UI covering every question they would otherwise need to answer by scanning the codebase or asking samm
+- covers: samm commands, campaign workflow, pipeline reference, content registry, inbox, settings fields, calendar, troubleshooting
+- built while context is high — avoids a scan-the-build pass later
+- lives under Operations → Manual in the sidebar
+
+Shape decisions locked:
+- static accordion page — no API calls, no dynamic data
+- 10 sections, each a collapsible accordion item
+- rendered at `/operations/manual`
+- sidebar subnav extended: Overview / Settings / Manual
+- kbd-style command examples for NL prompts
+- plain prose for field explanations — not a feature dump, a reference
+
+Sections:
+1. Quick Start — what samm is, workspace layout, first-time setup checklist
+2. samm Commands — NL examples with copy-safe formatting for every supported action
+3. Campaign Workflow (Pipeline C) — step-by-step lifecycle: trigger → brief → CEO approval → copy review → publish
+4. One-Off Posts (Pipeline D) — ad-hoc "write a post about X", where drafts land, no gate
+5. Content Registry — all statuses explained, tabs, approve/reject/edit/batch
+6. Inbox & Approvals — item types (brief, revision, escalation, suggestion, report), how to act on each
+7. Academic Calendar — event types, what they affect, creative override toggle explained
+8. Settings Reference — every field in Org Details, Brand Voice, Visual Brand, Integrations, Pipeline Automation
+9. Pipeline Reference — A (engagement), B (weekly), C (campaign), D (one-off) — what each does, triggers, outputs
+10. Troubleshooting — common issues and fixes
+
+Do not include:
+- live data or API calls — manual content is static
+- onboarding flow logic (separate M8B)
+
+Verification:
+- `/operations/manual` loads without errors
+- All 10 accordion sections expand/collapse correctly
+- Sidebar shows Manual as third subnav item under Operations
+- Page is mobile-scrollable (no overflow)
+
+Commit policy:
+- one commit after page is wired and all sections render
+
+---
+
+### M12A Test Status
+| Test | Status |
+|------|--------|
+| `/operations/manual` loads without errors | ⬜ |
+| All 10 accordion sections expand/collapse | ⬜ |
+| Sidebar shows Manual subnav under Operations | ⬜ |
+| Page renders correctly on mobile | ⬜ |
+
+---
+
 ## Milestone 13: Live Platform Publishing
 Status:
 - planned

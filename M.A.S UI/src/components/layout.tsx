@@ -30,6 +30,7 @@ const navItems = [
 const operationsSubnav = [
   { path: "/operations/overview", label: "Overview" },
   { path: "/operations/settings", label: "Settings" },
+  { path: "/operations/manual", label: "Manual" },
 ];
 
 interface SidebarContentProps {
