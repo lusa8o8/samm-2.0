@@ -1036,9 +1036,7 @@ Commit policy:
 
 ## Milestone 11F: Platform Cadence Policy
 Status:
-- design locked 2026-04-11 (see PIPELINE_C_DESIGN.md — Platform Cadence Policy section)
-- independent of M11A/B/C/D/E
-- must ship before M13 (Live Platform Publishing) — cadence rules must be baked in before real posts are sent
+- complete 2026-04-11
 
 Goal:
 - post scheduling is governed by a deterministic rule engine, not an LLM agent

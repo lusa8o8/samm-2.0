@@ -422,6 +422,10 @@ async function resumePipelineCRun(params: { supabase: any; anthropic: Anthropic;
 
     results.copy_assets_created = copyAssets.length
 
+    // Build the full schedule once before inserting — cadence engine assigns
+    // platform-aware scheduled_at for launch blast + sustaining posts.
+    const schedules = buildCadenceSchedule(copyAssets, context.today, event.event_date)
+
     for (let i = 0; i < copyAssets.length; i++) {
       const asset = copyAssets[i]
       await supabase
@@ -435,7 +439,7 @@ async function resumePipelineCRun(params: { supabase: any; anthropic: Anthropic;
           is_campaign_post: true,
           campaign_name: campaignBrief.name,
           pipeline_run_id: runId,
-          scheduled_at: getScheduledTime(i, copyAssets.length, context.today, event.event_date),
+          scheduled_at: schedules[i],
           created_by: 'pipeline-c-campaign'
         })
     }
@@ -720,7 +724,6 @@ Write the copy now.`
 
         return {
           platform: p.platform,
-          day_offset: index,
           body: postBody,
           subject_line,
           type: 'campaign'
@@ -1005,20 +1008,98 @@ function addDays(dateStr: string, days: number): string {
   return d.toISOString().split('T')[0]
 }
 
-// Spread post scheduling evenly across the campaign window.
-// Posts run from today through (eventDate - 1 day) so the last post fires
-// the day before the event — not after it has already passed.
-// With 6 posts and a 14-day window: posts on days 0, 2, 4, 7, 9, 11 approx.
-function getScheduledTime(index: number, total: number, today: string, eventDate: string): string {
-  const startMs = new Date(today).getTime()
-  // End one day before the event so the last post is a pre-event reminder
-  const endMs = new Date(eventDate).getTime() - 86400000
-  const windowMs = Math.max(endMs - startMs, 0)
+// ── M11F cadence engine ───────────────────────────────────────────────
+// Deterministic post scheduler driven by integration registry cadence_policy.
+// Scheduling is NOT an LLM decision. Rules:
+//   Day 0 (launch blast)  — all platforms fire at their preferred_time_utc
+//   Sustaining (2nd+ post) — next preferred weekday after sustaining_interval_days
+//   Cap                   — no platform exceeds max_posts_per_campaign
+//   Ceiling               — no post scheduled after (eventDate - 1 day)
+//
+// Accepts the full assets array and returns a parallel array of scheduled_at strings.
+function buildCadenceSchedule(
+  assets: Array<{ platform: string }>,
+  today: string,
+  eventDate: string
+): string[] {
 
-  // Evenly space posts across the window. If window is 0 (event is today),
-  // all posts go out today — still better than stacking at index 0,1,2,3,4,5.
-  const offsetMs = total > 1 ? Math.round((index / (total - 1)) * windowMs) : 0
-  const scheduled = new Date(startMs + offsetMs)
-  scheduled.setHours(9, 0, 0, 0)
-  return scheduled.toISOString()
+  const todayMs = new Date(today).getTime()
+  // Last allowed post: day before event at 00:00 UTC
+  const ceilingMs = new Date(eventDate).getTime() - 86400000
+
+  // Group asset indices by platform, preserving insertion order
+  const byPlatform: Record<string, number[]> = {}
+  assets.forEach((asset, i) => {
+    if (!byPlatform[asset.platform]) byPlatform[asset.platform] = []
+    byPlatform[asset.platform].push(i)
+  })
+
+  const scheduled: Record<number, string> = {}
+
+  for (const [platform, indices] of Object.entries(byPlatform)) {
+    const policy = (INTEGRATION_REGISTRY as Record<string, any>)[platform]?.cadence_policy
+    const [prefHour, prefMin] = policy
+      ? policy.preferred_time_utc.split(':').map(Number)
+      : [9, 0]
+    const maxPosts: number = policy?.max_posts_per_campaign ?? indices.length
+    const cappedIndices = indices.slice(0, maxPosts)
+
+    cappedIndices.forEach((idx, postIndex) => {
+      let targetMs: number
+
+      if (postIndex === 0 || !policy?.launch_blast) {
+        // Launch blast: day 0 at this platform's preferred_time_utc
+        const launch = new Date(todayMs)
+        launch.setUTCHours(prefHour, prefMin, 0, 0)
+        targetMs = launch.getTime()
+      } else {
+        // Sustaining: start from previous post + sustaining_interval_days,
+        // then advance to the next preferred weekday
+        const prevMs = new Date(scheduled[cappedIndices[postIndex - 1]]).getTime()
+        const afterIntervalMs = prevMs + (policy.sustaining_interval_days * 86400000)
+        targetMs = nextPreferredWeekday(afterIntervalMs, policy.preferred_days, prefHour, prefMin)
+      }
+
+      // Clamp to ceiling — never schedule after day before event
+      const clampedMs = Math.min(targetMs, ceilingMs)
+      scheduled[idx] = new Date(clampedMs).toISOString()
+    })
+  }
+
+  // Fill any uncapped indices (shouldn't happen but be safe)
+  assets.forEach((_, i) => {
+    if (!scheduled[i]) scheduled[i] = new Date(Math.min(todayMs, ceilingMs)).toISOString()
+  })
+
+  return assets.map((_, i) => scheduled[i])
+}
+
+// Advance from baseMs to the next occurrence of a preferred weekday at prefHour:prefMin UTC.
+// If baseMs already falls on a preferred day (at or before the preferred time), returns that day.
+function nextPreferredWeekday(
+  baseMs: number,
+  preferredDays: readonly string[],
+  prefHour: number,
+  prefMin: number
+): number {
+  const DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
+  const preferred = new Set(preferredDays.map(d => d.toLowerCase()))
+
+  // Start from midnight of the base day
+  const base = new Date(baseMs)
+  base.setUTCHours(0, 0, 0, 0)
+
+  for (let i = 0; i < 14; i++) {
+    const candidate = new Date(base.getTime() + i * 86400000)
+    const dayName = DAYS[candidate.getUTCDay()]
+    if (preferred.has(dayName)) {
+      candidate.setUTCHours(prefHour, prefMin, 0, 0)
+      return candidate.getTime()
+    }
+  }
+
+  // Fallback: return base date + 1 day at preferred time if no weekday match found
+  const fallback = new Date(base.getTime() + 86400000)
+  fallback.setUTCHours(prefHour, prefMin, 0, 0)
+  return fallback.getTime()
 }
