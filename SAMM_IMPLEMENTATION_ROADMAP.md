@@ -809,8 +809,7 @@ Verification:
 
 ## Milestone 11C: Pipeline C — Accuracy + Registry Polish
 Status:
-- design locked 2026-04-11 (see PIPELINE_C_DESIGN.md)
-- independent of M11A/B (can be done in parallel or after)
+- complete 2026-04-11
 
 Goal:
 - monitor prompt is honest about what it is actually checking at Stage 3
@@ -830,7 +829,7 @@ Verification:
 
 ## Milestone 11D: Pipeline C — event_end_date Schema Extension
 Status:
-- design locked 2026-04-11 (see PIPELINE_C_DESIGN.md)
+- complete 2026-04-11
 - independent of M11A/B/C
 
 Goal:
@@ -941,6 +940,60 @@ Commit policy:
 - migration first (committed before UI or prompt changes)
 - one stable commit after Settings UI is verified saving/loading correctly
 - one stable commit after design brief injection is verified end-to-end
+
+---
+
+## Milestone 11F: Platform Cadence Policy
+Status:
+- design locked 2026-04-11 (see PIPELINE_C_DESIGN.md — Platform Cadence Policy section)
+- independent of M11A/B/C/D/E
+- must ship before M13 (Live Platform Publishing) — cadence rules must be baked in before real posts are sent
+
+Goal:
+- post scheduling is governed by a deterministic rule engine, not an LLM agent
+- platform-specific day-of-week and time-of-day windows are encoded in the integration registry
+- launch blast (day 0, all platforms) is distinguished from sustaining cadence (platform-spaced)
+- campaign planners and copy writers can reference the cadence policy without re-deriving it each run
+
+Scope:
+
+**1. Integration registry: add cadence rules per channel**
+Each channel entry gains a `cadence_policy` object:
+```typescript
+cadence_policy: {
+  launch_blast: true,          // all platforms fire together on day 0
+  sustaining_interval_days: number,  // days between repeat posts on this platform
+  preferred_days: string[],    // e.g. ["tuesday", "thursday"]
+  preferred_time_utc: string,  // e.g. "08:00"
+  max_posts_per_campaign: number
+}
+```
+
+**2. `pipeline-c-campaign/index.ts`: apply cadence rules in scheduling**
+- Day 0 launch posts: schedule all platforms within a ±30 min window at `preferred_time_utc`
+- Sustaining posts: next slot = previous slot + `sustaining_interval_days` on a `preferred_days` weekday
+- Cap posts per platform at `max_posts_per_campaign`
+- Platform sequence for sustaining posts: staggered by 1 day minimum (no two platforms same day after launch)
+
+**3. Remove LLM scheduling decisions**
+- Scheduling is not a task for the campaign planner or copy writer
+- The campaign planner outputs `post_count_per_platform` intent only
+- Actual scheduled times are resolved deterministically after all agents complete
+
+Do not include:
+- Dynamic cadence tuning based on engagement data (deferred to post-M13 analytics loop)
+- Platform-specific A/B time testing (deferred)
+- User-configurable cadence overrides in Settings UI (deferred to M11F+)
+
+Verification:
+- Launch blast: all platforms fire on day 0 within their preferred_time_utc window
+- WhatsApp post and Facebook post do not share the same sustaining day after day 0
+- Max post cap per platform is respected (no platform exceeds its max_posts_per_campaign)
+- Post schedule in Inbox card shows correct staggered timestamps, not uniform sequential times
+
+Commit policy:
+- integration registry changes first (committed standalone)
+- scheduling logic second — committed after Inbox card shows staggered timestamps end-to-end
 
 ---
 

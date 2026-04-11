@@ -117,6 +117,15 @@ export const AGENT_REGISTRY = {
     supports_human_gate_handoff: true,
     enabled_by_capability: 'campaigns_enabled',
   },
+  canonical_copy_writer: {
+    id: 'canonical-copy-writer',
+    purpose: 'Produces the verbatim source-of-truth message (headline, core body, CTA, key fact) that all platform adapters must reproduce exactly.',
+    allowed_tools: ['write_canonical_copy'],
+    required_inputs: ['campaign_brief', 'brand_voice', 'calendar_event'],
+    produced_outputs: ['canonical_copy'],
+    supports_human_gate_handoff: false,
+    enabled_by_capability: 'campaigns_enabled',
+  },
   design_brief_agent: {
     id: 'design-brief-agent',
     purpose: 'Produces concise design briefs for campaign asset creation.',

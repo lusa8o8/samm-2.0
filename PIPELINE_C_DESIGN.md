@@ -481,6 +481,64 @@ A designer or Canva AI receiving this brief has no room to improvise on brand id
 
 ---
 
+## Platform Cadence Policy (M11F)
+
+### The problem
+
+After M11B, posts are spread evenly across the event window — better than bunching at the trigger, but still ignoring platform-specific best practices for posting day and time. A Facebook post at 3am Saturday and a WhatsApp status on the same day as a Facebook post are both scheduling mistakes that compound over a campaign.
+
+Fixing this with an LLM agent would be wrong. Cadence is a deterministic constraint, not a creative decision. An LLM can hallucinate "Tuesday is best" on every run. The integration registry already knows which platforms exist — it should also know when they perform.
+
+### Design
+
+**Rule engine, not an agent.** Cadence rules live in the integration registry as structured config per channel. The scheduler reads the config and applies it deterministically after all agents complete.
+
+**Two scheduling modes:**
+
+| Mode | When | Behaviour |
+|------|------|-----------|
+| Launch blast | Day 0 (campaign start) | All platforms fire within their `preferred_time_utc` window (±30 min stagger to avoid simultaneous load) |
+| Sustaining cadence | Days 1+ | Per-platform: advance from last post by `sustaining_interval_days`, land on the next `preferred_days` weekday, at `preferred_time_utc` |
+
+**Integration registry schema addition** (per channel):
+```typescript
+cadence_policy: {
+  launch_blast: boolean,           // true = fires on day 0 with all platforms
+  sustaining_interval_days: number, // min days between sustaining posts
+  preferred_days: string[],         // ["tuesday", "thursday"] — weekday targets
+  preferred_time_utc: string,       // "08:00" — preferred send time
+  max_posts_per_campaign: number    // hard cap; scheduler will not exceed this
+}
+```
+
+**Stagger rule for sustaining posts:**
+- No two platforms share the same sustaining day after launch
+- Minimum 1-day gap between any two platform posts after day 0
+- Platform order for staggering: WhatsApp → Facebook → YouTube → Email (lowest to highest production effort)
+
+**Campaign planner role after this milestone:**
+- Planner outputs `post_count_per_platform` (intent only)
+- Planner does NOT output scheduled times — that is the scheduler's job
+- If planner count exceeds `max_posts_per_campaign`, cap silently and log
+
+### What this fixes
+
+| Before M11F | After M11F |
+|-------------|------------|
+| Posts spread uniformly across window regardless of platform | Posts land on preferred weekdays at preferred times |
+| All platforms could fire on same day (post-launch) | Sustaining posts staggered — no two platforms same day |
+| Campaign planner invents scheduling logic | Scheduling is deterministic from registry config |
+| No post cap per platform | Hard cap from registry; capped cleanly without error |
+
+### What this defers
+
+- **Dynamic cadence tuning** — adjust preferred_days based on engagement data (post-M13 analytics loop)
+- **A/B time testing** — test two preferred_time_utc windows per platform (post-M13)
+- **User-configurable cadence overrides** — Settings UI to edit cadence_policy per channel (M11F+, after the rule engine is stable)
+- **Cross-timezone scheduling** — all times UTC for now; org-level timezone offset deferred
+
+---
+
 ## What Does Not Change
 
 - The CEO brief gate (Stage 1 → WAITING_HUMAN) — remains

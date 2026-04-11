@@ -499,6 +499,9 @@ Recent posts: ${JSON.stringify(recentPosts?.slice(0, 5))}`
 }
 
 // ── competitor researcher ─────────────────────────────────────────────
+// NOTE: competitor insights are simulated (no live web data source yet).
+// The brief payload includes competitor_insights_source: 'simulated' so the
+// CEO reviewing the brief can see this clearly. Replace with real data in M-vision.
 async function runCompetitorResearcher(
   anthropic: Anthropic,
   event: CalendarEvent
@@ -507,7 +510,7 @@ async function runCompetitorResearcher(
     model: 'claude-sonnet-4-5',
     max_tokens: 200,
     system: `You are a competitor research analyst for an EdTech company in Zambia.
-Provide mock competitor insights for campaign planning.
+Provide plausible competitor insights for campaign planning based on the event type and universities.
 Respond with JSON: { "insights": "...", "opportunity": "..." }`,
     messages: [{
       role: 'user',
@@ -520,7 +523,8 @@ What are competitors likely doing and what opportunity exists for TSH?`
   })
 
   const raw = response.content[0].type === 'text' ? response.content[0].text : '{}'
-  return JSON.parse(extractJSON(raw))
+  const result = JSON.parse(extractJSON(raw))
+  return { ...result, competitor_insights_source: 'simulated' }
 }
 
 // ── ambassador reporter ───────────────────────────────────────────────
@@ -774,21 +778,30 @@ async function runMonitor(
     .order('snapshot_date', { ascending: false })
     .limit(4)
 
-  // Use kpi_targets.weekly_signups as the benchmark instead of hardcoded expected_signups
+  // NOTE: This is a campaign readiness check, not a live performance check.
+  // Posts have just been approved — they are scheduled but not yet published to
+  // live platforms (M13). The monitor validates that the campaign setup is coherent
+  // (KPI targets are set, brand voice is complete, event window is valid).
+  // Real post-performance monitoring belongs in a scheduled check after M13 publishing.
   const weeklySignupBenchmark = kpiTargets?.weekly_signups ?? brief.expected_signups
 
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-5',
     max_tokens: 200,
-    system: `Analyse campaign performance and flag if intervention needed.
-Respond with JSON: { "status": "on_track|underperforming", "insight": "...", "action": "none|escalate" }`,
+    system: `You are reviewing a campaign setup before it goes live. Posts have been approved but not yet published.
+Check whether the campaign configuration is coherent and ready to execute.
+Consider: are KPI targets set, is the campaign window realistic, does the goal match the event?
+Do NOT claim to measure live post performance — posts are not published yet.
+Respond with JSON: { "status": "ready|needs_attention", "insight": "...", "action": "none|escalate" }`,
     messages: [{
       role: 'user',
-      content: `Campaign goal: ${brief.goal}
-Weekly signup benchmark (from KPI targets): ${weeklySignupBenchmark}
-Expected campaign signups: ${brief.expected_signups}
-Current metrics: ${JSON.stringify(metrics?.slice(0, 4))}
-Campaign posts: ${JSON.stringify(campaignPosts?.slice(0, 5))}`
+      content: `Campaign: ${brief.name}
+Goal: ${brief.goal}
+Duration: ${brief.duration_days} days
+Expected signups: ${brief.expected_signups}
+Weekly signup benchmark (KPI target): ${weeklySignupBenchmark}
+Posts approved: ${(campaignPosts ?? []).length}
+Platform metrics baseline: ${JSON.stringify(metrics?.slice(0, 4))}`
     }]
   })
 

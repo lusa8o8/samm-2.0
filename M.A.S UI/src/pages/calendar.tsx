@@ -40,6 +40,7 @@ const UNI_OPTIONS = ["UNZA", "CBU", "MU", "ZCAS", "DMI"];
 type EventFormData = {
   event_type: string;
   event_date: string;
+  event_end_date: string;
   label: string;
   universities: string[];
 };
@@ -86,13 +87,25 @@ function EventForm({
           </Select>
         </div>
         <div className="space-y-2">
-          <Label>Date</Label>
+          <Label>Start Date</Label>
           <Input
             type="date"
             value={value.event_date}
             onChange={(e) => onChange({ ...value, event_date: e.target.value })}
             required
           />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label>End Date <span className="text-muted-foreground">(optional)</span></Label>
+          <Input
+            type="date"
+            value={value.event_end_date}
+            min={value.event_date}
+            onChange={(e) => onChange({ ...value, event_end_date: e.target.value })}
+          />
+          <p className="text-[11px] text-muted-foreground">For multi-day events — exam windows, orientation weeks.</p>
         </div>
       </div>
       <div className="space-y-2">
@@ -131,6 +144,7 @@ function EventForm({
 const BLANK_FORM: EventFormData = {
   event_type: "exam",
   event_date: new Date().toISOString().split("T")[0],
+  event_end_date: "",
   label: "",
   universities: [],
 };
@@ -168,6 +182,7 @@ export default function Calendar() {
     setEditForm({
       event_type: event.event_type,
       event_date: event.event_date,
+      event_end_date: event.event_end_date ?? "",
       label: event.label,
       universities: event.universities ?? [],
     });

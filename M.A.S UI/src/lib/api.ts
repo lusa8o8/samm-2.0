@@ -936,10 +936,11 @@ export function useCreateCalendarEvent(options?: MutationHookOptions) {
     mutationFn: async ({
       data,
     }: {
-      data: { event_type: string; event_date: string; label: string; universities: string[] };
+      data: { event_type: string; event_date: string; event_end_date?: string | null; label: string; universities: string[] };
     }) => {
       const payload = {
         ...data,
+        event_end_date: data.event_end_date || null,
         org_id: getOrgId(),
         triggered: false,
         lead_days: 21,
@@ -966,7 +967,7 @@ export function useUpdateCalendarEvent(options?: MutationHookOptions) {
       data,
     }: {
       id: string;
-      data: Partial<{ event_type: string; event_date: string; label: string; universities: string[] }>;
+      data: Partial<{ event_type: string; event_date: string; event_end_date?: string | null; label: string; universities: string[] }>;
     }) => {
       const { data: updated, error } = await supabase
         .from("academic_calendar")
