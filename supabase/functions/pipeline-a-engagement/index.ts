@@ -331,42 +331,43 @@ async function classifyComment(
 ): Promise<ClassifiedComment> {
   const response = await anthropic.messages.create({
     model: 'claude-haiku-4-5-20251001',
-    max_tokens: 256,
-    system: `You are a comment classifier for a social media engagement system.
+    max_tokens: 128,
+    system: `Classify social media comments. Reply with JSON only — no markdown, no explanation.
 
-Classify the comment into exactly one intent:
-- spam: promotional content, unsolicited external links, fake accounts, unsolicited advertising
-- complaint: negative service experience, payment issues, strong accusations directed at THIS organisation
-- boost: strong advocacy, success stories, viral-sharing potential, testimonials
-- routine: questions, general engagement, requests for information, neutral feedback
+Intent options:
+- spam: bot, promo link, fake account, unsolicited ad (any shortened URL = spam)
+- complaint: real customer upset about THIS org's service, payment, or product
+- boost: testimonial, success story, or brand advocacy worth amplifying
+- routine: question, neutral feedback, general engagement
 
-Key disambiguation rules (apply before classifying):
-- SPAM: the author is running a promotion — look for unsolicited external links (shortened URLs like bit.ly or tinyurl, or any URL not belonging to this org), emoji-heavy sales pitches, money/prize claims, or bot patterns. Classify as spam if an unsolicited link is present, regardless of words in the URL itself (e.g. "bit.ly/scam123" is a spam link even though the URL contains "scam").
-- COMPLAINT: a genuine user is venting frustration about THIS organisation — they reference a payment they made, a service failure, or a broken promise. The word "scam" or "fraud" in the comment text does NOT make it spam; it can be a customer expressing betrayal ("I paid and got nothing, this is a scam!"). No promotional link is present.
-- The dividing line: does the author have a link or product to push? → SPAM. Does the author have a personal grievance about this org's service? → COMPLAINT.
+Audience: ${brandVoice.target_audience ?? 'students'} | Tone: ${brandVoice.tone ?? 'professional'}
 
-Context about the organisation:
-- Tone: ${brandVoice.tone ?? 'professional'}
-- Audience: ${brandVoice.target_audience ?? 'students'}
-
-Respond with valid JSON only — no explanation, no markdown:
-{"intent":"spam|complaint|boost|routine","reasoning":"one sentence"}`,
+JSON format: {"intent":"spam|complaint|boost|routine","reasoning":"one sentence"}`,
     messages: [
       {
         role: 'user',
         content: `Platform: ${comment.platform}\nAuthor: ${comment.author}\nComment: ${comment.text}`,
       },
+      // Pre-fill assistant turn to force JSON output without preamble
+      {
+        role: 'assistant',
+        content: '{',
+      },
     ],
   })
 
   const raw = response.content[0].type === 'text' ? response.content[0].text.trim() : ''
+  // Re-attach the pre-filled opening brace, strip any trailing markdown fence
+  const jsonStr = ('{' + raw).replace(/```[\s\S]*$/m, '').trim()
 
   try {
-    const parsed = JSON.parse(raw) as { intent: Intent; reasoning: string }
+    const parsed = JSON.parse(jsonStr) as { intent: Intent; reasoning: string }
+    if (!['spam', 'complaint', 'boost', 'routine'].includes(parsed.intent)) {
+      throw new Error(`Unexpected intent value: ${parsed.intent}`)
+    }
     return { ...comment, intent: parsed.intent, reasoning: parsed.reasoning }
   } catch {
-    // Fallback: treat as routine if JSON parse fails
-    console.warn('classifyComment JSON parse failed, defaulting to routine. Raw:', raw)
+    console.warn('classifyComment parse failed, defaulting to routine. Raw:', raw)
     return { ...comment, intent: 'routine', reasoning: 'Classification parse error — treated as routine.' }
   }
 }
