@@ -46,13 +46,12 @@ Current stance:
 **Stable through Milestone 10 + Milestone 8C (all fixes deployed, browser verification in progress as of 2026-04-11).**
 
 ### Latest Commits (most recent first)
+- `495ad29` — fix(inbox): show original comment in boost suggestion cards
+- `cdd0f11` — feat(8C-F): show original comment + drafted reply on Comments tab cards
 - `4de7bda` — fix(8C-E): strip markdown fences from classifier output before JSON.parse
-- `bc868d2` — fix(8C-E): simplify classifier prompt + force JSON via assistant prefill (superseded by 4de7bda)
 - `3e36f74` — fix(8C-F): show routine intent tag on comments cards too
 - `07f799d` — fix(8C-F/G/H): intent tags, batch grouping, inbox escalation display + insert fix
-- `4fa1984` — fix(8C-E): correct classifier disambiguation and fix name extraction in draftReply
-- `652ada9` — fix(8C-E): sharpen spam classifier to prevent misclassification on scam-URL links
-- `67c6b2c` — docs: 2026-04-11 verification session results + Milestone 8C lock
+- `7e51fb9` — docs: full handoff doc update — 8C complete, institutional memory, verification checklist
 - `6a99688` — feat: editable calendar + NL calendar commands (Milestone 10)
 - `080fc52` — fix: org details save failing — missing full_name column + silent error on save
 - `6d1c9e6` — fix: design_brief blocking Pipeline C resume at marketer gate
@@ -62,7 +61,7 @@ All pushed to `main`.
 ---
 
 ## Milestone 8C: Content Routing Corrections + UX Polish
-**Status: All fixes deployed. Browser verification in progress.**
+**Status: All fixes deployed and browser-verified 2026-04-11.**
 
 ### What was fixed and why (full institutional memory — do not re-investigate these)
 
@@ -112,13 +111,14 @@ All pushed to `main`.
 - Author name now shown in escalation card header.
 - File: `M.A.S UI/src/pages/inbox.tsx`
 
-### Verification checklist (run after 8C deploy)
-- [ ] Run Pipeline A → DB result: `escalations: 1, spam_ignored: 1, boosts_suggested: 2, errors: []`
-- [ ] Inbox → one Escalation card for "Angry Student"; original comment text visible; suggested response visible
-- [ ] Content Registry Comments tab → Natasha K and Chanda Mwale cards show amber **Boost** badge; Brian Mwanza, Mutale Banda, Lombe Phiri show quiet **Reply** badge
-- [ ] Comments tab → items grouped by day; "Fresh batch" pill appears on today's group; time visible on each card
-- [ ] Settings → Integrations: Switch-only, no redundant button
-- [ ] Run now via samm chat: toast fires in under 2 seconds
+### 8C Verification results (2026-04-11) — PASSED
+- [x] Pipeline A → `escalations: 1, spam_ignored: 1, boosts_suggested: 2, errors: []`
+- [x] Inbox → Escalation card for "Angry Student" with original comment text and suggested response
+- [x] Inbox → Boost suggestion card for Natasha K / Chanda Mwale with quoted comment visible
+- [x] Comments tab → Boost and Reply intent tags on cards
+- [x] Comments tab → original comment quoted in collapsed preview; original comment + drafted reply in expanded view
+- [x] Comments tab → grouped by day with Fresh batch pill; time on date display
+- [x] Settings → Integrations: Switch-only, no redundant button
 
 ---
 
@@ -139,22 +139,52 @@ The insert had `ref_table: 'content_registry'` — this column does not exist. R
 
 ---
 
-## Milestone Queue (Next Agent Starts Here)
+## Remaining Verification Tests (run before proceeding to M11)
 
-### Immediate (after 8C verification passes)
-Proceed to **Milestone 11: Live Platform Publishing**
-- Replace `getMockComments()` in `pipeline-a-engagement/index.ts` with real API reads from Facebook, WhatsApp, YouTube
-- No schema changes needed — the content pipeline and intent classification are already in place
-- Milestone 11 scope is in `SAMM_IMPLEMENTATION_ROADMAP.md`
+8C is verified. The following features are implemented but not yet browser-verified. Do not start M11 until these pass or known issues are documented.
 
-### Queue after Milestone 11
+### Milestone 10 — Editable Calendar + NL Commands
+These were built in commit `6a99688` but not verified.
+
+**Calendar UI (calendar.tsx)**
+- Add event: click Add Event, fill fields, save → event appears in calendar list
+- Edit event: click Edit on existing event → prefilled dialog → change name/date → save → event updates in place
+- Delete event: click Delete → confirm dialog → event removed from list
+
+**NL calendar commands via samm chat**
+- "Add a [topic] event on [date]" → samm inserts to `academic_calendar`, replies with confirmation, event visible in Calendar
+- "Schedule a campaign for [event name] on [date]" → event created, Pipeline C **not** triggered (no `run_pipeline_c` flag)
+- "Schedule a campaign for [event name] on [date] and run the pipeline" → event created AND Pipeline C triggered → campaign brief lands in Inbox within ~60s
+- Ambiguous input ("schedule something soon") → samm asks for clarification rather than hallucinating a date
+
+### Pipeline B — Full Round-Trip (not yet verified end-to-end)
+Pipeline B was fixed in 8C-C but the full approval→resume flow has not been verified.
+
+- Run Pipeline B via samm chat ("run the weekly content pipeline")
+- Drafts must land in Content Registry → Drafts tab, grouped by campaign — NOT in Inbox
+- Inbox must receive a weekly report (not `draft_approval` items)
+- Approve all drafts in Content Registry (individually or batch) → pipeline resumes → `success` in pipeline_runs
+- If any draft is rejected: rejection request appears in Inbox → edit and resubmit in Content Registry → approve → pipeline resumes
+
+### samm NL Scheduler — Full Command Coverage
+These NL patterns are handled by `coordinator-chat/scheduler.ts` and have not all been tested.
+
+- "Run the engagement pipeline" → Pipeline A triggered, toast fires in <2s, run appears in Operations
+- "Run the weekly content pipeline" → Pipeline B triggered
+- "Run the campaign pipeline" → Pipeline C triggered
+- "What's the status of Pipeline A?" → samm reports last run status (running/completed/failed/waiting)
+- "Resume Pipeline B" → resumes a waiting_human run
+- "Cancel" (after a confirmation prompt) → samm acknowledges, nothing triggered
+
+### Milestone Queue (after all verification passes)
+- **M11**: Live Platform Publishing — replace `getMockComments()` with real Facebook/WhatsApp/YouTube API reads
 - **M12**: Multi-Channel samm Access (Slack, Teams, WhatsApp, Telegram, email inbound)
 - **M13**: Voice Interface
 - **M14**: Dashless Operation (Google Sheets, Docs, Excel)
 - **M15**: Visual Plugin Builder
 - **M16**: Sales and CRM Integration
 
-### Deferred (revisit after broad integration coverage)
+### Deferred
 - **M8B**: Onboarding Flow UI (4-5 screen wizard)
 - **M9**: Copy Quality Check (Pipeline C phase 3 critic pass)
 

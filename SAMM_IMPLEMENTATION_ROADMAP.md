@@ -713,18 +713,27 @@ Scope:
 
 ## Milestone 10: Editable Calendar + Natural Language Calendar Commands
 Status:
-- planned
+- implemented 2026-04-11, browser verification pending
 
 Goal:
 - calendar is fully editable from the UI (add, edit, delete events)
 - users can prompt samm to create or update calendar events in natural language
 - "schedule a post about the UNZA orientation next Friday" resolves the event from the calendar and queues a Pipeline C run
 
-Scope:
-- editable calendar UI (currently read-only)
-- `coordinator-chat` extended to handle calendar create/update commands
-- natural language post drafting against a named event: samm reads calendar, generates copy on demand outside of cron schedule
-- on-demand Pipeline C trigger from a chat command, not just cron
+Scope (all implemented):
+- `calendar.tsx`: Edit button per card — prefilled dialog → `useUpdateCalendarEvent` mutation → invalidates calendar query
+- `calendar.tsx`: Delete button — AlertDialog confirm → `useDeleteCalendarEvent` mutation → invalidates calendar query
+- `api.ts`: `useUpdateCalendarEvent` and `useDeleteCalendarEvent` mutations added
+- `coordinator-chat/index.ts`: `create_calendar_event` action type added to model instruction
+- `coordinator-chat/index.ts`: handler inserts to `academic_calendar`, optionally fires Pipeline C if model sets `run_pipeline_c: true`
+
+Verification checklist:
+- Calendar UI — Add: click "Add Event" (or equivalent), fill in event details, save → event appears in calendar
+- Calendar UI — Edit: click Edit on an existing event, change name/date, save → event updates in place
+- Calendar UI — Delete: click Delete on an event, confirm → event removed from calendar
+- NL create: prompt samm "Add a [topic] event on [date]" → samm inserts event, replies with confirmation, event visible in Calendar
+- NL with Pipeline C: prompt samm "Schedule a campaign for [event] on [date] and run the campaign pipeline" → event created AND Pipeline C triggered → campaign brief lands in Inbox
+- NL ambiguity: prompt samm with a vague event description → samm asks for clarification rather than hallucinating a date
 
 ## Milestone 11: Live Platform Publishing
 Status:
