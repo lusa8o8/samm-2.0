@@ -190,13 +190,13 @@ export default function OperationsManual() {
               <Step n={1}>Type something like <Cmd>write a post about a weekend sale</Cmd> or <Cmd>draft a Facebook post about our grand opening</Cmd>.</Step>
               <Step n={2}>If you type <Cmd>run pipeline d</Cmd>, samm will ask for the topic first.</Step>
               <Step n={3}>samm decides on the main message, then writes the post in the right format for each channel.</Step>
-              <Step n={4}>Drafts land in Content -> Drafts within about 10 seconds.</Step>
+              <Step n={4}>Drafts land in Content {"->"} Drafts within about 10 seconds.</Step>
               <Step n={5}>Review, edit if needed, then approve. Approved posts move to Scheduled.</Step>
             </Section>
 
             <Section title="What to know">
               <div className="space-y-1.5 text-sm text-muted-foreground">
-                <p>— Quick posts now show a recent activity signal in Operations -> Overview, so you can see when the last one ran.</p>
+                <p>— Quick posts now show a recent activity signal in Operations {"->"} Overview, so you can see when the last one ran.</p>
                 <p>— samm writes from the topic you give and the brand settings you saved. It does not do a long planning round first.</p>
                 <p>— To write for one channel only, name it clearly. Example: <Cmd>draft a WhatsApp message about a weekend sale</Cmd>.</p>
               </div>
@@ -458,8 +458,8 @@ export default function OperationsManual() {
 
             <Section title="Quick post — no drafts appeared in Content">
               <div className="space-y-1.5 text-sm text-muted-foreground">
-                <p>1. First check Content -> Drafts.</p>
-                <p>2. Then check Operations -> Overview. The latest quick post should show under Pipeline D and Recent Executions.</p>
+                <p>1. First check Content {"->"} Drafts.</p>
+                <p>2. Then check Operations {"->"} Overview. The latest quick post should show under Pipeline D and Recent Executions.</p>
                 <p>3. If the drafts still are not there, samm may have started a full campaign instead. Check Inbox for a campaign plan.</p>
                 <p>4. Use clear phrasing like <Cmd>write a post about a weekend sale</Cmd> instead of campaign wording.</p>
               </div>
@@ -468,7 +468,7 @@ export default function OperationsManual() {
             <Section title="Canva AI asks for social handles, logo, or a link">
               <div className="space-y-1.5 text-sm text-muted-foreground">
                 <p>The design brief is missing your social handles or primary link.</p>
-                <p>Go to Operations -> Settings -> Visual Brand, fill in the Social Handles fields and Primary Link, and save. The next campaign's design brief will include them.</p>
+                <p>Go to Operations {"->"} Settings {"->"} Visual Brand, fill in the Social Handles fields and Primary Link, and save. The next campaign's design brief will include them.</p>
               </div>
             </Section>
 
@@ -483,7 +483,7 @@ export default function OperationsManual() {
             <Section title="Approved post is not publishing">
               <div className="space-y-1.5 text-sm text-muted-foreground">
                 <p>Some channels can still need extra connection setup before live publishing works properly.</p>
-                <p>If a post stays in Scheduled or moves to Failed, check Operations -> Settings and make sure the channel is connected correctly.</p>
+                <p>If a post stays in Scheduled or moves to Failed, check Operations {"->"} Settings and make sure the channel is connected correctly.</p>
                 <p>If needed, you can still copy the post from Content and publish it yourself while setup is being finished.</p>
               </div>
             </Section>
