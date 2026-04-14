@@ -109,13 +109,20 @@ Use `SAMM_IMPLEMENTATION_ROADMAP.md` as the detailed checklist. Current pending 
 - `M12A`: verify manual page load, accordion behavior, sidebar link, and mobile rendering
 
 ## Milestone Queue
-- `M13A`: Facebook Live Publishing - NEXT stable checkpoint
+- `M13A`: Facebook Live Publishing - active live verification slice
   - Facebook remains the first end-to-end verified slice
   - On success write `content_registry.status = 'published'` and `published_at`
   - On failure set `status = 'failed'` and log the reason in `metadata`
 - `M13B`: WhatsApp live publishing
 - `M13C`: YouTube live publishing
 - `M13D`: Email live publishing
+- `M13E`: Coordinator intent normalization / reasoning hardening
+  - add a lightweight intent-classification layer before the full coordinator prompt
+  - normalize small NL variants (`hi`, `hello`, `write`, `draft`, `create campaign`, `run pipeline`)
+  - prepare `samm` for later chat-channel integrations
+- `M13F`: Platform compliance + official app onboarding foundation
+  - official `samm` Meta app / business-verification track
+  - landing page + policy docs + domain/email consistency for platform review
 - parallel scaffolding for `M13B/M13C/M13D` is allowed, but verification and stable commits remain provider-by-provider
 - `M14`: Multi-channel samm access
 - `M15`: Voice interface
@@ -176,9 +183,47 @@ Rule of thumb:
 - `pipeline_runs` lifecycle: `running -> waiting_human -> resumed -> success/failed/cancelled`
 - Pipeline C resumes in the background via `EdgeRuntime.waitUntil`
 
+## Current M13A State
+- Fresh Honey Shop workspace/org remains the active `M13A` verification org.
+- `coordinator-chat` overload handling was hardened and deployed.
+  - raw Anthropic `529 overloaded_error` is no longer leaked to the user
+  - transient model failures now return a clean retryable `503` message
+- `pipeline-c-campaign` resume/import bug was fixed and deployed.
+  - old failure: `INTEGRATION_REGISTRY is not defined`
+- same-day campaign scheduling was fixed and deployed.
+  - posts no longer backdate into the past for same-day events
+- frontend org hydration bug was fixed locally.
+  - `getOrgId()` now hydrates from the active session before org-scoped queries run
+  - this prevented Honey Shop Settings saves from silently targeting the wrong org on fresh load
+- `publish-scheduled` is now declared in `supabase/config.toml` with `verify_jwt = false` and redeployed.
+  - anonymous/manual scheduler invocation works again for live verification
+- Honey Shop Facebook credentials are now confirmed to reach the backend.
+  - the old `Missing Facebook credentials` error is resolved
+
+## Current Blocker
+- `M13A` is no longer blocked by local scheduler/runtime/config wiring.
+- Live Facebook publish now reaches the Facebook Graph API and fails with permission error `403 (#200)`.
+- Current blocker is external platform compliance / token scope, not internal app logic.
+- The Honey Shop app/token path still needs a Page token with working post-publish permission.
+- Meta may require the official app/use-case path and possibly business verification for production-grade page publishing.
+
+## Landing Page / Compliance Note
+- Add landing page requirements to the `M13` series as part of `M13F`.
+- Minimum assets to prepare:
+  - live HTTPS website or subdomain for `samm`
+  - Privacy Policy
+  - Terms of Service
+  - product/business description
+  - contact email
+  - domain/email consistency where possible
+- A subdomain is acceptable for early setup, but if the final `samm` domain is known, buy it early to reduce rework during verification.
+
 ## Constraints To Preserve
 - Do not do a broad `samm` workspace redesign.
 - Keep the product professional and restrained.
 - Keep scope narrow and milestone-shaped.
 - For `M13A-M13D`, keep stable checkpoints provider-by-provider. Parallel scaffolding is allowed, but do not collapse Facebook, WhatsApp, YouTube, and email into one unverified commit.
+
+
+
 

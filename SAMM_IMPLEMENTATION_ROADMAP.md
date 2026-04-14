@@ -1187,7 +1187,7 @@ Commit policy:
 Status:
 - planned
 - depends on M11E (brand_visual injected into briefs) and M11F (cadence policy baked in) � both complete
-- delivery is split into `M13A` through `M13D`
+- delivery is split into `M13A` through `M13F`
 
 Goal:
 - replace mock publish actions with real platform API calls behind the existing adapter interfaces
@@ -1199,6 +1199,7 @@ Locked delivery rules:
 - `M13A` Facebook is the first end-to-end checkpoint and the first browser/live verification target
 - implementation scaffolding for later adapters may be built in parallel to speed production
 - parallel scaffolding does not change the stable commit rule: no mixed multi-provider checkpoint commits
+- coordinator hardening and platform-compliance work may be split into explicit follow-on slices inside the M13 series
 
 Shared M13 foundation:
 - Supabase cron job: poll `content_registry` for rows where `status = 'approved'` or `status = 'scheduled'` and `scheduled_at <= now()` -> publish
@@ -1225,6 +1226,27 @@ Verification:
 Commit policy:
 - migration for publish columns first if still needed
 - one stable Facebook checkpoint commit after end-to-end verification
+
+Current implementation/progress snapshot (2026-04-14):
+- fresh Honey Shop workspace remains the active `M13A` verification org
+- coordinator resilience fix is implemented and deployed
+  - transient Anthropic overloads now return a clean retryable `503`
+  - raw provider `529` JSON is no longer leaked to the user
+- `pipeline-c-campaign` import/resume bug fixed and deployed
+  - old failure: `INTEGRATION_REGISTRY is not defined`
+- same-day campaign scheduling bug fixed and deployed
+  - same-day posts no longer backdate into the past
+- frontend org hydration bug fixed locally
+  - active session now hydrates `org_id` before org-scoped queries execute
+- `publish-scheduled` is now declared in `supabase/config.toml` with `verify_jwt = false` and redeployed
+  - anonymous/manual scheduler invocation works again for live verification
+- Honey Shop Facebook credentials are now confirmed to reach the backend
+  - old `Missing Facebook credentials` error is resolved
+
+Current blocker snapshot (2026-04-14):
+- live Facebook publish now reaches the Facebook Graph API and fails with `403 (#200)` permission error
+- current blocker is external platform compliance / token scope, not internal scheduler/runtime/config wiring
+- next diagnostic target is a Page token with working post-publish permission, then business-verification / official-app readiness if Meta still blocks posting
 
 ### M13B: WhatsApp Live Publishing
 Goal:
@@ -1261,6 +1283,43 @@ Scope:
 Verification:
 - approved email draft sends successfully
 - success/failure state follows the shared publish state contract
+
+### M13E: Coordinator Intent Normalization / Reasoning Hardening
+Goal:
+- make `samm` more tolerant of small natural-language variations before later chat-channel integrations land
+
+Scope:
+- lightweight intent-classification layer before the full coordinator prompt
+- normalize common variants and synonyms (`hi`, `hello`, `write`, `draft`, `create campaign`, `run pipeline`)
+- reserve the full reasoning path for ambiguous or open-ended requests
+- reduce token waste and brittle routing for obvious requests
+
+Verification:
+- semantically equivalent greetings and simple pipeline prompts route consistently
+- obvious one-off post prompts (`write`, `draft`, `create a post`) resolve to the same intent
+- coordinator no longer depends on exact phrasing for simple operational commands
+
+### M13F: Platform Compliance + Official App Onboarding Foundation
+Goal:
+- prepare `samm` to offer production-grade official platform connections instead of ad hoc manual token entry
+
+Scope:
+- define the official `samm` Meta app / business owner path
+- capture business-verification prerequisites and app-review requirements
+- add landing page requirements to the milestone series
+- define the future OAuth-based connect flow target for platform connections
+
+Landing page requirements:
+- live HTTPS website or subdomain for `samm`
+- Privacy Policy
+- Terms of Service
+- clear product/business description
+- contact email
+- domain/email consistency where possible
+
+Verification:
+- requirements checklist is documented and complete enough to start verification work without rediscovery
+- official-app path is explicit in docs and handoff
 
 Do not include in M13A:
 - analytics pull-back from live platforms (separate milestone)
@@ -1392,9 +1451,11 @@ Reason:
 Milestones M11A through M11F and M12 are complete. All brand, scheduling, and one-off post infrastructure is in place.
 
 Next highest-leverage work:
-1. **M13A Facebook Live Publishing** � first verified live publish path. Facebook remains the first stable checkpoint; adapter scaffolds for M13B/M13C/M13D may be built in parallel, but verification and stable commits remain provider-by-provider.
-2. **Canva AI close-the-loop test** — run a campaign with brand_visual + social handles filled in Settings → verify Canva AI completes a design without follow-up questions.
-3. **Pending test queue** — work through the ⬜ items in the Test Status section above; update each to ✅ as verified.
+1. **M13A Facebook Live Publishing** - active live verification slice. Internal scheduler/runtime/config blockers are largely cleared; the current blocker is Facebook `403 (#200)` permission/compliance, not missing local wiring.
+2. **M13E Coordinator intent normalization** - lock the lightweight intent layer before later `samm` chat integrations widen the NL surface area.
+3. **M13F Platform compliance foundation** - prepare the official app, business-verification, and landing-page path in parallel with adapter work.
+4. **Canva AI close-the-loop test** - run a campaign with brand_visual + social handles filled in Settings and verify Canva AI completes a design without follow-up questions.
+5. **Pending test queue** - work through the pending items in the Test Status section above and update each to verified as it passes in the browser.
 
 ## Commit Strategy
 Recommended commit pattern:
@@ -1420,4 +1481,8 @@ The roadmap is intentionally conservative:
 - bring onboarding, billing, and live APIs in only after the execution core is reliable
 
 That is the boringly effective path to the full agent system.
+
+
+
+
 

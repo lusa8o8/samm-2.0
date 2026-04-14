@@ -7,7 +7,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.27.0'
 import { getAgentDefinition } from '../_shared/agent-registry.ts'
-import { getIntegrationDefinition } from '../_shared/integration-registry.ts'
+import { INTEGRATION_REGISTRY, getIntegrationDefinition } from '../_shared/integration-registry.ts'
 import { PIPELINE_RUN_STATUS } from '../_shared/pipeline-run-status.ts'
 
 // ── types ─────────────────────────────────────────────────────────────
@@ -1024,8 +1024,12 @@ function buildCadenceSchedule(
 ): string[] {
 
   const todayMs = new Date(today).getTime()
-  // Last allowed post: day before event at 00:00 UTC
-  const ceilingMs = new Date(eventDate).getTime() - 86400000
+  const nowMs = Date.now()
+  // Last allowed post: day before event at 00:00 UTC.
+  // If that window has already passed, schedule to the next quarter-hour with a small lead instead of backdating.
+  const rawCeilingMs = new Date(eventDate).getTime() - 86400000
+  const sameDayFallbackMs = nextQuarterHourSlot(nowMs, 30)
+  const ceilingMs = rawCeilingMs <= nowMs ? sameDayFallbackMs : rawCeilingMs
 
   // Group asset indices by platform, preserving insertion order
   const byPlatform: Record<string, number[]> = {}
@@ -1060,15 +1064,16 @@ function buildCadenceSchedule(
         targetMs = nextPreferredWeekday(afterIntervalMs, policy.preferred_days, prefHour, prefMin)
       }
 
-      // Clamp to ceiling — never schedule after day before event
-      const clampedMs = Math.min(targetMs, ceilingMs)
+      // Clamp to the allowed window. For same-day campaigns, this pushes posts to the next testable slot instead of the past.
+      const floorMs = rawCeilingMs <= nowMs ? sameDayFallbackMs : todayMs
+      const clampedMs = Math.max(Math.min(targetMs, ceilingMs), floorMs)
       scheduled[idx] = new Date(clampedMs).toISOString()
     })
   }
 
   // Fill any uncapped indices (shouldn't happen but be safe)
   assets.forEach((_, i) => {
-    if (!scheduled[i]) scheduled[i] = new Date(Math.min(todayMs, ceilingMs)).toISOString()
+    if (!scheduled[i]) scheduled[i] = new Date(rawCeilingMs <= nowMs ? sameDayFallbackMs : Math.min(todayMs, ceilingMs)).toISOString()
   })
 
   return assets.map((_, i) => scheduled[i])
@@ -1076,6 +1081,19 @@ function buildCadenceSchedule(
 
 // Advance from baseMs to the next occurrence of a preferred weekday at prefHour:prefMin UTC.
 // If baseMs already falls on a preferred day (at or before the preferred time), returns that day.
+function nextQuarterHourSlot(baseMs: number, minLeadMinutes = 30): number {
+  const slot = new Date(baseMs + minLeadMinutes * 60000)
+  slot.setUTCSeconds(0, 0)
+  const minutes = slot.getUTCMinutes()
+  const rounded = Math.ceil(minutes / 15) * 15
+  if (rounded === 60) {
+    slot.setUTCHours(slot.getUTCHours() + 1, 0, 0, 0)
+  } else {
+    slot.setUTCMinutes(rounded, 0, 0)
+  }
+  return slot.getTime()
+}
+
 function nextPreferredWeekday(
   baseMs: number,
   preferredDays: readonly string[],
@@ -1103,3 +1121,7 @@ function nextPreferredWeekday(
   fallback.setUTCHours(prefHour, prefMin, 0, 0)
   return fallback.getTime()
 }
+
+
+
+

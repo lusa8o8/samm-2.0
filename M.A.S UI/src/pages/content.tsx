@@ -200,7 +200,12 @@ function ContentCard({
       </div>
 
       {!isExpanded && (
-        <div className="-mt-2 px-5 pb-4">
+        <div className="-mt-2 space-y-3 px-5 pb-4">
+          {item.media_url && (
+            <div className="overflow-hidden rounded-md border">
+              <img src={item.media_url} alt="Attached media preview" className="h-28 w-full object-cover" />
+            </div>
+          )}
           {item.metadata?.original_comment ? (
             <p className="line-clamp-2 text-[13px] leading-relaxed text-muted-foreground">
               &ldquo;{String(item.metadata.original_comment)}&rdquo;
@@ -824,3 +829,4 @@ export default function Content() {
     </div>
   );
 }
+

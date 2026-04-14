@@ -25,6 +25,7 @@ const DEFAULT_SUGGESTIONS = [
   'What is next on the calendar?',
   'Run the engagement pipeline',
 ]
+const TRANSIENT_MODEL_ERROR_MESSAGE = 'samm is temporarily busy right now. Please try again in a moment.'
 
 function jsonResponse(body: ChatResponse | { error: string }, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -96,6 +97,56 @@ function summarizeInbox(rows: any[]) {
     priority: row.priority,
     created_at: row.created_at,
   }))
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message
+  return String(error ?? 'Unknown error')
+}
+
+function isTransientModelError(error: unknown) {
+  const message = getErrorMessage(error).toLowerCase()
+  return (
+    message.includes('overloaded_error') ||
+    message.includes('rate_limit_error') ||
+    message.includes('temporarily unavailable') ||
+    message.includes('529') ||
+    message.includes('503') ||
+    message.includes('rate limit') ||
+    message.includes('overloaded')
+  )
+}
+
+async function createCoordinatorCompletionWithRetry(anthropic: Anthropic, prompt: unknown) {
+  let lastError: unknown = null
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      return await anthropic.messages.create({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 600,
+        system: 'You are samm. Be concise, operational, and clear. Return JSON only.',
+        messages: [
+          {
+            role: 'user',
+            content: JSON.stringify(prompt),
+          },
+        ],
+      })
+    } catch (error) {
+      lastError = error
+      if (!isTransientModelError(error) || attempt === 1) {
+        throw error
+      }
+      await sleep(700)
+    }
+  }
+
+  throw lastError ?? new Error(TRANSIENT_MODEL_ERROR_MESSAGE)
 }
 
 Deno.serve(async (req) => {
@@ -244,17 +295,7 @@ Rules:
 - Keep suggestions short and actionable.`
     }
 
-    const completion = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 600,
-      system: 'You are samm. Be concise, operational, and clear. Return JSON only.',
-      messages: [
-        {
-          role: 'user',
-          content: JSON.stringify(prompt),
-        },
-      ],
-    })
+    const completion = await createCoordinatorCompletionWithRetry(anthropic, prompt)
 
     const rawText = completion.content
       .filter((item: any) => item.type === 'text')
@@ -440,7 +481,16 @@ Rules:
       suggestions,
     })
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error'
+    if (isTransientModelError(error)) {
+      return jsonResponse({ error: TRANSIENT_MODEL_ERROR_MESSAGE }, 503)
+    }
+
+    const message = getErrorMessage(error)
     return jsonResponse({ error: message }, 500)
   }
 })
+
+
+
+
+

@@ -10,8 +10,12 @@ const DEV_ORG_ID = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11";
 
 let _orgId: string = DEV_ORG_ID;
 
-supabase.auth.onAuthStateChange((_event, session) => {
+function syncOrgId(session: Session | null) {
   _orgId = session?.user?.app_metadata?.org_id ?? DEV_ORG_ID;
+}
+
+supabase.auth.onAuthStateChange((_event, session) => {
+  syncOrgId(session);
 });
 
 export function getOrgId(): string {
@@ -35,6 +39,8 @@ export async function getSession() {
 }
 
 async function validateSession(session: Session | null) {
+  syncOrgId(session);
+
   if (!session?.access_token) return null;
 
   const { error } = await supabase.auth.getUser(session.access_token);
@@ -75,3 +81,4 @@ export async function getAccessToken() {
   const session = await getActiveSession();
   return session?.access_token ?? null;
 }
+

@@ -15,7 +15,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-const PIPELINE_TRIGGER_KEY: Record<string, "a" | "b" | "c"> = {
+const PIPELINE_TRIGGER_KEY: Partial<Record<string, "a" | "b" | "c">> = {
   pipeline_a: "a",
   pipeline_b: "b",
   pipeline_c: "c",
@@ -34,6 +34,7 @@ export default function AgentOverview() {
     { key: "pipeline_a", data: statusData.pipeline_a },
     { key: "pipeline_b", data: statusData.pipeline_b },
     { key: "pipeline_c", data: statusData.pipeline_c },
+    { key: "pipeline_d", data: statusData.pipeline_d },
   ] : [];
 
   async function handleTrigger(pipelineKey: string) {
@@ -87,14 +88,14 @@ export default function AgentOverview() {
               <Activity className="h-4 w-4" />
               System Status
             </h2>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
               {statusLoading ? (
                 Array.from({ length: 4 }).map((_, i) => (
                   <Skeleton key={i} className="h-36 w-full rounded-lg" />
                 ))
               ) : (
                 statusCards.map(({ key, data }) => {
-                  const canTrigger = key !== "coordinator";
+                  const canTrigger = key !== "coordinator" && Boolean(PIPELINE_TRIGGER_KEY[key]);
                   const isTriggering = triggeringPipeline === key;
                   const isBlocked = data.status === "running" || data.status === "resumed" || data.status === "waiting_human";
 
@@ -243,3 +244,4 @@ export default function AgentOverview() {
     </div>
   );
 }
+

@@ -81,6 +81,7 @@ const PIPELINE_DESCRIPTIONS: Record<string, string> = {
   pipeline_a: "Processes engagement and escalations.",
   pipeline_b: "Drafts and schedules social content.",
   pipeline_c: "Generates and sends campaign briefs.",
+  pipeline_d: "Drafts one-off posts on request.",
 };
 
 const PLATFORM_ORDER = ["facebook", "whatsapp", "youtube", "email"];
@@ -109,7 +110,9 @@ function toPipelineKey(value?: string | null) {
   if (normalized.includes("pipeline-c")) return "pipeline_c";
   if (normalized === "pipeline_a") return "pipeline_a";
   if (normalized === "pipeline_b") return "pipeline_b";
+  if (normalized.includes("pipeline-d")) return "pipeline_d";
   if (normalized === "pipeline_c") return "pipeline_c";
+  if (normalized === "pipeline_d") return "pipeline_d";
   return "coordinator";
 }
 
@@ -787,6 +790,7 @@ export function useGetPipelinesStatus(options?: QueryHookOptions) {
         pipeline_a: formatPipelineStatus("pipeline_a", latest.pipeline_a),
         pipeline_b: formatPipelineStatus("pipeline_b", latest.pipeline_b),
         pipeline_c: formatPipelineStatus("pipeline_c", latest.pipeline_c),
+        pipeline_d: formatPipelineStatus("pipeline_d", latest.pipeline_d),
       };
     },
     ...options?.query,
@@ -1243,3 +1247,4 @@ export function useTriggerPipeline(options?: MutationHookOptions) {
     ...options?.mutation,
   });
 }
+

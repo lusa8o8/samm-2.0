@@ -244,7 +244,9 @@ async function publishFacebook(row: PublishableContentRow, platformConnection: P
   const accessToken = String(platformConnection.access_token ?? '').trim()
 
   if (!pageId || !accessToken) {
-    throw new Error('Missing Facebook credentials: page_id and access_token are required')
+    throw new Error(
+      `Missing Facebook credentials for ${row.org_id}: connected=${platformConnection.connected === true}, has_page_id=${pageId.length > 0}, has_access_token=${accessToken.length > 0}`,
+    )
   }
 
   const params = new URLSearchParams()
@@ -279,3 +281,5 @@ async function publishFacebook(row: PublishableContentRow, platformConnection: P
     raw: payload,
   }
 }
+
+
