@@ -246,12 +246,28 @@ Rule of thumb:
   - Ambassadors toggle off: nav hidden, route gated, KPI hidden, no ambassador-targeted generation triggered
   - Pipeline B now drafts Honey Shop-relevant content instead of UNZA/StudyHub exam-prep content
   - Pipeline D remains clean after universalization changes
-- Remaining M13F gap discovered during verification:
-  - `pipeline-a-engagement` still leaks old education-era poll options and an `undefined` brand/source fallback in one poll path
-  - example leak: `What would help you most this week from undefined? A) Past papers B) Video walkthroughs C) Quick revision tips`
+- Remaining M13F runtime leak was fixed and reverified:
+  - Pipeline A no longer emits the old education-era poll options or `undefined` brand fallback
+  - verified replacement: `What would you like to see more of from this brand this week? A) Product tips B) Behind-the-scenes updates C) Special offers`
+- M13F is now stable enough to hand off as a committed universalization checkpoint
+## Current M13G Diagnosis
+- M13G pass 1 is complete and committed.
+  - _shared/llm-client.ts exists
+  - coordinator-chat now uses the shared Anthropic-backed client
+- M13G pass 2 is now verified in browser and Supabase.
+  - pipeline-d-post now uses the shared client for canonical copy and platform copy generation
+  - direct Anthropic instantiation was removed from Pipeline D
+  - un pipeline d guidance still works through coordinator-chat
+  - one-off prompts like draft a Facebook post about our grand opening and i need a post about discounts still return clean deterministic responses
+  - Supabase pipeline-d-post invocations return 200
+  - resulting drafts land in Content Registry
+- The only issue surfaced during pass 2 verification was not backend failure.
+  - a discounts draft initially looked missing, but it had landed
+  - the real gap is UI visibility in Content Registry: there is no day segmentation or obvious drafted-at freshness on cards
 - Locked next move:
-  - fix `pipeline-a-engagement` poll-generation fallback/options so they are generic and brand-aware
-  - then continue the backend sweep only if more education-first runtime leaks remain after re-test
+  - commit M13G pass 2 as a successful shared-adapter migration
+  - treat Content Registry freshness/day grouping as a later UI polish
+  - if the adapter series continues, migrate pipeline-a-engagement next before broadening the shared interface further
 ## Landing Page / Compliance Note
 - Add landing page requirements to the `M13` series as part of `M13F`.
 - Minimum assets to prepare:

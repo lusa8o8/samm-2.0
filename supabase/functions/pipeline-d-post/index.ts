@@ -1,15 +1,15 @@
 // supabase/functions/pipeline-d-post/index.ts
-// ─────────────────────────────────────────────────────────────────────
-// Pipeline D — One-Off Post
+// ---------------------------------------------------------------------
+// Pipeline D - One-Off Post
 // Lightweight utility for ad-hoc "write a post about X" requests.
 // No research, no brief, no CEO gate, no monitor, no pipeline_runs row.
-// Flow: topic → canonical copy → parallel platform adapters → Content Registry drafts
+// Flow: topic -> canonical copy -> parallel platform adapters -> Content Registry drafts
 // Designed to complete in < 10 seconds.
-// ─────────────────────────────────────────────────────────────────────
+// ---------------------------------------------------------------------
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.27.0'
 import { getIntegrationDefinition } from '../_shared/integration-registry.ts'
+import { createAnthropicClient, generateTextWithAnthropic } from '../_shared/llm-client.ts'
 
 const DEFAULT_ORG_ID = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'
 const DEFAULT_PLATFORMS = ['facebook', 'whatsapp', 'youtube', 'email']
@@ -32,11 +32,12 @@ function extractJSON(text: string, fallback = '{}') {
     const firstBrace = text.indexOf('{')
     const lastBrace = text.lastIndexOf('}')
     if (firstBrace !== -1 && lastBrace !== -1) return text.slice(firstBrace, lastBrace + 1)
-  } catch (_e) { /* fall through */ }
+  } catch (_e) {
+    // fall through
+  }
   return fallback
 }
 
-// ── org config ────────────────────────────────────────────────────────
 async function getOrgConfig(supabase: any, orgId: string) {
   const { data, error } = await supabase
     .from('org_config')
@@ -47,10 +48,9 @@ async function getOrgConfig(supabase: any, orgId: string) {
   return data
 }
 
-// ── brand voice prompt builder ────────────────────────────────────────
 function buildSystemPrompt(brandVoice: any): string {
   const hashtagLine = Array.isArray(brandVoice.hashtags) && brandVoice.hashtags.length > 0
-    ? `\nApproved hashtags (use only these — do not invent others): ${brandVoice.hashtags.join(' ')}`
+    ? `\nApproved hashtags (use only these - do not invent others): ${brandVoice.hashtags.join(' ')}`
     : ''
   const formatLine = brandVoice.post_format_preference
     ? `\nPost format preference: ${brandVoice.post_format_preference}`
@@ -66,19 +66,15 @@ Good post example: "${brandVoice.example_good_post ?? brandVoice.good_post_examp
 Bad post example: "${brandVoice.example_bad_post ?? brandVoice.bad_post_example ?? ''}"${hashtagLine}${formatLine}`
 }
 
-// ── Phase 1: canonical copy ───────────────────────────────────────────
-// One LLM call produces the headline, body, CTA, and key fact that
-// all platform adapters must use verbatim — no drift between platforms.
 async function runCanonicalCopy(
-  anthropic: Anthropic,
+  anthropic: ReturnType<typeof createAnthropicClient>,
   topic: string,
   eventRef: string | null,
-  brandVoice: any
+  brandVoice: any,
 ): Promise<{ headline: string; core_body: string; exact_cta: string; key_fact: string }> {
-
-  const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: 300,
+  const response = await generateTextWithAnthropic(anthropic, {
+    task: 'one_off_writer',
+    maxTokens: 300,
     system: `${buildSystemPrompt(brandVoice)}
 
 Distil the single most important message for this topic into its purest form.
@@ -93,25 +89,21 @@ Respond with JSON only:
       role: 'user',
       content: `Topic: ${topic}${eventRef ? `\nRelated event: ${eventRef}` : ''}
 
-Write the canonical message now.`
-    }]
+Write the canonical message now.`,
+    }],
   })
 
   const raw = response.content[0].type === 'text' ? response.content[0].text : '{}'
   return JSON.parse(extractJSON(raw))
 }
 
-// ── Phase 2: platform adapters (parallel) ────────────────────────────
-// Each adapter adapts the canonical message for its platform only.
-// headline, exact_cta, and key_fact must appear verbatim in every asset.
 async function runPlatformAdapters(
-  anthropic: Anthropic,
+  anthropic: ReturnType<typeof createAnthropicClient>,
   topic: string,
   canonical: { headline: string; core_body: string; exact_cta: string; key_fact: string },
   platforms: string[],
-  brandVoice: any
+  brandVoice: any,
 ): Promise<Array<{ platform: string; body: string; subject_line?: string }>> {
-
   const PLATFORM_INSTRUCTIONS: Record<string, string> = {
     [getIntegrationDefinition('facebook').id]: '2-3 sentences, emoji ok, end with the CTA or primary link if one is available',
     [getIntegrationDefinition('whatsapp').id]: 'under 200 characters, conversational, one clear call to action',
@@ -120,15 +112,15 @@ async function runPlatformAdapters(
   }
 
   const requests = platforms
-    .filter(p => PLATFORM_INSTRUCTIONS[p])
+    .filter((p) => PLATFORM_INSTRUCTIONS[p])
     .map(async (platform) => {
       try {
-        const response = await anthropic.messages.create({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 200,
+        const response = await generateTextWithAnthropic(anthropic, {
+          task: 'one_off_writer',
+          maxTokens: 200,
           system: `${buildSystemPrompt(brandVoice)}
 
-Write ONLY the post copy — no JSON, no quotes, no preamble.
+Write ONLY the post copy - no JSON, no quotes, no preamble.
 
 You MUST include these elements verbatim:
 - Opening headline: "${canonical.headline}"
@@ -143,8 +135,8 @@ Core message: ${canonical.core_body}
 Platform: ${platform}
 Instructions: ${PLATFORM_INSTRUCTIONS[platform]}
 
-Write the copy now.`
-          }]
+Write the copy now.`,
+          }],
         })
 
         const body = response.content[0].type === 'text'
@@ -171,16 +163,15 @@ Write the copy now.`
   return results.filter((r): r is NonNullable<typeof r> => r !== null)
 }
 
-// ── main handler ──────────────────────────────────────────────────────
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   try {
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     )
-    const anthropic = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY')! })
+    const anthropic = createAnthropicClient(Deno.env.get('ANTHROPIC_API_KEY')!)
 
     const payload = await req.json().catch(() => ({}))
     const orgId: string = payload?.org_id ?? payload?.orgId ?? DEFAULT_ORG_ID
@@ -199,15 +190,12 @@ Deno.serve(async (req) => {
 
     console.log(`Pipeline D: writing post about "${topic}" for platforms: ${platforms.join(', ')}`)
 
-    // Phase 1: canonical copy (1 LLM call)
     const canonical = await runCanonicalCopy(anthropic, topic, eventRef, brandVoice)
     console.log(`Canonical headline locked: "${canonical.headline}"`)
 
-    // Phase 2: platform adapters (parallel LLM calls)
     const assets = await runPlatformAdapters(anthropic, topic, canonical, platforms, brandVoice)
     console.log(`${assets.length} platform drafts produced`)
 
-    // Phase 3: insert drafts into Content Registry
     let inserted = 0
     for (const asset of assets) {
       const { error } = await supabase
@@ -230,8 +218,7 @@ Deno.serve(async (req) => {
 
     console.log(`Pipeline D complete: ${inserted} drafts in Content Registry`)
 
-    return jsonResponse({ ok: true, drafts_created: inserted, platforms_written: assets.map(a => a.platform) })
-
+    return jsonResponse({ ok: true, drafts_created: inserted, platforms_written: assets.map((a) => a.platform) })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     console.error('Pipeline D failed:', err)

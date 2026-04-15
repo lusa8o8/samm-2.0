@@ -2,6 +2,7 @@ import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.27.0'
 
 export type LlmTask =
   | 'coordinator'
+  | 'one_off_writer'
 
 type TextMessage = {
   role: 'user' | 'assistant'
@@ -29,6 +30,12 @@ const TASK_CONFIG: Record<LlmTask, { model: string; maxTokens: number; retries: 
   coordinator: {
     model: 'claude-sonnet-4-20250514',
     maxTokens: 600,
+    retries: 2,
+    retryDelayMs: 700,
+  },
+  one_off_writer: {
+    model: 'claude-sonnet-4-20250514',
+    maxTokens: 300,
     retries: 2,
     retryDelayMs: 700,
   },
