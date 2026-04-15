@@ -1403,14 +1403,31 @@ Locked design:
 
 Progress:
 - pass 1 verified and committed:
-  - _shared/llm-client.ts added
-  - coordinator-chat migrated to the shared client
+  - `_shared/llm-client.ts` added
+  - `coordinator-chat` migrated to the shared client
   - greeting handling, deterministic Pipeline D guidance, and transient busy responses remained stable
-- pass 2 verified in browser + Supabase:
-  - pipeline-d-post migrated to the shared client
+- pass 2 verified and committed:
+  - `pipeline-d-post` migrated to the shared client
   - direct Anthropic instantiation removed from Pipeline D
   - one-off drafting still lands clean Facebook/general drafts in Content Registry
-  - Supabase pipeline-d-post invocations return 200
+  - Supabase `pipeline-d-post` invocations return `200`
+- pass 3 verified and committed:
+  - `pipeline-a-engagement` migrated to the shared client for comment classification and reply drafting
+  - deployment succeeded and the function returned `200`
+  - logs confirm daily poll posting, ambassador gating, and metrics snapshot behavior remained stable
+- pass 4 verified in browser and Supabase:
+  - `pipeline-b-weekly` migrated to the shared client for:
+    - weekly planner
+    - weekly copy writer
+    - ambassador writer
+    - weekly reporter
+  - direct Anthropic instantiation removed from Pipeline B
+  - deployment succeeded and logs confirm:
+    - `Plan created: 9 posts planned`
+    - `Running copy writer...`
+    - `Sending drafts to Content Registry for approval...`
+    - `9 drafts sent to Content Registry`
+  - no adapter regression surfaced in the migration
 
 Verified distinction:
 - the temporary confusion around a missing discounts draft was not a shared-adapter regression
@@ -1422,10 +1439,12 @@ Verified distinction:
 Current shared-client coverage:
 - coordinator-chat
 - pipeline-d-post
+- pipeline-a-engagement
+- pipeline-b-weekly
 
 Next narrow move:
-- migrate pipeline-a-engagement to the shared client next
-- keep the adapter surface narrow unless Pipeline A proves a real need for JSON/helper expansion
+- migrate `pipeline-c-campaign` to the shared client next
+- keep the adapter surface narrow unless Pipeline C proves a real need for JSON/helper expansion
 - treat Content Registry freshness/day grouping as a separate UI polish, not part of M13G success criteria
 
 ---

@@ -5,7 +5,10 @@
 // ─────────────────────────────────────────────────────────────────────
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.27.0'
+import {
+  createAnthropicClient,
+  generateTextWithAnthropic,
+} from '../_shared/llm-client.ts'
 import { getAgentDefinition } from '../_shared/agent-registry.ts'
 import { getIntegrationDefinition } from '../_shared/integration-registry.ts'
 import { PIPELINE_RUN_STATUS } from '../_shared/pipeline-run-status.ts'
@@ -140,9 +143,7 @@ Deno.serve(async (req) => {
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
   )
-  const anthropic = new Anthropic({
-    apiKey: Deno.env.get('ANTHROPIC_API_KEY')!
-  })
+  const anthropic = createAnthropicClient(Deno.env.get('ANTHROPIC_API_KEY')!)
 
   const payload = await req.json().catch(() => ({}))
   const context: PipelineContext = {
@@ -341,7 +342,7 @@ async function updatePipelineBRun(
 
 async function resumePipelineBRun(params: {
   supabase: any
-  anthropic: Anthropic
+  anthropic: ReturnType<typeof createAnthropicClient>
   context: PipelineContext
   config: any
   runId: string
@@ -486,7 +487,7 @@ async function resumePipelineBRun(params: {
 
 // plan agent ────────────────────────────────────────────────────────
 async function runPlanAgent(
-  anthropic: Anthropic,
+  anthropic: ReturnType<typeof createAnthropicClient>,
   metrics: any[],
   upcomingEvents: any[],
   newContent: NewContent[],
@@ -499,9 +500,9 @@ async function runPlanAgent(
     ? `Weekly posting limits per platform: ${JSON.stringify(postingLimits)}`
     : 'Default: plan 5 posts across platforms.'
 
-  const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-5',
-    max_tokens: 800,
+  const response = await generateTextWithAnthropic(anthropic, {
+    task: 'weekly_planner',
+    maxTokens: 800,
     system: `${buildSystemPrompt(config?.brand_voice, config?.full_name?.trim() || config?.org_name?.trim() || 'this brand')}
 
 You are the weekly content planner for this business.
@@ -557,7 +558,7 @@ Create this week's content plan.`
 
 // ── copy writer ───────────────────────────────────────────────────────
 async function runCopyWriter(
-  anthropic: Anthropic,
+  anthropic: ReturnType<typeof createAnthropicClient>,
   planItem: any,
   newContent: NewContent[],
   brandVoice: any
@@ -565,9 +566,9 @@ async function runCopyWriter(
 
   const featuredContent = newContent.find(c => c.id === planItem.content_id)
 
-  const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-5',
-    max_tokens: 300,
+  const response = await generateTextWithAnthropic(anthropic, {
+    task: 'weekly_copywriter',
+    maxTokens: 300,
     system: `${buildSystemPrompt(brandVoice)}
 
 For email: include a subject line on the first line starting with "Subject: "
@@ -612,7 +613,7 @@ ${featuredContent
 // ── ambassador update ─────────────────────────────────────────────────
 async function runAmbassadorUpdate(
   supabase: any,
-  anthropic: Anthropic,
+  anthropic: ReturnType<typeof createAnthropicClient>,
   context: PipelineContext,
   newContent: NewContent[],
   brandVoice: any
@@ -628,9 +629,9 @@ async function runAmbassadorUpdate(
     return
   }
 
-  const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-5',
-    max_tokens: 200,
+  const response = await generateTextWithAnthropic(anthropic, {
+    task: 'ambassador_writer',
+    maxTokens: 200,
     system: `${buildSystemPrompt(brandVoice)}
 
 Write a brief weekly update message for this brand's ambassadors or partner reps.
@@ -667,14 +668,14 @@ Keep it energetic, under 150 words. Include new content to share and remind them
 // ── reporter ──────────────────────────────────────────────────────────
 async function runReporter(
   supabase: any,
-  anthropic: Anthropic,
+  anthropic: ReturnType<typeof createAnthropicClient>,
   context: PipelineContext,
   metrics: any[],
   pipelineResults: any
 ) {
-  const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-5',
-    max_tokens: 500,
+  const response = await generateTextWithAnthropic(anthropic, {
+    task: 'weekly_reporter',
+    maxTokens: 500,
     system: `You write concise weekly marketing reports for the business owner or operator of this workspace.
 Plain text, under 200 words. Cover: what was done, key numbers, what worked, what didn't, plan for next week.`,
     messages: [{
@@ -732,6 +733,9 @@ function getScheduledTime(day: string, today: string): string {
   scheduled.setHours(9, 0, 0, 0)
   return scheduled.toISOString()
 }
+
+
+
 
 
 

@@ -250,7 +250,46 @@ Rule of thumb:
   - Pipeline A no longer emits the old education-era poll options or `undefined` brand fallback
   - verified replacement: `What would you like to see more of from this brand this week? A) Product tips B) Behind-the-scenes updates C) Special offers`
 - M13F is now stable enough to hand off as a committed universalization checkpoint
-## Current M13G Diagnosis`r`n- `M13G` pass 1 is complete and committed.`r`n  - `_shared/llm-client.ts` exists`r`n  - `coordinator-chat` now uses the shared Anthropic-backed client`r`n- `M13G` pass 2 is verified and committed.`r`n  - `pipeline-d-post` now uses the shared client for canonical copy and platform copy generation`r`n  - direct Anthropic instantiation was removed from Pipeline D`r`n  - one-off prompts still return clean deterministic responses`r`n  - Supabase `pipeline-d-post` invocations return `200``r`n  - resulting drafts land in Content Registry`r`n- `M13G` pass 3 is now verified in browser and Supabase.`r`n  - `pipeline-a-engagement` now uses the shared client for comment classification and reply drafting`r`n  - deployment succeeded and the function returned `200``r`n  - logs confirm:`r`n    - daily poll still posts clean generic copy`r`n    - ambassador gating still works when disabled`r`n    - daily metrics snapshot still writes`r`n  - no new runtime error surfaced in the migration`r`n- Remaining non-adapter issue observed during the series:`r`n  - Content Registry still lacks day segmentation / obvious drafted-at freshness on cards`r`n  - this is a separate UI polish, not an adapter blocker`r`n- Locked next move:`r`n  - commit `M13G` pass 3 as a successful shared-adapter migration`r`n  - if the adapter series continues, migrate `pipeline-b-weekly` next before broadening the shared interface further`r`n`r`n## Landing Page / Compliance Note
+## Current M13G Diagnosis
+- `M13G` pass 1 is complete and committed.
+  - `_shared/llm-client.ts` exists
+  - `coordinator-chat` now uses the shared Anthropic-backed client
+- `M13G` pass 2 is complete and committed.
+  - `pipeline-d-post` now uses the shared client for canonical copy and platform copy generation
+  - direct Anthropic instantiation was removed from Pipeline D
+  - one-off prompts still return clean deterministic responses
+  - Supabase `pipeline-d-post` invocations return `200`
+  - resulting drafts land in Content Registry
+- `M13G` pass 3 is complete and committed.
+  - `pipeline-a-engagement` now uses the shared client for comment classification and reply drafting
+  - deployment succeeded and the function returned `200`
+  - logs confirm:
+    - daily poll still posts clean generic copy
+    - ambassador gating still works when disabled
+    - daily metrics snapshot still writes
+  - no new runtime error surfaced in the migration
+- `M13G` pass 4 is now verified in browser and Supabase.
+  - `pipeline-b-weekly` now uses the shared client for:
+    - weekly plan generation
+    - weekly copy generation
+    - ambassador update generation
+    - weekly report generation
+  - direct Anthropic instantiation was removed from Pipeline B
+  - deployment succeeded and the function completed successfully
+  - logs confirm:
+    - `Plan created: 9 posts planned`
+    - `Running copy writer...`
+    - `Sending drafts to Content Registry for approval...`
+    - `9 drafts sent to Content Registry`
+  - no new runtime error surfaced in the migration
+- Remaining non-adapter issue observed during the series:
+  - Content Registry still lacks day segmentation / obvious drafted-at freshness on cards
+  - this is a separate UI polish, not an adapter blocker
+- Locked next move:
+  - commit `M13G` pass 4 as a successful shared-adapter migration
+  - if the adapter series continues, migrate `pipeline-c-campaign` next before broadening the shared interface further
+
+## Landing Page / Compliance Note
 - Add landing page requirements to the `M13` series as part of `M13F`.
 - Minimum assets to prepare:
   - live HTTPS website or subdomain for `samm`

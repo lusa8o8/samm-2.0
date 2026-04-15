@@ -4,6 +4,10 @@ export type LlmTask =
   | 'coordinator'
   | 'classifier'
   | 'reply_writer'
+  | 'weekly_planner'
+  | 'weekly_copywriter'
+  | 'ambassador_writer'
+  | 'weekly_reporter'
   | 'one_off_writer'
 
 type TextMessage = {
@@ -44,6 +48,30 @@ const TASK_CONFIG: Record<LlmTask, { model: string; maxTokens: number; retries: 
   reply_writer: {
     model: 'claude-haiku-4-5-20251001',
     maxTokens: 200,
+    retries: 2,
+    retryDelayMs: 700,
+  },
+  weekly_planner: {
+    model: 'claude-sonnet-4-5',
+    maxTokens: 800,
+    retries: 2,
+    retryDelayMs: 700,
+  },
+  weekly_copywriter: {
+    model: 'claude-sonnet-4-5',
+    maxTokens: 300,
+    retries: 2,
+    retryDelayMs: 700,
+  },
+  ambassador_writer: {
+    model: 'claude-sonnet-4-5',
+    maxTokens: 200,
+    retries: 2,
+    retryDelayMs: 700,
+  },
+  weekly_reporter: {
+    model: 'claude-sonnet-4-5',
+    maxTokens: 500,
     retries: 2,
     retryDelayMs: 700,
   },
@@ -100,3 +128,5 @@ export async function generateTextWithAnthropic(
 
   throw lastError ?? new Error('LLM request failed')
 }
+
+
