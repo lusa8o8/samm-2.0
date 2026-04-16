@@ -145,6 +145,9 @@ function ContentCard({
   const isRejected = item.status === "rejected";
   const contentType = getContentType(item);
   const TypeIcon = contentType.icon;
+  const draftedAt = item.created_at ? new Date(item.created_at) : null;
+  const updatedAt = item.updated_at ? new Date(item.updated_at) : null;
+  const isFreshDraft = isDraft && draftedAt ? Date.now() - draftedAt.getTime() < 2 * 60 * 60 * 1000 : false;
 
   return (
     <div
@@ -331,7 +334,22 @@ function ContentCard({
               <span>Published: {new Date(item.published_at).toLocaleString("en-ZA", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false })}</span>
             </>
           ) : item.status === "draft" ? (
-            <span>Awaiting approval</span>
+            <>
+              {isFreshDraft && (
+                <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" title="Drafted in the last 2 hours" />
+              )}
+              <span>
+                {draftedAt
+                  ? `Drafted: ${draftedAt.toLocaleString("en-ZA", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false })}`
+                  : "Awaiting approval"}
+              </span>
+            </>
+          ) : item.status === "failed" ? (
+            <span>
+              {updatedAt
+                ? `Last updated: ${updatedAt.toLocaleString("en-ZA", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false })}`
+                : "No date set"}
+            </span>
           ) : (
             <span>No date set</span>
           )}
@@ -574,38 +592,55 @@ type ContentItem = {
   media_url?: string | null;
   rejection_note?: string | null;
   metadata?: Record<string, unknown> | null;
+  created_at?: string | null;
+  updated_at?: string | null;
 };
 
-function groupCommentsByDay(items: ContentItem[]) {
-  const now = Date.now()
-  const TWO_HOURS = 2 * 60 * 60 * 1000
-  const groups: { label: string; dateKey: string; items: ContentItem[] }[] = []
+function getItemTimestamp(item: ContentItem, status: TabStatus) {
+  if (status === "draft") return item.created_at ?? item.updated_at ?? null;
+  if (status === "scheduled") return item.scheduled_at ?? item.updated_at ?? item.created_at ?? null;
+  if (status === "published") return item.published_at ?? item.updated_at ?? item.created_at ?? null;
+  if (status === "failed") return item.updated_at ?? item.created_at ?? null;
+  return item.published_at ?? item.scheduled_at ?? item.updated_at ?? item.created_at ?? null;
+}
 
-  const today = new Date().toDateString()
-  const yesterday = new Date(now - 86400000).toDateString()
+function groupContentByDay(items: ContentItem[], status: TabStatus) {
+  const now = Date.now();
+  const twoHours = 2 * 60 * 60 * 1000;
+  const groups: { label: string; dateKey: string; items: ContentItem[] }[] = [];
+
+  const today = new Date(now).toDateString();
+  const yesterday = new Date(now - 86400000).toDateString();
 
   for (const item of items) {
-    const ts = item.published_at ?? item.scheduled_at
-    const d = ts ? new Date(ts) : null
-    const dateKey = d ? d.toDateString() : "unknown"
+    const timestamp = getItemTimestamp(item, status);
+    const date = timestamp ? new Date(timestamp) : null;
+    const dateKey = date ? date.toDateString() : "unknown";
     const label =
-      dateKey === today ? "Today" :
-      dateKey === yesterday ? "Yesterday" :
-      d ? d.toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" }) : "Unknown date"
+      dateKey === today
+        ? "Today"
+        : dateKey === yesterday
+          ? "Yesterday"
+          : date
+            ? date.toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })
+            : "Unknown date";
 
-    let group = groups.find((g) => g.dateKey === dateKey)
+    let group = groups.find((entry) => entry.dateKey === dateKey);
     if (!group) {
-      group = { label, dateKey, items: [] }
-      groups.push(group)
+      group = { label, dateKey, items: [] };
+      groups.push(group);
     }
-    group.items.push(item)
+    group.items.push(item);
   }
 
-  return { groups, isRecent: (item: ContentItem) => {
-    const ts = item.published_at ?? item.scheduled_at
-    if (!ts) return false
-    return now - new Date(ts).getTime() < TWO_HOURS
-  }}
+  return {
+    groups,
+    isRecent: (item: ContentItem) => {
+      const timestamp = getItemTimestamp(item, status);
+      if (!timestamp) return false;
+      return now - new Date(timestamp).getTime() < twoHours;
+    },
+  };
 }
 
 function groupDraftsByCampaign(items: ContentItem[]) {
@@ -626,6 +661,58 @@ function groupDraftsByCampaign(items: ContentItem[]) {
   }
 
   return { groups, ungrouped };
+}
+
+function groupDraftDraftsByDay(
+  campaignGroups: { pipeline_run_id: string; campaign_name: string; items: ContentItem[] }[],
+  ungrouped: ContentItem[]
+) {
+  const now = Date.now();
+  const groups = new Map<
+    string,
+    {
+      label: string;
+      campaignGroups: { pipeline_run_id: string; campaign_name: string; items: ContentItem[] }[];
+      ungrouped: ContentItem[];
+    }
+  >();
+
+  const today = new Date(now).toDateString();
+  const yesterday = new Date(now - 86400000).toDateString();
+
+  const ensureGroup = (dateKey: string, label: string) => {
+    const existing = groups.get(dateKey);
+    if (existing) return existing;
+
+    const created = { label, campaignGroups: [], ungrouped: [] };
+    groups.set(dateKey, created);
+    return created;
+  };
+
+  const resolveLabel = (dateKey: string, date: Date | null) => {
+    if (dateKey === today) return "Today";
+    if (dateKey === yesterday) return "Yesterday";
+    return date ? date.toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" }) : "Unknown date";
+  };
+
+  for (const group of campaignGroups) {
+    const timestamps = group.items
+      .map((item) => item.created_at ?? item.updated_at)
+      .filter(Boolean) as string[];
+    const anchor = timestamps.length > 0 ? timestamps[0] : null;
+    const date = anchor ? new Date(anchor) : null;
+    const dateKey = date ? date.toDateString() : "unknown";
+    ensureGroup(dateKey, resolveLabel(dateKey, date)).campaignGroups.push(group);
+  }
+
+  for (const item of ungrouped) {
+    const anchor = item.created_at ?? item.updated_at;
+    const date = anchor ? new Date(anchor) : null;
+    const dateKey = date ? date.toDateString() : "unknown";
+    ensureGroup(dateKey, resolveLabel(dateKey, date)).ungrouped.push(item);
+  }
+
+  return Array.from(groups.entries()).map(([dateKey, value]) => ({ dateKey, ...value }));
 }
 
 export default function Content() {
@@ -712,10 +799,16 @@ export default function Content() {
   const { groups, ungrouped } = status === "draft" && displayItems.length > 0
     ? groupDraftsByCampaign(displayItems as ContentItem[])
     : { groups: [], ungrouped: displayItems as ContentItem[] };
+  const draftDayGroups = status === "draft" ? groupDraftDraftsByDay(groups, ungrouped) : [];
 
   const { groups: commentGroups, isRecent } = status === "comments" && displayItems.length > 0
-    ? groupCommentsByDay(displayItems as ContentItem[])
+    ? groupContentByDay(displayItems as ContentItem[], "comments")
     : { groups: [], isRecent: () => false };
+
+  const { groups: datedGroups, isRecent: isRecentNonComment } =
+    status !== "draft" && status !== "comments" && displayItems.length > 0
+      ? groupContentByDay(displayItems as ContentItem[], status)
+      : { groups: [], isRecent: () => false };
 
   return (
     <div className="flex h-full flex-col bg-[linear-gradient(180deg,rgba(244,241,235,0.45)_0%,rgba(244,241,235,0)_30%)]">
@@ -787,41 +880,70 @@ export default function Content() {
                 </div>
               ))}
             </>
+          ) : status === "draft" ? (
+            <>
+              {draftDayGroups.map((dayGroup) => (
+                <div key={dayGroup.dateKey}>
+                  <div className="mb-3 flex items-center gap-2">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{dayGroup.label}</p>
+                  </div>
+
+                  <div className="space-y-8">
+                    {dayGroup.campaignGroups.map((group) => (
+                      <div key={group.pipeline_run_id}>
+                        <div className="mb-3 flex items-center justify-between">
+                          <div>
+                            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Campaign</p>
+                            <h2 className="text-sm font-semibold text-foreground">{group.campaign_name}</h2>
+                          </div>
+                          <Button
+                            size="sm"
+                            className="h-8 text-xs"
+                            disabled={batchApproveMutation.isPending}
+                            onClick={() => batchApproveMutation.mutate({ pipelineRunId: group.pipeline_run_id })}
+                          >
+                            <Check className="mr-1.5 h-3.5 w-3.5" />
+                            Approve all ({group.items.filter((i) => i.status === "draft" && i.platform !== "design_brief").length})
+                          </Button>
+                        </div>
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                          {group.items.map(renderCard)}
+                        </div>
+                      </div>
+                    ))}
+
+                    {dayGroup.ungrouped.length > 0 && (
+                      <div>
+                        {dayGroup.campaignGroups.length > 0 && (
+                          <p className="mb-3 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Other drafts</p>
+                        )}
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                          {dayGroup.ungrouped.map(renderCard)}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </>
           ) : (
             <>
-              {groups.map((group) => (
-                <div key={group.pipeline_run_id}>
-                  <div className="mb-3 flex items-center justify-between">
-                    <div>
-                      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Campaign</p>
-                      <h2 className="text-sm font-semibold text-foreground">{group.campaign_name}</h2>
-                    </div>
-                    <Button
-                      size="sm"
-                      className="h-8 text-xs"
-                      disabled={batchApproveMutation.isPending}
-                      onClick={() => batchApproveMutation.mutate({ pipelineRunId: group.pipeline_run_id })}
-                    >
-                      <Check className="mr-1.5 h-3.5 w-3.5" />
-                      Approve all ({group.items.filter((i) => i.status === "draft" && i.platform !== "design_brief").length})
-                    </Button>
+              {datedGroups.map((group) => (
+                <div key={group.dateKey}>
+                  <div className="mb-3 flex items-center gap-2">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{group.label}</p>
+                    {group.label === "Today" && group.items.some(isRecentNonComment) && (
+                      <span className="flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700">
+                        <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
+                        Fresh activity
+                      </span>
+                    )}
                   </div>
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     {group.items.map(renderCard)}
                   </div>
                 </div>
               ))}
-
-              {ungrouped.length > 0 && (
-                <div>
-                  {groups.length > 0 && (
-                    <p className="mb-3 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Other drafts</p>
-                  )}
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    {ungrouped.map(renderCard)}
-                  </div>
-                </div>
-              )}
             </>
           )}
         </div>

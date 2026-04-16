@@ -328,6 +328,13 @@ Rule of thumb:
 - Current external blocker:
   - organization verification should not be forced until PACRA clearance and formal registration are completed
   - target document for later Meta organization verification: `Business Registration or License Document` from PACRA
+- Content Registry freshness polish is now implemented locally:
+  - draft cards show drafted-at timestamps instead of only `Awaiting approval`
+  - draft tab adds day grouping (`Today`, `Yesterday`, date) while preserving campaign grouping within each day
+  - scheduled, published, and failed tabs also use day grouping for clearer recency scanning
+  - fresh same-day activity is highlighted with lightweight badges
+- Verification:
+  - `npm run build` passed in `M.A.S UI`
 
 ## Constraints To Preserve
 - Do not do a broad `samm` workspace redesign.

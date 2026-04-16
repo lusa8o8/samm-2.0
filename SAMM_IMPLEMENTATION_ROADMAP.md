@@ -1614,7 +1614,7 @@ Milestones M11A through M11F and M12 are complete. All brand, scheduling, and on
 Next highest-leverage work:
 1. **M13H Meta production identity + compliance** - active external setup slice. Current status: `getsamm.app` Meta business portfolio exists, `Samm` Page exists, personal verification succeeded, PACRA name clearance submitted; blocker is waiting for formal registration documents before organization verification.
 2. **Landing/public-site split** - when code work starts, keep `login.tsx` as the auth page and build a separate public landing page for Meta/business-proof content, legal links, and contact details.
-3. **Content Registry freshness polish** - treat day grouping and clearer drafted-at freshness as a separate UI slice after the Meta/compliance identity track is stable.
+3. **Content Registry freshness polish** - implemented locally. Drafts now show drafted-at timestamps, and drafts/scheduled/published/failed tabs use day grouping for clearer freshness scanning.
 4. **Canva AI close-the-loop test** - run a campaign with brand_visual + social handles filled in Settings and verify Canva AI completes a design without follow-up questions.
 5. **Adapter maturation** - shared JSON policy, provider routing, observability, and future provider overrides are the remaining LLM follow-on work; no more backend surface migrations are required right now.
 
