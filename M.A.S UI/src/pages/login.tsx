@@ -49,8 +49,8 @@ const audienceTiles = [
 export default function Login() {
   const [, setLocation] = useLocation();
   const [isSignUp, setIsSignUp] = useState(false);
-  const [email, setEmail] = useState("ops@tsh.com");
-  const [password, setPassword] = useState("password123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -281,6 +281,18 @@ export default function Login() {
                   {isSignUp ? "Sign in" : "Create workspace"}
                 </button>
               </p>
+
+              <div className="mt-6 flex items-center justify-center gap-4 text-xs text-muted-foreground lg:justify-start">
+                <Link href="/" className="underline underline-offset-4 transition-opacity hover:opacity-70">
+                  Homepage
+                </Link>
+                <Link href="/privacy" className="underline underline-offset-4 transition-opacity hover:opacity-70">
+                  Privacy
+                </Link>
+                <Link href="/terms" className="underline underline-offset-4 transition-opacity hover:opacity-70">
+                  Terms
+                </Link>
+              </div>
             </div>
           </div>
         </div>

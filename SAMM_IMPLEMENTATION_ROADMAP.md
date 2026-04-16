@@ -1486,6 +1486,13 @@ Current conclusion:
   - preserve the current auth experience in `login.tsx`
   - build a separate public landing page for Meta/compliance/business-proof needs
   - fix leftover browser-title branding (`TSH Marketing OS`) as part of that public-site slice, not by overloading the auth screen
+- landing/public-site split is now implemented locally:
+  - unauthenticated `/` is the dedicated public landing page
+  - `/login` preserves the auth experience
+  - `/privacy` and `/terms` added as public legal pages
+  - auth leak cleanup completed (`ops@tsh.com` default removed, browser title corrected)
+  - public page includes product positioning, workflow proof, a dedicated `Meet samm` section, and public contact/legal trust elements
+  - `npm run build` passed after the split
 
 ---
 ## Milestone 14: Multi-Channel Samm Access

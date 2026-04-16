@@ -7,6 +7,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Layout } from "@/components/layout";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
+import Landing from "@/pages/landing";
+import Privacy from "@/pages/privacy";
+import Terms from "@/pages/terms";
 import { getActiveSession, supabase } from "@/lib/supabase";
 import { useGetOrgConfig } from "@/lib/api";
 
@@ -21,6 +24,18 @@ import AgentSettings from "@/pages/agent/settings";
 import AgentManual from "@/pages/agent/manual";
 
 const queryClient = new QueryClient();
+
+function PublicRouter() {
+  return (
+    <Switch>
+      <Route path="/" component={Landing} />
+      <Route path="/login" component={Login} />
+      <Route path="/privacy" component={Privacy} />
+      <Route path="/terms" component={Terms} />
+      <Route component={Landing} />
+    </Switch>
+  );
+}
 
 function Router() {
   const { data: config } = useGetOrgConfig();
@@ -111,7 +126,7 @@ function AuthGate() {
     );
   }
 
-  return session ? <Router /> : <Login />;
+  return session ? <Router /> : <PublicRouter />;
 }
 
 function App() {

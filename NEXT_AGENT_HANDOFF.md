@@ -305,6 +305,20 @@ Rule of thumb:
   - Terms of Service
   - consistent browser tab title and metadata (`samm`, not `TSH Marketing OS`)
   - clear relationship between brand (`samm`) and website (`getsamm.app`)
+- Public landing page slice is now implemented locally:
+  - unauthenticated `/` now serves a dedicated marketing/compliance landing page
+  - auth moved to `/login`
+  - public `/privacy` and `/terms` pages added
+  - `login.tsx` preserved as the auth page with light cleanup only
+  - default browser title updated to `samm | Marketing workflow and approvals`
+  - leftover auth default email leak (`ops@tsh.com`) removed
+- Current public-page positioning:
+  - outcome-first hero
+  - product-proof/workflow section
+  - dedicated `Meet samm` differentiator section
+  - trust/contact/legal footer for Meta/business-proof optics
+- Verification:
+  - `npm run build` passed in `M.A.S UI`
 - Current Meta / registration progress:
   - `getsamm.app` business portfolio created in Meta
   - `Samm` Facebook Page created under that portfolio
