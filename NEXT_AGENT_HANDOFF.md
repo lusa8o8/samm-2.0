@@ -201,11 +201,18 @@ Rule of thumb:
   - the old `Missing Facebook credentials` error is resolved
 
 ## Current Blocker
-- `M13A` is no longer blocked by local scheduler/runtime/config wiring.
-- Live Facebook publish now reaches the Facebook Graph API and fails with permission error `403 (#200)`.
-- Current blocker is external platform compliance / token scope, not internal app logic.
-- The Honey Shop app/token path still needs a Page token with working post-publish permission.
-- Meta may require the official app/use-case path and possibly business verification for production-grade page publishing.
+- `M13A` is no longer blocked by local scheduler/runtime/config wiring or by uncertainty around whether the official Meta app can really publish.
+- The official `samm` Meta app has now been verified in Graph API Explorer to:
+  - retrieve the Honey Shop page and Page access token via `/me/accounts`
+  - read Page metadata for `Honey Shop ZM`
+  - publish a real post to the Honey Shop Facebook Page
+- Verified live post id:
+  - `1110560415804812_1545204624272262`
+- Current blocker is no longer “can the app publish?”
+- Current blocker is productization + compliance:
+  - `samm` still relies on manual Facebook credential entry inside the product
+  - PACRA registration certificate is still pending for clean Meta organization verification
+  - the next slice should replace manual token handling with an official in-product Facebook connect flow
 
 ## Current M13E Diagnosis
 - The deterministic greeting layer is working in browser for `hi`, `hello`, `yo`, and similar small variants.
@@ -324,10 +331,19 @@ Rule of thumb:
   - `Samm` Facebook Page created under that portfolio
   - `getsamm.app` domain added
   - personal verification for Lusa Malingusha completed successfully
-  - PACRA name clearance submitted and pending review (`GETSAMM.APP`, `SAMM TECHNOLOGIES`, `SAMM`)
+  - official `samm` Meta app created and minimally configured
+  - Supabase callback accepted for Facebook Login:
+    - `https://jxmdwltfkxstiwnwwiuf.supabase.co/auth/v1/callback`
+  - Graph API verification passed:
+    - `pages_show_list`
+    - `pages_read_engagement`
+    - `pages_manage_posts`
+  - real Honey Shop Facebook post created by the official `samm` app
+  - PACRA registration for `EIGHT ZERO EIGHT DIGITAL SYSTEMS` has been submitted and paid; waiting on review/certificate
 - Current external blocker:
-  - organization verification should not be forced until PACRA clearance and formal registration are completed
+  - organization verification should not be forced until PACRA registration certificate is issued
   - target document for later Meta organization verification: `Business Registration or License Document` from PACRA
+  - next implementation slice should productize Facebook connection inside `samm` instead of relying on manual token entry / Explorer-only testing
 - Content Registry freshness polish is now implemented locally:
   - draft cards show drafted-at timestamps instead of only `Awaiting approval`
   - draft tab adds day grouping (`Today`, `Yesterday`, date) while preserving campaign grouping within each day

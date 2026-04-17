@@ -1242,11 +1242,24 @@ Current implementation/progress snapshot (2026-04-14):
   - anonymous/manual scheduler invocation works again for live verification
 - Honey Shop Facebook credentials are now confirmed to reach the backend
   - old `Missing Facebook credentials` error is resolved
+- official `samm` Meta app is now minimally configured and verified in developer/admin context
+  - Facebook Login callback accepted:
+    - `https://jxmdwltfkxstiwnwwiuf.supabase.co/auth/v1/callback`
+  - Graph API verification passed:
+    - Page discovery succeeded
+    - Page token retrieval succeeded
+    - real post creation to `Honey Shop ZM` succeeded
+  - verified created post id:
+    - `1110560415804812_1545204624272262`
 
 Current blocker snapshot (2026-04-14):
-- live Facebook publish now reaches the Facebook Graph API and fails with `403 (#200)` permission error
-- current blocker is external platform compliance / token scope, not internal scheduler/runtime/config wiring
-- next diagnostic target is a Page token with working post-publish permission, then business-verification / official-app readiness if Meta still blocks posting
+- current blocker is no longer basic capability proof
+- current blocker is productization + compliance
+- next implementation target:
+  - replace manual Facebook credential entry with an official in-product Facebook connect flow
+  - persist Facebook Page connection data in org config
+  - reverify end-to-end publishing from inside the product
+  - resume Meta organization verification after PACRA registration certificate issuance
 
 ### M13B: WhatsApp Live Publishing
 Goal:
