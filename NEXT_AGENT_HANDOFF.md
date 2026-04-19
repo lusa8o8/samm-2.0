@@ -368,6 +368,10 @@ Rule of thumb:
   - remove Pipeline A mock metrics writes
   - harden backend org resolution so missing org context fails clearly instead of silently collapsing onto the dev org
   - leave Metrics UI in an honest empty state until real ingestion lands
+- Current checkpoint state:
+  - the Metrics page has already been switched to an honest empty state and no longer presents seeded placeholder analytics as live data
+  - the active backend path has now been hardened so missing org context fails clearly instead of silently falling back to a dev org
+  - Pipeline A no longer writes placeholder `platform_metrics` snapshots
 - Diagnosis locked before code:
   - Metrics UI is org-scoped in the frontend query layer and is not directly hardcoded
   - identical values across separate workspaces are caused by Pipeline A seeding the same placeholder `platform_metrics` snapshot into each org

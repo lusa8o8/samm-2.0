@@ -9,9 +9,8 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getIntegrationDefinition } from '../_shared/integration-registry.ts'
-import { createAnthropicClient, generateJsonWithAnthropic, generateTextWithAnthropic } from '../_shared/llm-client.ts
+import { createAnthropicClient, generateJsonWithAnthropic, generateTextWithAnthropic } from '../_shared/llm-client.ts'
 
-const DEFAULT_ORG_ID = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'
 const DEFAULT_PLATFORMS = ['facebook', 'whatsapp', 'youtube', 'email']
 
 const corsHeaders = {
@@ -160,12 +159,16 @@ Deno.serve(async (req) => {
     const anthropic = createAnthropicClient(Deno.env.get('ANTHROPIC_API_KEY')!)
 
     const payload = await req.json().catch(() => ({}))
-    const orgId: string = payload?.org_id ?? payload?.orgId ?? DEFAULT_ORG_ID
+    const orgId = payload?.org_id ?? payload?.orgId
     const topic: string = String(payload?.topic ?? '').trim()
     const platforms: string[] = Array.isArray(payload?.platforms) && payload.platforms.length > 0
       ? payload.platforms
       : DEFAULT_PLATFORMS
     const eventRef: string | null = payload?.event_ref ? String(payload.event_ref) : null
+
+    if (!orgId || typeof orgId !== 'string') {
+      return jsonResponse({ ok: false, error: 'orgId is required' }, 400)
+    }
 
     if (!topic) {
       return jsonResponse({ ok: false, error: 'topic is required' }, 400)

@@ -1533,7 +1533,7 @@ Current external blocker:
 
 ### M13I: Metrics Honesty + Org Isolation Hardening
 Status:
-- active next internal slice
+- in progress - core checkpoints landed locally
 
 Goal:
 - remove Pipeline A mock metric writes
@@ -1554,6 +1554,16 @@ Scope:
   - `pipeline-d-post`
   - `coordinator-chat`
 - switch the Metrics page to an honest empty-state until live ingestion exists
+
+Current checkpoint state:
+- Metrics UI honest empty-state landed
+- Pipeline A mock metric snapshot write removed
+- silent default-org fallback removed from the active path:
+  - `pipeline-a-engagement`
+  - `pipeline-b-weekly`
+  - `pipeline-c-campaign`
+  - `pipeline-d-post`
+  - `coordinator-chat`
 
 Non-goals:
 - do not build live metrics ingestion in this slice

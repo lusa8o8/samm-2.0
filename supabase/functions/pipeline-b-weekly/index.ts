@@ -128,8 +128,15 @@ Deno.serve(async (req) => {
   const anthropic = createAnthropicClient(Deno.env.get('ANTHROPIC_API_KEY')!)
 
   const payload = await req.json().catch(() => ({}))
+  const orgId = payload?.orgId ?? payload?.org_id
+  if (!orgId || typeof orgId !== 'string') {
+    return new Response(
+      JSON.stringify({ ok: false, error: 'orgId is required' }),
+      { status: 400, headers: { 'Content-Type': 'application/json' } },
+    )
+  }
   const context: PipelineContext = {
-    orgId: payload?.orgId ?? payload?.org_id ?? 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+    orgId,
     today: payload?.today ?? new Date().toISOString().split('T')[0],
     calendarEvents: Array.isArray(payload?.calendarEvents) ? payload.calendarEvents : undefined
   }

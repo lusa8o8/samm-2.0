@@ -25,7 +25,6 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
-const DEFAULT_ORG_ID = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'
 const DEFAULT_SUGGESTIONS = [
   'Summarize this week',
   'What needs my approval?',
@@ -204,7 +203,11 @@ Deno.serve(async (req) => {
     const message = String(body?.message ?? '').trim()
     const history = Array.isArray(body?.history) ? (body.history as ChatHistoryItem[]) : []
     const confirmationAction = body?.confirmationAction ? String(body.confirmationAction) : null
-    const orgId = user.app_metadata?.org_id ?? body?.orgId ?? DEFAULT_ORG_ID
+    const orgId = user.app_metadata?.org_id ?? body?.orgId
+
+    if (!orgId || typeof orgId !== 'string') {
+      return jsonResponse({ error: 'Missing org context' }, 400)
+    }
 
     if (!message) {
       return jsonResponse({ error: 'Message is required' }, 400)

@@ -176,13 +176,6 @@ function createPipelineASteps(): PipelineExecutableStep<PipelineAState, Pipeline
         },
       ],
     },
-    {
-      kind: 'task',
-      id: 'write-metric-snapshot',
-      run: async ({ context }) => {
-        await writeMetricSnapshot(context.supabase, context.context)
-      },
-    },
   ]
 }
 
@@ -194,8 +187,15 @@ Deno.serve(async (req) => {
   const anthropic = createAnthropicClient(Deno.env.get('ANTHROPIC_API_KEY')!)
 
   const payload = await req.json().catch(() => ({}))
+  const orgId = payload?.orgId ?? payload?.org_id
+  if (!orgId || typeof orgId !== 'string') {
+    return new Response(
+      JSON.stringify({ ok: false, error: 'orgId is required' }),
+      { status: 400, headers: { 'Content-Type': 'application/json' } },
+    )
+  }
   const context: PipelineContext = {
-    orgId: payload?.orgId ?? payload?.org_id ?? 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+    orgId,
     today: payload?.today ?? new Date().toISOString().split('T')[0],
   }
 
@@ -516,26 +516,3 @@ async function checkAmbassadors(
   }
 }
 
-async function writeMetricSnapshot(
-  supabase: any,
-  context: PipelineContext,
-) {
-  const mockMetrics = [
-    { platform: getIntegrationDefinition('facebook').id, followers: 3420, post_reach: 287, engagement: 43, signups: 12 },
-    { platform: getIntegrationDefinition('whatsapp').id, followers: 1850, post_reach: 412, engagement: 28, signups: 8 },
-    { platform: getIntegrationDefinition('youtube').id, followers: 8930, post_reach: 634, engagement: 91, signups: 19 },
-    { platform: getIntegrationDefinition('email').id, followers: 720, post_reach: 310, engagement: 22, signups: 5, email_open_rate: 34.2 },
-  ]
-
-  for (const metric of mockMetrics) {
-    await supabase.from('platform_metrics').upsert({
-      org_id: context.orgId,
-      ...metric,
-      snapshot_date: context.today,
-    }, {
-      onConflict: 'org_id,platform,snapshot_date',
-    })
-  }
-
-  console.log('Daily metrics snapshot written')
-}
