@@ -194,10 +194,17 @@ Delivered in first slice:
   - deterministic claim helper
   - placeholder dispatch map for `pipeline-b-weekly` and `pipeline-c-campaign`
 
+Delivered in second slice:
+- deployable thin ingress function:
+  - `supabase/functions/coordinator-ingress`
+- ingress handles explicit scheduler paths itself
+- ingress proxies non-explicit chat requests to the current live `coordinator-chat`
+- frontend function slug switched locally from `coordinator-chat` to `coordinator-ingress`
+
 Still open in `M14A.1`:
-- wire ingress to enqueue worker-targeted runs
+- wire ingress to enqueue worker-targeted runs for the first moved execution path
 - move the first live execution path behind the worker
-- deploy the worker to Railway
+- deploy the worker scaffold to Railway
 - revalidate `M14A` memory writes in production
 
 Out of scope:

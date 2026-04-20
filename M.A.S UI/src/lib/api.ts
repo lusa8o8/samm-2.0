@@ -422,7 +422,7 @@ async function requestPipelineBResume() {
     throw new Error("Your session expired. Please sign in again.");
   }
 
-  const { error } = await supabase.functions.invoke("coordinator-chat", {
+  const { error } = await supabase.functions.invoke(COORDINATOR_FUNCTION, {
     body: {
       message: "resume pipeline b",
       history: [],
@@ -446,7 +446,7 @@ async function requestPipelineCResume() {
     throw new Error("Your session expired. Please sign in again.");
   }
 
-  const { error } = await supabase.functions.invoke("coordinator-chat", {
+  const { error } = await supabase.functions.invoke(COORDINATOR_FUNCTION, {
     body: {
       message: "resume pipeline c",
       history: [],
@@ -1232,6 +1232,8 @@ type CoordinatorChatResponse = {
   } | null;
 };
 
+const COORDINATOR_FUNCTION = "coordinator-ingress";
+
 export function useCoordinatorChat(options?: MutationHookOptions) {
   return useMutation({
     mutationFn: async ({ message, history = [], confirmationAction = null }: CoordinatorChatRequest) => {
@@ -1242,7 +1244,7 @@ export function useCoordinatorChat(options?: MutationHookOptions) {
           throw new Error("Your session expired. Please sign in again.");
         }
 
-        const { data, error } = await supabase.functions.invoke("coordinator-chat", {
+        const { data, error } = await supabase.functions.invoke(COORDINATOR_FUNCTION, {
           body: {
             message,
             history,
@@ -1282,7 +1284,7 @@ export function useTriggerPipeline(options?: MutationHookOptions) {
         c: "run pipeline c",
       };
 
-      const { error } = await supabase.functions.invoke("coordinator-chat", {
+      const { error } = await supabase.functions.invoke(COORDINATOR_FUNCTION, {
         body: {
           message: messageMap[pipeline],
           history: [],

@@ -68,6 +68,11 @@ Current `M14A.1` delivered slice:
 - SQL claim / release / heartbeat functions added
 - isolated `samm-worker/` scaffold added
 - worker currently polls and claims deterministically but does not yet execute live pipeline logic
+- deployable thin ingress function added:
+  - `coordinator-ingress`
+- ingress handles explicit scheduler paths directly
+- ingress proxies non-explicit chat requests to the currently live `coordinator-chat`
+- frontend hook now points locally to `coordinator-ingress`
 
 `M14A` remains intentionally narrow:
 - schema
@@ -315,5 +320,5 @@ Locked ingress/worker rule:
 - worker executes approved work against existing durable contracts
 
 Current immediate next implementation step:
-- wire ingress to enqueue worker-targeted runs for the first moved path
-- then move `pipeline-b-weekly` behind the worker
+- validate `coordinator-ingress` against live `/samm` traffic
+- then wire worker-targeted enqueueing for `pipeline-b-weekly`
