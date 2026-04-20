@@ -299,6 +299,50 @@ export async function linkCoordinatorTaskToPipelineRun(
   }
 }
 
+export async function updateCoordinatorTaskStatus(
+  supabase: any,
+  params: {
+    taskId: string
+    status: CoordinatorTaskStatus
+    currentSummary?: string | null
+    resultSummary?: string | null
+  },
+) {
+  const { taskId, status, currentSummary, resultSummary } = params
+  assertCoordinatorTaskStatus(status)
+
+  const now = new Date().toISOString()
+  const terminal = status === COORDINATOR_TASK_STATUS.COMPLETED
+    || status === COORDINATOR_TASK_STATUS.FAILED
+    || status === COORDINATOR_TASK_STATUS.CANCELLED
+
+  const patch: Record<string, unknown> = {
+    status,
+    updated_at: now,
+  }
+
+  if (currentSummary !== undefined) {
+    patch.current_summary = currentSummary
+  }
+
+  if (resultSummary !== undefined) {
+    patch.result_summary = resultSummary
+  }
+
+  if (terminal) {
+    patch.completed_at = now
+  }
+
+  const { error } = await supabase
+    .from('coordinator_tasks')
+    .update(patch)
+    .eq('id', taskId)
+
+  if (error) {
+    throw new Error(`Failed to update coordinator task status: ${error.message}`)
+  }
+}
+
 export function mapPipelineRunStatusToCoordinatorStatus(status: PipelineRunStatus): CoordinatorTaskStatus {
   if (status === PIPELINE_RUN_STATUS.RUNNING || status === PIPELINE_RUN_STATUS.RESUMED) {
     return COORDINATOR_TASK_STATUS.RUNNING

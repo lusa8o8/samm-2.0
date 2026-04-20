@@ -12,9 +12,13 @@ import {
 } from '../_shared/llm-client.ts'
 import { getAgentDefinition } from '../_shared/agent-registry.ts'
 import { getIntegrationDefinition } from '../_shared/integration-registry.ts'
-import { PIPELINE_RUN_STATUS } from '../_shared/pipeline-run-status.ts'
+import { PIPELINE_RUN_STATUS, type PipelineRunStatus } from '../_shared/pipeline-run-status.ts'
 import { publishDueContentRows } from '../_shared/publish-content.ts'
 import { areAmbassadorsEnabled } from '../_shared/org-capabilities.ts'
+import {
+  linkCoordinatorTaskToPipelineRun,
+  syncCoordinatorTaskFromRun,
+} from '../_shared/samm-memory.ts'
 
 // ── types ─────────────────────────────────────────────────────────────
 interface NewContent {
@@ -146,6 +150,9 @@ Deno.serve(async (req) => {
     : typeof payload?.resumeRunId === 'string'
       ? payload.resumeRunId
       : null
+  const coordinatorTaskId = typeof payload?.coordinator_task_id === 'string'
+    ? payload.coordinator_task_id
+    : null
 
   const config = await getOrgConfig(supabase, context.orgId)
 
@@ -166,7 +173,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    runId = await createPipelineBRun(supabase, context.orgId)
+    runId = await createPipelineBRun(supabase, context.orgId, coordinatorTaskId)
 
     console.log('Starting parallel fetch phase...')
 
@@ -273,12 +280,13 @@ Deno.serve(async (req) => {
   }
 })
 
-async function createPipelineBRun(supabase: any, orgId: string) {
+async function createPipelineBRun(supabase: any, orgId: string, coordinatorTaskId?: string | null) {
   const { data, error } = await supabase
     .from('pipeline_runs')
     .insert({
       org_id: orgId,
       pipeline: 'pipeline-b-weekly',
+      coordinator_task_id: coordinatorTaskId ?? null,
       status: PIPELINE_RUN_STATUS.RUNNING,
       started_at: new Date().toISOString(),
     })
@@ -286,6 +294,12 @@ async function createPipelineBRun(supabase: any, orgId: string) {
     .single()
 
   if (error) throw new Error(`Failed to create Pipeline B run: ${error.message}`)
+  if (coordinatorTaskId && data?.id) {
+    await linkCoordinatorTaskToPipelineRun(supabase, {
+      taskId: coordinatorTaskId,
+      runId: data.id,
+    })
+  }
   return data?.id as string
 }
 
@@ -327,6 +341,11 @@ async function updatePipelineBRun(
     .eq('id', runId)
 
   if (error) throw new Error(`Failed to update Pipeline B run: ${error.message}`)
+  await syncCoordinatorTaskFromRun(supabase, {
+    runId,
+    status: status as PipelineRunStatus,
+    result,
+  })
 }
 
 async function resumePipelineBRun(params: {

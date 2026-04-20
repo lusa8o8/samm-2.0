@@ -188,6 +188,9 @@ Deno.serve(async (req) => {
 
   const payload = await req.json().catch(() => ({}))
   const orgId = payload?.orgId ?? payload?.org_id
+  const coordinatorTaskId = typeof payload?.coordinator_task_id === 'string'
+    ? payload.coordinator_task_id
+    : null
   if (!orgId || typeof orgId !== 'string') {
     return new Response(
       JSON.stringify({ ok: false, error: 'orgId is required' }),
@@ -216,6 +219,7 @@ Deno.serve(async (req) => {
     orgId: context.orgId,
     pipeline: 'pipeline-a-engagement',
     state,
+    coordinatorTaskId,
     execute: async (results) => {
       await executePipelineSteps(createPipelineASteps(), {
         state: results,

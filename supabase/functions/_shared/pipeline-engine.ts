@@ -1,4 +1,8 @@
 import { PIPELINE_RUN_STATUS, type PipelineRunStatus } from './pipeline-run-status.ts'
+import {
+  linkCoordinatorTaskToPipelineRun,
+  syncCoordinatorTaskFromRun,
+} from './samm-memory.ts'
 
 export type PipelineStepArgs<TState, TContext> = {
   state: TState
@@ -67,6 +71,7 @@ type PipelineExecutionParams<TState> = {
   orgId: string
   pipeline: string
   state: TState
+  coordinatorTaskId?: string | null
   execute: (state: TState) => Promise<void>
 }
 
@@ -90,10 +95,17 @@ export type PipelineExecutionResult<TState> =
 export async function runPipelineExecution<TState>(
   params: PipelineExecutionParams<TState>,
 ): Promise<PipelineExecutionResult<TState>> {
-  const { supabase, orgId, pipeline, state, execute } = params
-  const runId = await startRun(supabase, orgId, pipeline)
+  const { supabase, orgId, pipeline, state, coordinatorTaskId, execute } = params
+  const runId = await startRun(supabase, orgId, pipeline, coordinatorTaskId)
 
   try {
+    if (coordinatorTaskId && runId) {
+      await linkCoordinatorTaskToPipelineRun(supabase, {
+        taskId: coordinatorTaskId,
+        runId,
+      })
+    }
+
     await execute(state)
     await finishRun(supabase, runId, PIPELINE_RUN_STATUS.SUCCESS, state)
     return {
@@ -120,12 +132,14 @@ async function startRun(
   supabase: any,
   orgId: string,
   pipeline: string,
+  coordinatorTaskId?: string | null,
 ): Promise<string | null> {
   const { data } = await supabase
     .from('pipeline_runs')
     .insert({
       org_id: orgId,
       pipeline,
+      coordinator_task_id: coordinatorTaskId ?? null,
       status: PIPELINE_RUN_STATUS.RUNNING,
       started_at: new Date().toISOString(),
     })
@@ -154,5 +168,16 @@ async function finishRun(
 
   if (error) {
     console.error('Failed to finish pipeline run:', error.message)
+    return
+  }
+
+  try {
+    await syncCoordinatorTaskFromRun(supabase, {
+      runId,
+      status,
+      result: (result as Record<string, unknown>) ?? null,
+    })
+  } catch (syncError) {
+    console.error('Failed to sync coordinator task from pipeline run:', syncError instanceof Error ? syncError.message : String(syncError))
   }
 }

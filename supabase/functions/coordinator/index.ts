@@ -1,4 +1,8 @@
 import { PIPELINE_RUN_STATUS, type PipelineRunStatus } from '../_shared/pipeline-run-status.ts'
+import {
+  linkCoordinatorTaskToPipelineRun,
+  syncCoordinatorTaskFromRun,
+} from '../_shared/samm-memory.ts'
 // supabase/functions/coordinator/index.ts
 // ─────────────────────────────────────────────────────────────────────
 // Coordinator — runs daily at 07:00
@@ -52,11 +56,14 @@ Deno.serve(async (req) => {
   // read ORG_ID from request body, falling back to env var
   const body = await req.json().catch(() => ({}))
   const ORG_ID: string = body.orgId ?? body.org_id ?? Deno.env.get('SUPABASE_ORG_ID') ?? 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'
+  const coordinatorTaskId = typeof body?.coordinator_task_id === 'string'
+    ? body.coordinator_task_id
+    : null
 
   const config = await getOrgConfig(supabase, ORG_ID)
 
   const today = new Date().toISOString().split('T')[0]
-  const runId = await startRun(supabase, ORG_ID, 'coordinator')
+  const runId = await startRun(supabase, ORG_ID, 'coordinator', coordinatorTaskId)
 
   try {
 
@@ -171,13 +178,20 @@ async function invokePipeline(
 async function startRun(
   supabase: any,
   orgId: string,
-  pipeline: string
+  pipeline: string,
+  coordinatorTaskId?: string | null,
 ): Promise<string> {
   const { data } = await supabase
     .from('pipeline_runs')
-    .insert({ org_id: orgId, pipeline, status: PIPELINE_RUN_STATUS.RUNNING })
+    .insert({ org_id: orgId, pipeline, coordinator_task_id: coordinatorTaskId ?? null, status: PIPELINE_RUN_STATUS.RUNNING })
     .select('id')
     .single()
+  if (coordinatorTaskId && data?.id) {
+    await linkCoordinatorTaskToPipelineRun(supabase, {
+      taskId: coordinatorTaskId,
+      runId: data.id,
+    })
+  }
   return data?.id
 }
 
@@ -195,6 +209,12 @@ async function finishRun(
       finished_at: new Date().toISOString()
     })
     .eq('id', runId)
+
+  await syncCoordinatorTaskFromRun(supabase, {
+    runId,
+    status,
+    result: (result as Record<string, unknown>) ?? null,
+  })
 }
 
 function addDays(dateStr: string, days: number): string {

@@ -16,6 +16,7 @@ import {
   getErrorMessage,
   isTransientLlmError,
 } from '../_shared/llm-client.ts'
+import { ensureDashboardMemoryContext } from '../_shared/samm-memory.ts'
 
 type ChatRole = 'user' | 'coordinator'
 
@@ -256,6 +257,11 @@ Deno.serve(async (req) => {
     if (inboxResult.error) throw new Error(`Failed to load inbox items: ${inboxResult.error.message}`)
 
     const activeRuns = await expireStaleRuns(supabase, runsResult.data ?? [])
+    const memoryContext = await ensureDashboardMemoryContext(supabase, {
+      orgId,
+      userId: user.id,
+      message,
+    })
 
     const orgConfig = orgConfigResult.data
     const metrics = summarizeMetrics(metricsResult.data ?? [])
@@ -267,9 +273,11 @@ Deno.serve(async (req) => {
     const explicitSchedulerResult = await resolveExplicitSchedulerRequest({
       supabase,
       orgId,
+      userId: user.id,
       message,
       confirmationAction,
       runs: activeRuns,
+      memoryContext,
     })
 
     if (explicitSchedulerResult) {
@@ -393,11 +401,14 @@ Rules:
         const pipelineResult = await resolveModelPipelineAction({
           supabase,
           orgId,
+          userId: user.id,
           runs: activeRuns,
           action: pipelineAction,
           fallbackMessage: `Added "${action.label}" to the calendar and queued a campaign for it.`,
           suggestions,
           eventContext: calendarContext,
+          memoryContext,
+          message,
         })
         if (pipelineResult) return jsonResponse(pipelineResult)
       }
@@ -478,10 +489,13 @@ Rules:
     const modelSchedulerResult = await resolveModelPipelineAction({
       supabase,
       orgId,
+      userId: user.id,
       runs: activeRuns,
       action,
       fallbackMessage: parsed.message || '',
       suggestions,
+      memoryContext,
+      message,
     })
 
     if (modelSchedulerResult) {

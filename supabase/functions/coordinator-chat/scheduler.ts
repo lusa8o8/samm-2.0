@@ -3,6 +3,14 @@ import {
   isPipelineRunBlocking,
   isPipelineRunExecuting,
 } from '../_shared/pipeline-run-status.ts'
+import {
+  COORDINATOR_TASK_STATUS,
+  COORDINATOR_TASK_TYPE,
+  createCoordinatorTask,
+  type DashboardMemoryContext,
+  syncCoordinatorTaskFromRun,
+  updateCoordinatorTaskStatus,
+} from '../_shared/samm-memory.ts'
 
 // EdgeRuntime is a Supabase Edge Runtime global — not in standard Deno types.
 declare const EdgeRuntime: { waitUntil: (promise: Promise<unknown>) => void }
@@ -66,9 +74,11 @@ type SchedulerAction = {
 type ExplicitSchedulerParams = {
   supabase: any
   orgId: string
+  userId: string
   message: string
   confirmationAction?: string | null
   runs: any[]
+  memoryContext: DashboardMemoryContext
 }
 
 // Passed from coordinator-chat when a calendar event was just created and Pipeline C
@@ -83,11 +93,14 @@ export type CalendarEventContext = {
 type ModelSchedulerParams = {
   supabase: any
   orgId: string
+  userId: string
   runs: any[]
   action: SchedulerAction
   fallbackMessage: string
   suggestions: string[]
   eventContext?: CalendarEventContext
+  memoryContext: DashboardMemoryContext
+  message: string
 }
 
 const PLATFORM_NORMALIZERS: Array<{ keywords: string[]; platform: string }> = [
@@ -358,8 +371,15 @@ async function schedulePipelineRun(
   pipeline: PipelineTarget,
   orgId: string,
   runs: any[],
-  eventContext?: CalendarEventContext
+  options?: {
+    eventContext?: CalendarEventContext
+    memoryContext?: DashboardMemoryContext
+    userId?: string
+    requestText?: string
+    resolvedIntent?: string
+  },
 ): Promise<ChatResponse> {
+  const eventContext = options?.eventContext
   const latestRun = getLatestPipelineRun(runs, pipeline.id)
 
   if (isPipelineRunBlocking(latestRun?.status)) {
@@ -420,6 +440,30 @@ async function schedulePipelineRun(
     }
   }
 
+  let coordinatorTaskId: string | null = null
+
+  if (options?.memoryContext && options?.userId) {
+    const taskRecord = await createCoordinatorTask({
+      supabase,
+      orgId,
+      userId: options.userId,
+      routeId: options.memoryContext.routeId,
+      threadId: options.memoryContext.threadId,
+      sourceChannel: options.memoryContext.sourceChannel,
+      sourceConversationId: options.memoryContext.sourceConversationId,
+      sourceThreadId: options.memoryContext.sourceThreadId,
+      taskType: COORDINATOR_TASK_TYPE.PIPELINE_RUN,
+      requestText: options.requestText ?? `Run ${pipeline.title}`,
+      resolvedIntent: options.resolvedIntent ?? 'run_pipeline',
+      requestedPipeline: pipeline.id,
+      currentSummary: `Requested ${pipeline.title}`,
+      followupRouteId: options.memoryContext.routeId,
+    })
+
+    coordinatorTaskId = taskRecord.taskId
+    invokeBody.coordinator_task_id = coordinatorTaskId
+  }
+
   // Fire the pipeline in the background so coordinator-chat returns immediately.
   // The toast on the frontend fires as soon as this response lands (<1s).
   // Pipeline status and run rows are visible in Operations once the run starts.
@@ -427,6 +471,15 @@ async function schedulePipelineRun(
     .catch((err: unknown) => {
       const msg = err instanceof Error ? err.message : String(err)
       console.error(`Background run of ${pipeline.id} failed: ${msg}`)
+      if (coordinatorTaskId) {
+        return updateCoordinatorTaskStatus(supabase, {
+          taskId: coordinatorTaskId,
+          status: COORDINATOR_TASK_STATUS.FAILED,
+          resultSummary: msg,
+        }).catch((taskErr) => {
+          console.error(`Failed to mark coordinator task ${coordinatorTaskId} as failed:`, taskErr instanceof Error ? taskErr.message : String(taskErr))
+        })
+      }
     })
 
   try {
@@ -468,6 +521,21 @@ async function resumePipelineRun(supabase: any, pipeline: PipelineTarget, orgId:
     return formatPipelineStatusResponse(pipeline, latestRun)
   }
 
+  const { error: resumeStatusError } = await supabase
+    .from('pipeline_runs')
+    .update({ status: PIPELINE_RUN_STATUS.RESUMED })
+    .eq('id', waitingRun.id)
+
+  if (resumeStatusError) {
+    throw new Error(`Failed to mark ${pipeline.id} run as resumed: ${resumeStatusError.message}`)
+  }
+
+  await syncCoordinatorTaskFromRun(supabase, {
+    runId: waitingRun.id,
+    status: PIPELINE_RUN_STATUS.RESUMED,
+    result: (waitingRun.result ?? {}) as Record<string, unknown>,
+  })
+
   // Fire the pipeline resume in the background. The resume does significant work
   // (multiple LLM calls) that would block coordinator-chat from responding to the
   // browser. Return immediately after scheduling so the approval mutation completes
@@ -498,7 +566,7 @@ async function resumePipelineRun(supabase: any, pipeline: PipelineTarget, orgId:
 }
 
 export async function resolveExplicitSchedulerRequest(params: ExplicitSchedulerParams): Promise<ChatResponse | null> {
-  const { supabase, orgId, message, confirmationAction, runs } = params
+  const { supabase, orgId, userId, message, confirmationAction, runs, memoryContext } = params
 
   const directPipeline = confirmationAction ? inferPipelineTarget(confirmationAction) : null
   const requestedPipeline = inferPipelineTarget(message)
@@ -523,7 +591,12 @@ export async function resolveExplicitSchedulerRequest(params: ExplicitSchedulerP
   }
 
   if (isRunRequest && requestedPipeline && !isExplicitConfirm) {
-    return await schedulePipelineRun(supabase, requestedPipeline, orgId, runs)
+    return await schedulePipelineRun(supabase, requestedPipeline, orgId, runs, {
+      memoryContext,
+      userId,
+      requestText: message,
+      resolvedIntent: 'run_pipeline',
+    })
   }
 
   if (isExplicitCancel) {
@@ -534,14 +607,19 @@ export async function resolveExplicitSchedulerRequest(params: ExplicitSchedulerP
   }
 
   if (isExplicitConfirm && directPipeline) {
-    return await schedulePipelineRun(supabase, directPipeline, orgId, runs)
+    return await schedulePipelineRun(supabase, directPipeline, orgId, runs, {
+      memoryContext,
+      userId,
+      requestText: `Confirmed ${directPipeline.title}`,
+      resolvedIntent: 'run_pipeline',
+    })
   }
 
   return null
 }
 
 export async function resolveModelPipelineAction(params: ModelSchedulerParams): Promise<ChatResponse | null> {
-  const { supabase, orgId, runs, action, fallbackMessage, suggestions, eventContext } = params
+  const { supabase, orgId, userId, runs, action, fallbackMessage, suggestions, eventContext, memoryContext, message } = params
 
   if (!action || action.type !== 'run_pipeline' || !action.pipeline) {
     return null
@@ -552,7 +630,13 @@ export async function resolveModelPipelineAction(params: ModelSchedulerParams): 
       id: action.pipeline,
       title: action.title ?? action.pipeline,
       description: action.description ?? '',
-    }, orgId, runs, eventContext)
+    }, orgId, runs, {
+      eventContext,
+      memoryContext,
+      userId,
+      requestText: message,
+      resolvedIntent: action.type,
+    })
 
     return {
       message: fallbackMessage || scheduled.message,

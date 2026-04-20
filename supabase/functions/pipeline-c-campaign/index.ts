@@ -12,8 +12,12 @@ import {
 } from '../_shared/llm-client.ts'
 import { getAgentDefinition } from '../_shared/agent-registry.ts'
 import { INTEGRATION_REGISTRY, getIntegrationDefinition } from '../_shared/integration-registry.ts'
-import { PIPELINE_RUN_STATUS } from '../_shared/pipeline-run-status.ts'
+import { PIPELINE_RUN_STATUS, type PipelineRunStatus } from '../_shared/pipeline-run-status.ts'
 import { areAmbassadorsEnabled } from '../_shared/org-capabilities.ts'
+import {
+  linkCoordinatorTaskToPipelineRun,
+  syncCoordinatorTaskFromRun,
+} from '../_shared/samm-memory.ts'
 
 // ── types ─────────────────────────────────────────────────────────────
 interface CalendarEvent {
@@ -115,6 +119,9 @@ Deno.serve(async (req) => {
     : typeof payload?.resumeRunId === 'string'
       ? payload.resumeRunId
       : null
+  const coordinatorTaskId = typeof payload?.coordinator_task_id === 'string'
+    ? payload.coordinator_task_id
+    : null
 
   let context: PipelineContext = {
     orgId,
@@ -165,7 +172,7 @@ Deno.serve(async (req) => {
       return await resumePipelineCRun({ supabase, anthropic, context, config, runId: resumeRunId })
     }
 
-    runId = await createPipelineCRun(supabase, context.orgId)
+    runId = await createPipelineCRun(supabase, context.orgId, coordinatorTaskId)
 
     const event = context.calendarEvent
     if (!event) {
@@ -270,12 +277,13 @@ Deno.serve(async (req) => {
 })
 
 // ── performance analyser ──────────────────────────────────────────────
-async function createPipelineCRun(supabase: any, orgId: string) {
+async function createPipelineCRun(supabase: any, orgId: string, coordinatorTaskId?: string | null) {
   const { data, error } = await supabase
     .from('pipeline_runs')
     .insert({
       org_id: orgId,
       pipeline: 'pipeline-c-campaign',
+      coordinator_task_id: coordinatorTaskId ?? null,
       status: PIPELINE_RUN_STATUS.RUNNING,
       started_at: new Date().toISOString(),
     })
@@ -283,6 +291,12 @@ async function createPipelineCRun(supabase: any, orgId: string) {
     .single()
 
   if (error) throw new Error(`Failed to create Pipeline C run: ${error.message}`)
+  if (coordinatorTaskId && data?.id) {
+    await linkCoordinatorTaskToPipelineRun(supabase, {
+      taskId: coordinatorTaskId,
+      runId: data.id,
+    })
+  }
   return data?.id as string
 }
 
@@ -314,6 +328,11 @@ async function updatePipelineCRun(supabase: any, runId: string | null, status: s
     .eq('id', runId)
 
   if (error) throw new Error(`Failed to update Pipeline C run: ${error.message}`)
+  await syncCoordinatorTaskFromRun(supabase, {
+    runId,
+    status: status as PipelineRunStatus,
+    result,
+  })
 }
 
 async function resumePipelineCRun(params: { supabase: any; anthropic: ReturnType<typeof createAnthropicClient>; context: PipelineContext; config: any; runId: string }) {
