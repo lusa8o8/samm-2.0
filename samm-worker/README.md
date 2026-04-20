@@ -17,3 +17,7 @@ Environment variables:
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `SAMM_WORKER_ID`
 - `SAMM_WORKER_POLL_INTERVAL_MS` optional
+- `SAMM_WORKER_PIPELINES` optional comma-separated allow-list
+
+Safety default:
+- if `SAMM_WORKER_PIPELINES` is unset, the worker stays inert and claims nothing

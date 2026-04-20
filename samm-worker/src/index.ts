@@ -32,9 +32,15 @@ async function main() {
     `[worker] starting ${workerConfig.workerId} (poll=${workerConfig.pollIntervalMs}ms pipelines=${workerConfig.pipelines.join(',')})`,
   )
 
+  if (workerConfig.pipelines.length === 0) {
+    console.log('[worker] no pipelines enabled; worker is inert until SAMM_WORKER_PIPELINES is configured')
+  }
+
   while (true) {
     try {
-      await tick()
+      if (workerConfig.pipelines.length > 0) {
+        await tick()
+      }
     } catch (error) {
       console.error('[worker] tick failed:', error instanceof Error ? error.message : String(error))
     }

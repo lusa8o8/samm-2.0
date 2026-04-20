@@ -1,4 +1,5 @@
 const DEFAULT_POLL_INTERVAL_MS = 5000
+const DEFAULT_PIPELINES = ''
 
 function requireEnv(name: string) {
   const value = process.env[name]?.trim()
@@ -14,10 +15,17 @@ function parsePositiveInt(value: string | undefined, fallback: number) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
 }
 
+function parsePipelineList(value: string | undefined) {
+  return (value ?? DEFAULT_PIPELINES)
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
 export const workerConfig = {
   supabaseUrl: requireEnv('SUPABASE_URL'),
   supabaseServiceRoleKey: requireEnv('SUPABASE_SERVICE_ROLE_KEY'),
   workerId: process.env.SAMM_WORKER_ID?.trim() || `worker-${process.pid}`,
   pollIntervalMs: parsePositiveInt(process.env.SAMM_WORKER_POLL_INTERVAL_MS, DEFAULT_POLL_INTERVAL_MS),
-  pipelines: ['pipeline-b-weekly', 'pipeline-c-campaign'],
+  pipelines: parsePipelineList(process.env.SAMM_WORKER_PIPELINES),
 } as const
