@@ -230,7 +230,8 @@ Current validation state:
 - `coordinator-ingress` is deployed and handling explicit scheduler traffic successfully
 - `channel_routes` and `conversation_threads` now populate in production validation
 - the first worker path is proven for `pipeline-b-weekly`
-- Railway deployment is the next operational step, not a design unknown
+- `samm-worker` is deployed on Railway and the first remote worker path is validated for `pipeline-b-weekly`
+- Railway is now an active part of the runtime, not a planning assumption
 
 ## Explicit Non-Goals
 `M14A.1` does not include:

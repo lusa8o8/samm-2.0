@@ -35,7 +35,7 @@ Before touching code, reread:
 - `VALIDATION_FOUNDATIONS.md`
 
 ## Current Build Status
-Stable through `M14A` on `main`, with `M14A.1` now validated locally and partly deployed.
+Stable through `M14A` on `main`, with `M14A.1` now validated locally and on Railway for the first worker path.
 
 Latest pushed `M14A` commits:
 - `a68b790` `docs: lock SAMM 2.0 milestone and contract docs`
@@ -82,6 +82,12 @@ Current `M14A.1` delivered slice:
   - approval gate still works
   - resume path still works
   - Pipeline B completes successfully after approval
+- Railway deployment proved the same first worker path remotely:
+  - `samm-worker` is deployed to Railway service `worker`
+  - `run pipeline b` queues through thin ingress with no local worker running
+  - drafts land in Content Registry
+  - Pipeline B reaches `waiting_human`
+  - Supabase `pipeline-b-weekly` logs show drafts sent to Content Registry
 
 `M14A` remains intentionally narrow:
 - schema
@@ -300,6 +306,7 @@ Manual product validation now confirms:
 - `channel_routes` rows are present
 - `conversation_threads` rows are present
 - first worker handoff path for Pipeline B is validated end to end
+- first Railway worker path for Pipeline B is validated end to end
 
 Open issue:
 - `/samm` chat remains non-persistent in the UI
@@ -332,6 +339,5 @@ Locked ingress/worker rule:
 - worker executes approved work against existing durable contracts
 
 Current immediate next implementation step:
-- commit the validated `M14A.1` slice
-- deploy `samm-worker` to Railway
+- commit and push the validated `M14A.1` Railway slice
 - move `pipeline-c-campaign` behind the worker path next
