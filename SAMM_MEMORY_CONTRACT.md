@@ -86,6 +86,20 @@ Minimum fields:
 - `updated_at`
 - `completed_at` nullable
 
+### Allowed task status values
+Controlled string set:
+- `new`
+- `admitted`
+- `running`
+- `waiting_human`
+- `completed`
+- `failed`
+- `cancelled`
+
+Rule:
+- these are lifecycle values, not free-form labels
+- status authority remains limited to the control plane and explicit resume/cancel/terminal paths
+
 ### Allowed `task_type` values
 Controlled string set:
 - `pipeline_run`
@@ -126,6 +140,12 @@ Minimum fields:
 - `payload` jsonb nullable
 - `created_at`
 - `fired_at` nullable
+
+### Allowed obligation status values
+Controlled string set:
+- `pending`
+- `fired`
+- `cancelled`
 
 ### `trigger_type` contract
 Contract values:
@@ -198,6 +218,12 @@ The schema should preserve fields useful for future structured UI rendering:
 - obligation trigger payload
 
 ## M14A Acceptance Criteria
+- `conversation_threads`, `coordinator_tasks`, `coordinator_obligations`, and `channel_routes` exist in schema
+- `pipeline_runs` can link back to `coordinator_tasks`
+- `coordinator-chat` creates dashboard-scoped memory context for meaningful async requests
+- scheduler-created async pipeline work creates a coordinator task plus obligations
+- active pipeline lifecycle paths can update linked coordinator task status
+- no outbound follow-up delivery or reminder firing is implemented in this milestone
 - `coordinator-chat` can create task, obligation, route, and thread records
 - linked scheduler / pipeline state can update task lifecycle deterministically
 - no outbound follow-up sending exists yet
