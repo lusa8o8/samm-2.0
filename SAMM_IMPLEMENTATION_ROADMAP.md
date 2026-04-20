@@ -145,7 +145,7 @@ Rollback boundary:
 
 ## M14A.1 - Thin Ingress Runtime Split
 Status:
-- planned
+- in progress
 
 Goal:
 - restore deployability and preserve the scheduler-first architecture by moving heavy execution out of hosted Supabase edge bundling while keeping Supabase as the durable control/data plane
@@ -182,6 +182,23 @@ In scope:
 - preserve all existing state contracts
 - move only the minimum execution surface required to unblock deployability
 - create a dedicated worker directory and service surface instead of linking the repo root
+
+Delivered in first slice:
+- `pipeline_runs` worker-claim contract migration
+- claim / release / heartbeat SQL functions for worker execution
+- dedicated `samm-worker/` scaffold with:
+  - isolated `package.json`
+  - TypeScript config
+  - Supabase admin client
+  - polling loop
+  - deterministic claim helper
+  - placeholder dispatch map for `pipeline-b-weekly` and `pipeline-c-campaign`
+
+Still open in `M14A.1`:
+- wire ingress to enqueue worker-targeted runs
+- move the first live execution path behind the worker
+- deploy the worker to Railway
+- revalidate `M14A` memory writes in production
 
 Out of scope:
 - full infra rewrite

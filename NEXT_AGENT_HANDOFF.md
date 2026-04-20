@@ -63,6 +63,12 @@ The active next step is now:
 - move heavy execution into a dedicated Node worker runtime
 - follow `SAMM_RUNTIME_SPLIT_CONTRACT.md` as the execution contract for this redesign
 
+Current `M14A.1` delivered slice:
+- worker-claim contract added to `pipeline_runs`
+- SQL claim / release / heartbeat functions added
+- isolated `samm-worker/` scaffold added
+- worker currently polls and claims deterministically but does not yet execute live pipeline logic
+
 `M14A` remains intentionally narrow:
 - schema
 - write/read contracts
@@ -307,3 +313,7 @@ Locked first moved execution paths:
 Locked ingress/worker rule:
 - scheduler authority stays in ingress
 - worker executes approved work against existing durable contracts
+
+Current immediate next implementation step:
+- wire ingress to enqueue worker-targeted runs for the first moved path
+- then move `pipeline-b-weekly` behind the worker
