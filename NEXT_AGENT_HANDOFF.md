@@ -1,10 +1,10 @@
 # Next Agent Handoff
 
 ## Repo
-- Root: `C:\Users\Lusa\tsh-marketing-system`
-- Main app: `C:\Users\Lusa\tsh-marketing-system\M.A.S UI`
+- Root: `C:\Users\Lusa\samm 2.0`
+- Main app: `C:\Users\Lusa\samm 2.0\M.A.S UI`
 - Supabase project ref: `jxmdwltfkxstiwnwwiuf`
-- GitHub repo: `https://github.com/lusa8o8/tsh-marketing-system.git`
+- GitHub repo: `https://github.com/lusa8o8/samm-2.0.git`
 
 ## Working Discipline
 Carry this forward exactly.
@@ -17,7 +17,8 @@ Carry this forward exactly.
 6. Push stable checkpoints to `main` when requested.
 7. Avoid speculative cleanup or scope creep.
 
-The product has stayed clean because every session followed: discovery -> diagnosis -> plan -> narrow execution -> verification -> commit.
+The product has stayed clean because every session followed:
+`discovery -> diagnosis -> plan -> narrow execution -> verification -> commit`.
 
 ## If The Session Breaks Or Rate Limits Hit
 Before touching code, reread:
@@ -27,375 +28,231 @@ Before touching code, reread:
 - `SAMM_RUNTIME_SPEC.md`
 - `SAMM_SCHEDULER_CONTRACT.md`
 - `SAMM_CODEBASE_MAPPING.md`
+- `SAMM_MEMORY_CONTRACT.md`
+- `STRUCTURED_CONFIG_CONTRACT.md`
+- `CONTACT_IDENTITY_AND_MERGE_RULES.md`
+- `VALIDATION_FOUNDATIONS.md`
 
 ## Current Build Status
-Stable through `M13H` public/productization checkpoints on `main`.
+Stable through `M13I` on `main`.
 
-Do not trust the old handoff text that said the repo was only stable through `M10 + 8C`.
-Current source of truth is:
-- `SAMM_IMPLEMENTATION_ROADMAP.md` for milestone and browser-test status
+Latest pushed `M13I` commits:
+- `3ee8edc` `feat(M13I): make metrics UI honest`
+- `32eb52f` `fix(M13I): remove mock metrics writes and harden org scope`
+
+The source of truth is now:
+- `SAMM_IMPLEMENTATION_ROADMAP.md` for milestone order and acceptance boundaries
 - `git log` for what has actually landed
-- this file for institutional memory and next-slice guidance
+- this file for current institutional memory and next-slice guidance
 
-### Latest commits
-- `e8914a3` - fix: add public crawl files and improve landing contrast
-- `e226b37` - fix: polish auth redirect and sign-out control
-- `95804f1` - feat: add official facebook connect flow in settings
-- `99e151c` - docs: lock meta app publishing proof and next slice
-- `dce0b44` - fix: restore login route links
-- `4f3a247` - feat: improve content registry freshness visibility
-- `6905fc2` - copy: refine landing and legal page wording
-- `e4108ba` - feat: add public landing page and auth split
-- `6cd691f` - refactor(M13G): finish shared llm migration and generic calendar types
-- `6a4bd14` - refactor(M13G): migrate pipeline c and stabilize adapter flows
-- `6942852` - refactor(M13G): migrate pipeline b to shared llm client
-- `ee99ffc` - refactor(M13G): migrate pipeline a to shared llm client
+## Current Active Slice
+No implementation has started for `M14A` yet.
 
-All pushed to `main`.
+The next allowed execution slice is:
+- `M14A` `SAMM Memory Layer`
+
+`M14A` is intentionally narrow:
+- schema
+- write/read contracts
+- coordinator creates tasks, obligations, routes, and thread state
+- scheduler updates linked task states
+- linkage between `pipeline_runs` and `coordinator_tasks`
+
+Explicitly out of scope for `M14A`:
+- outbound follow-up delivery
+- multi-channel delivery
+- CRM
+- Sales
+- obligation firing engine
+- reminder execution
+- UI overhaul
+
+## Locked SAMM 2.0 Decisions
+
+### Calendar naming
+- Keep physical DB table `academic_calendar` for now.
+- Use neutral domain naming `campaign_calendar` in docs, wrappers, and future services.
+- Do not rename the physical table in this phase.
+
+### Human task surface
+- Keep `human_inbox` as the active human gate surface for now.
+- Create `human_inbox` rows only for actionable human decisions.
+- Do not create inbox rows for passive async status tracking.
+
+### `coordinator_tasks.task_type`
+Use a controlled string set, not a DB enum.
+
+Initial allowed values:
+- `pipeline_run`
+- `approval_request`
+- `status_check`
+- `summary_request`
+- `calendar_followup`
+- `content_review`
+- `manual_action`
+- `system_notice`
+
+Unknown values must be rejected in domain validation.
+
+### `coordinator_obligations.trigger_type`
+Contract includes:
+- `on_success`
+- `on_failure`
+- `on_waiting_human`
+- `on_stale`
+- `on_cancelled`
+- `on_due_time`
+- `on_no_response_timeout`
+
+`M14A` implements only:
+- `on_success`
+- `on_failure`
+- `on_waiting_human`
+- `on_cancelled`
+
+### `channel_routes`
+Contract includes future channels:
+- `dashboard`
+- `whatsapp`
+- `email`
+- `slack`
+- `telegram`
+- `teams`
+
+`M14A` actively supports only:
+- `dashboard`
+
+### Contact merge policy
+No auto-merge when strong identifiers disagree.
+
+Merge precedence:
+1. explicit internal `contact_id`
+2. WhatsApp number
+3. email
+4. channel-specific external id
+5. weak display-name or social hints -> never auto-merge
+
+Conflicts should create uncertainty/review-needed state, not silent merges.
+
+### Task status authority
+Only these may mutate `coordinator_tasks.status`:
+- `coordinator-chat`
+- `scheduler`
+- explicit pipeline resume, cancel, and terminal-state paths
+
+Agents must never mutate coordinator task lifecycle directly.
+
+### Discounts
+- No free-form discount overrides in SAMM 2.0 foundational work.
+- Discounts must come from structured config and policy layers.
+
+### Learning thresholds
+- Must be documented before the learning layer lands.
+- Do not implement pattern promotion without explicit thresholds.
+
+### Memory principle
+`SAMM` memory is structured operational memory, not generic AI memory.
+
+It exists for:
+- conversation continuity
+- work tracking
+- obligations
+- routing
+
+It does not exist for:
+- fuzzy personal memory
+- speculative long-term memory
+- summarization-as-truth
+
+## Immediate Milestone Queue
+- `M14A` `SAMM Memory Layer`
+- `M14B` `Structured Config Expansion`
+- `M14C` `CRM P1`
+- `M15D` `Validation Foundations`
+- `M14D` `CRM P2`
+- `M15A` `Sales S1`
+- `M14E` `CRM P3`
+- `M15B` `Sales S2`
+- `M15C` `Pattern Learning Layer`
+- `M15E` `Conversation Guardrails`
+- `M16A` `Pipeline Standardization`
+
+This order is locked unless the roadmap docs are explicitly amended first.
 
 ## Product State
-`samm` is still the product anchor. Hybrid control-plane model remains the intended architecture.
+`samm` remains the product anchor.
 
 Current stance:
-- Full workspace redesign is deferred.
-- UI changes stay narrow and operational.
-- Inbox = workflow decisions only.
-- Content Registry = content review only.
-- Optional modules stay deferred until capability gating/onboarding work.
+- preserve the scheduler-first control plane
+- preserve pipelines A/B/C/D and `publish-scheduled`
+- preserve Supabase as single durable source of truth
+- extend with deterministic layers instead of rewriting the system
+
+The current architecture is:
+- `coordinator-chat` as active runtime
+- `scheduler.ts` as control-plane authority
+- shared `_shared/*` modules as common runtime layer
+- Supabase tables as durable truth for org state, runs, content, approvals, calendar, and metrics
 
 ## Institutional Memory
 
+### Metrics honesty
+`M13I` removed mock metric writes and hardened org resolution on the active path.
+If identical analytics values appear again, do not assume shared-org leakage without verifying the writer path first.
+
 ### Supabase JS insert error pattern
 `supabase.from(...).insert({...})` does not throw on failure; it returns `{ data, error }`.
-Rule: always destructure and handle `error` explicitly.
+Always destructure and handle `error` explicitly.
 
 ### Claude Haiku markdown fence behavior
-Haiku wraps JSON in fenced blocks even when told not to.
-Rule: strip fences before `JSON.parse` with the existing regex pattern.
+Haiku may wrap JSON in fenced blocks even when told not to.
+Strip fences before `JSON.parse` using the existing regex pattern.
 
 ### `ref_table` is not a column on `human_inbox`
 Do not add it back.
 
-### Pipeline C event context is fixed now
-`M11A` landed.
-- NL calendar create + run passes `calendarEvent` through `coordinator-chat/scheduler.ts`
-- Standalone `run the campaign pipeline` falls back to the next upcoming `academic_calendar` event
-- Empty calendar fails clearly instead of running a demo event
-Do not reintroduce the old hardcoded demo fallback.
-
-### `academic_calendar.event_type` needs migrations when widened
-If the UI adds a new event type, add a migration to widen the DB constraint in the same slice.
-
-### NL edit needs `needs_confirmation: false`
-Edits are reversible and should execute directly. Deletes still require confirmation.
+### Calendar table widening
+If the UI adds a new event type, add a migration widening the physical `academic_calendar.event_type` constraint in the same slice.
 
 ### Confirmation card pattern
-The chat UI renders confirmation cards only from `response.confirmation`, not `response.action`.
-For destructive actions that need confirmation, use a deterministic `confirmation.action` token and a fast-path handler.
+The chat UI renders confirmation cards from `response.confirmation`, not `response.action`.
+Destructive actions needing confirmation must use a deterministic `confirmation.action` token and a fast-path handler.
 
 ### Scheduler interception note
-Messages with a pipeline keyword plus a run verb can bypass the LLM and go straight through scheduler handling.
-Keep `isCalendarCreateSignal`-style guards when a message must create state before triggering a pipeline.
-
-## Remaining Verification Queue
-Use `SAMM_IMPLEMENTATION_ROADMAP.md` as the detailed checklist. Current pending browser checks still visible in the roadmap include:
-- `M10`: NL ambiguity should ask for clarification instead of hallucinating a date
-- `M11B`: verify `scheduled_at` timestamps are visibly spread across the campaign window
-- `M11C`: verify competitor label is shown as simulated and monitor language stays honest
-- `M11D`: verify end date add/edit/min constraint behavior in Calendar UI
-- `M11E`: verify visual brand persistence, design brief injection, and creative override note
-- `M11F`: verify launch blast, stagger, per-platform cap, and staggered timestamps
-- `M12`: verify Pipeline D routing, draft creation, brand voice behavior, and no `pipeline_runs` row
-- `M12A`: verify manual page load, accordion behavior, sidebar link, and mobile rendering
-
-## Milestone Queue
-- `M13A`: Facebook Live Publishing - active live verification slice
-  - Facebook remains the first end-to-end verified slice
-  - On success write `content_registry.status = 'published'` and `published_at`
-  - On failure set `status = 'failed'` and log the reason in `metadata`
-- `M13B`: WhatsApp live publishing
-- `M13C`: YouTube live publishing
-- `M13D`: Email live publishing
-- `M13E`: Coordinator intent normalization / reasoning hardening
-  - add a lightweight intent-classification layer before the full coordinator prompt
-  - normalize small NL variants (`hi`, `hello`, `write`, `draft`, `create campaign`, `run pipeline`)
-  - prepare `samm` for later chat-channel integrations
-- `M13F`: Platform compliance + official app onboarding foundation
-  - official `samm` Meta app / business-verification track
-  - landing page + policy docs + domain/email consistency for platform review
-- parallel scaffolding for `M13B/M13C/M13D` is allowed, but verification and stable commits remain provider-by-provider
-- `M14`: Multi-channel samm access
-- `M15`: Voice interface
-- `M16`: Dashless operation
-- `M-vision`: logo upload, multimodal palette extraction, visual references, Canva API integration
-
-## Pipeline Taxonomy
-| Pipeline | Intent | Output | Approval gates | When to use |
-|---|---|---|---|---|
-| A - Engagement | Process social comments | Replies in Content Registry; escalations + boost suggestions in Inbox | None | Comment processing |
-| B - Weekly Content | Generate weekly content batch | Draft posts in Content Registry | Marketer gate | Weekly cadence |
-| C - Campaign | Full campaign for an event | Brief in Inbox; 6 copy cards + design brief in Content Registry | CEO brief + marketer copy gates | Major event campaigns |
-| D - One-Off Post | Draft ad-hoc posts on request | 1-N platform drafts in Content Registry | Marketer review only | "Write a post about X" |
-
-Rule of thumb:
-- "Run a campaign" or "schedule a campaign for X" -> Pipeline C
-- "Write a post" or "draft a WhatsApp message about X" -> Pipeline D
+Messages containing a pipeline keyword plus a run verb can bypass the LLM and go through scheduler handling.
+Keep explicit guards whenever a message must create state before triggering a pipeline.
 
 ## Key Files
 
 ### Frontend
 - `M.A.S UI/src/pages/content.tsx`
 - `M.A.S UI/src/pages/inbox.tsx`
+- `M.A.S UI/src/pages/metrics.tsx`
 - `M.A.S UI/src/pages/agent/overview.tsx`
 - `M.A.S UI/src/pages/agent/settings.tsx`
-- `M.A.S UI/src/pages/agent/manual.tsx`
 - `M.A.S UI/src/lib/api.ts`
 - `M.A.S UI/src/lib/supabase.ts`
 
 ### Supabase edge functions
+- `supabase/functions/coordinator-chat/index.ts`
+- `supabase/functions/coordinator-chat/scheduler.ts`
 - `supabase/functions/pipeline-a-engagement/index.ts`
 - `supabase/functions/pipeline-b-weekly/index.ts`
 - `supabase/functions/pipeline-c-campaign/index.ts`
 - `supabase/functions/pipeline-d-post/index.ts`
-- `supabase/functions/coordinator-chat/index.ts`
-- `supabase/functions/coordinator-chat/scheduler.ts`
+- `supabase/functions/publish-scheduled/index.ts`
 - `supabase/functions/_shared/pipeline-engine.ts`
 - `supabase/functions/_shared/agent-registry.ts`
 - `supabase/functions/_shared/integration-registry.ts`
 - `supabase/functions/_shared/pipeline-run-status.ts`
 - `supabase/functions/provision-org/index.ts`
 
-### Key migrations already landed
-- `20260409161000_pipeline_runs_status_states.sql`
-- `20260410120000_content_registry_campaign_fields.sql`
-- `20260410130000_content_registry_rejection_note.sql`
-- `20260410140000_content_registry_media_url.sql`
-- `20260410150000_content_registry_design_brief_platform.sql`
-- `20260411100000_org_config_extended_fields.sql`
-- `20260411110000_content_registry_metadata.sql`
-- `20260411120000_academic_calendar_event_type_graduation.sql`
+## Current M14A Goal
+Build the `SAMM` memory foundation without expanding into CRM, Sales, or outbound delivery.
 
-## Operational Notes
-- `ANTHROPIC_API_KEY` is already set in hosted Supabase Edge Function secrets
-- Supabase CLI: `C:/Users/Lusa/.scoop/shims/supabase.exe`
-- Local `deno` is not installed; deploy to verify Deno-side changes
-- `content_registry` lifecycle: `draft -> scheduled -> published` or `rejected` or `failed`
-- `pipeline_runs` lifecycle: `running -> waiting_human -> resumed -> success/failed/cancelled`
-- Pipeline C resumes in the background via `EdgeRuntime.waitUntil`
-
-## Current M13A State
-- Fresh Honey Shop workspace/org remains the active `M13A` verification org.
-- `coordinator-chat` overload handling was hardened and deployed.
-  - raw Anthropic `529 overloaded_error` is no longer leaked to the user
-  - transient model failures now return a clean retryable `503` message
-- `pipeline-c-campaign` resume/import bug was fixed and deployed.
-  - old failure: `INTEGRATION_REGISTRY is not defined`
-- same-day campaign scheduling was fixed and deployed.
-  - posts no longer backdate into the past for same-day events
-- frontend org hydration bug was fixed locally.
-  - `getOrgId()` now hydrates from the active session before org-scoped queries run
-  - this prevented Honey Shop Settings saves from silently targeting the wrong org on fresh load
-- `publish-scheduled` is now declared in `supabase/config.toml` with `verify_jwt = false` and redeployed.
-  - anonymous/manual scheduler invocation works again for live verification
-- Honey Shop Facebook credentials are now confirmed to reach the backend.
-  - the old `Missing Facebook credentials` error is resolved
-
-## Current Blocker
-- `M13A` is no longer blocked by local scheduler/runtime/config wiring or by uncertainty around whether the official Meta app can really publish.
-- The official `samm` Meta app has now been verified in Graph API Explorer to:
-  - retrieve the Honey Shop page and Page access token via `/me/accounts`
-  - read Page metadata for `Honey Shop ZM`
-  - publish a real post to the Honey Shop Facebook Page
-- Verified live post id:
-  - `1110560415804812_1545204624272262`
-- Current blocker is no longer “can the app publish?”
-- Current blocker is productization + compliance:
-  - `samm` still relies on manual Facebook credential entry inside the product
-  - PACRA registration certificate is still pending for clean Meta organization verification
-  - the next slice should replace manual token handling with an official in-product Facebook connect flow
-
-## Current M13E Diagnosis
-- The deterministic greeting layer is working in browser for `hi`, `hello`, `yo`, and similar small variants.
-- The broadened write-post matcher is now verified for conversational one-off prompts like:
-  - `can you draft me a quick post about our grand opening?`
-  - `i need a post about discounts`
-- `pipeline-d-post` was fixed and redeployed:
-  - stale Anthropic model ids were updated to `claude-sonnet-4-20250514`
-  - `pipeline-d-post` was added to `supabase/config.toml`
-- Browser + Supabase verification now shows:
-  - `coordinator-chat` returns deterministic Pipeline D responses for conversational one-off post prompts
-  - `pipeline-d-post` returns `200`
-  - Supabase logs show `4 platform drafts produced` and `Pipeline D complete: 4 drafts in Content Registry`
-  - Honey Shop Content Registry is populated with the resulting drafts
-- Remaining M13E follow-up is narrower than the original blocker:
-  - Operations UI is still mostly driven by `pipeline_runs`, so Pipeline D remains under-visible in the app because it intentionally creates no `pipeline_runs` row
-  - explicit command alias handling for `run pipeline d` is still missing, so that phrasing can still fall through to the LLM path instead of returning a deterministic guided response
-- Next narrow fix: add deterministic `run pipeline d` guidance and lightweight Pipeline D last-run visibility in Operations without introducing `pipeline_runs` for Pipeline D.
-
-## Current M13F Diagnosis
-- `M13F` is now in active universalization/modularity work, not just compliance planning.
-- Verified M13F progress so far:
-  - Calendar UI is now generic (`Event Calendar`, freeform audience tags instead of fixed university chips).
-  - Settings now uses generic wording (`Connections & Modules`, `Custom App / Private Tool`, `Product / Landing Page`).
-  - Optional module toggles exist in Settings for `Ambassadors` and `Affiliates`.
-  - `Ambassadors` now behaves like a real optional module in the product shell:
-    - hidden from nav when disabled
-    - direct `/ambassadors` route redirects to Settings when disabled
-    - ambassador KPI field is hidden when disabled
-  - backend ambassador enforcement is partially live:
-    - `pipeline-a-engagement`, `pipeline-b-weekly`, and `pipeline-c-campaign` now skip ambassador workflows when the module is off
-  - `pipeline-b-weekly` hardcoded TSH/StudyHub mock content has been replaced with generic org-aware fallback content
-  - `pipeline-b-weekly` weekly report no longer includes ambassador status when the module is off
-  - `pipeline-d-post` Facebook drafting no longer hardcodes a StudyHub link
-  - `coordinator-chat` calendar instructions now treat the legacy `universities` field as generic audience tags / segments
-  - `_shared/integration-registry` now exposes the old `studyhub` source as generic `Custom App` wording
-- Browser/runtime verification completed in Honey Shop:
-  - Ambassadors toggle off: nav hidden, route gated, KPI hidden, no ambassador-targeted generation triggered
-  - Pipeline B now drafts Honey Shop-relevant content instead of UNZA/StudyHub exam-prep content
-  - Pipeline D remains clean after universalization changes
-- Remaining M13F runtime leak was fixed and reverified:
-  - Pipeline A no longer emits the old education-era poll options or `undefined` brand fallback
-  - verified replacement: `What would you like to see more of from this brand this week? A) Product tips B) Behind-the-scenes updates C) Special offers`
-- M13F is now stable enough to hand off as a committed universalization checkpoint
-## Current M13G Diagnosis
-- `M13G` is now functionally complete for the current backend LLM surfaces.
-- Shared-client coverage now includes:
-  - `coordinator-chat`
-  - `pipeline-d-post`
-  - `pipeline-a-engagement`
-  - `pipeline-b-weekly`
-  - `pipeline-c-campaign`
-- Repo-wide verification confirms direct provider calls now live only in `_shared/llm-client.ts`.
-- Verified runtime fixes folded into the migration:
-  - Pipeline B resume now passes `config` into the weekly reporter, so post-approval reporting completes cleanly
-  - standalone `run pipeline c` now prechecks for a future event and tells the user to add one first
-  - Pipeline C no longer throws a blank `500` when no future event exists
-  - Pipeline C resume now persists `calendar_event` before the first human gate, fixing the missing stored context failure
-  - coordinator event creation instructions now explicitly forbid inventing campuses or universities when the user did not specify them
-- Verified outcomes in browser and Supabase:
-  - Pipeline B drafts, approval, and weekly report resume all complete successfully
-  - Pipeline C brief generation, approval, and draft creation resume all complete successfully
-  - one-off Pipeline D drafting remains stable after the shared-client migration
-  - Pipeline A still classifies, drafts replies, and posts the generic poll cleanly
-- Calendar UI polish now landed locally with a successful frontend production build:
-  - generic event types replace the academic event-type list
-  - legacy event types are normalized for display/editing
-  - dialog accessibility warning addressed with `DialogDescription`
-- Remaining non-adapter issue observed during the series:
-  - Content Registry still lacks day segmentation / obvious drafted-at freshness on cards
-  - this is a separate UI polish, not an adapter/runtime blocker
-- Locked next move:
-  - treat remaining LLM work as adapter maturation, not more backend surface migration
-  - switch to the next UI polish / Meta verification slice deliberately, instead of extending M13G further by default
-
-## Landing Page / Compliance Note
-- Add landing page requirements to the `M13` series as part of `M13F`.
-- Minimum assets to prepare:
-  - live HTTPS website or subdomain for `samm`
-  - Privacy Policy
-  - Terms of Service
-  - product/business description
-  - contact email
-  - domain/email consistency where possible
-- A subdomain is acceptable for early setup, but if the final `samm` domain is known, buy it early to reduce rework during verification.
-- Product decision locked before any landing-page code work:
-  - keep the current `login.tsx` experience as the auth page
-  - build a separate public marketing/compliance landing page for `getsamm.app`
-  - do not overload the auth screen with Meta-proof/legal/contact content
-- Reason for the split:
-  - the current auth page is strong as a focused sign-in/create-workspace experience
-  - Meta/business-proof content needs public-facing business context, legal links, and contact details that should exist outside the sign-in surface
-- Public landing page minimum additions when that slice starts:
-  - clear `samm` / `getsamm.app` product description
-  - public contact details (`hello@getsamm.app`, Lusaka/Zambia region if desired)
-  - Privacy Policy
-  - Terms of Service
-  - consistent browser tab title and metadata (`samm`, not `TSH Marketing OS`)
-  - clear relationship between brand (`samm`) and website (`getsamm.app`)
-- Public landing page slice is now implemented locally:
-  - unauthenticated `/` now serves a dedicated marketing/compliance landing page
-  - auth moved to `/login`
-  - public `/privacy` and `/terms` pages added
-  - `login.tsx` preserved as the auth page with light cleanup only
-  - default browser title updated to `samm | Marketing workflow and approvals`
-  - leftover auth default email leak (`ops@tsh.com`) removed
-- Current public-page positioning:
-  - outcome-first hero
-  - product-proof/workflow section
-  - dedicated `Meet samm` differentiator section
-  - trust/contact/legal footer for Meta/business-proof optics
-- Verification:
-  - `npm run build` passed in `M.A.S UI`
-- Current Meta / registration progress:
-  - `getsamm.app` business portfolio created in Meta
-  - `Samm` Facebook Page created under that portfolio
-  - `getsamm.app` domain added
-  - personal verification for Lusa Malingusha completed successfully
-  - official `samm` Meta app created and minimally configured
-  - Supabase callback accepted for Facebook Login:
-    - `https://jxmdwltfkxstiwnwwiuf.supabase.co/auth/v1/callback`
-  - Graph API verification passed:
-    - `pages_show_list`
-    - `pages_read_engagement`
-    - `pages_manage_posts`
-  - real Honey Shop Facebook post created by the official `samm` app
-  - PACRA registration for `EIGHT ZERO EIGHT DIGITAL SYSTEMS` has been submitted and paid; waiting on review/certificate
-- Current external blocker:
-  - organization verification should not be forced until PACRA registration certificate is issued
-  - target document for later Meta organization verification: `Business Registration or License Document` from PACRA
-  - next implementation slice should productize Facebook connection inside `samm` instead of relying on manual token entry / Explorer-only testing
-- Official Facebook connect flow is now productized in `samm`:
-  - `Operations -> Settings` now exposes `Connect with samm app`
-  - the app returns to `samm`, fetches manageable Pages, and stores the selected Page connection into org config
-  - manual Page ID / token entry remains as a fallback only
-- Content Registry freshness polish is now implemented locally:
-  - draft cards show drafted-at timestamps instead of only `Awaiting approval`
-  - draft tab adds day grouping (`Today`, `Yesterday`, date) while preserving campaign grouping within each day
-  - scheduled, published, and failed tabs also use day grouping for clearer recency scanning
-  - fresh same-day activity is highlighted with lightweight badges
-- Verification:
-  - `npm run build` passed in `M.A.S UI`
-- Current public-site polish follow-up:
-  - keep the landing page viewport zoom restriction as-is by product choice
-  - add a real public `robots.txt`
-  - add a real public `sitemap.xml`
-  - raise landing-page label contrast where Lighthouse flags low-contrast eyebrow text
-  - all three are now landed and pushed
-
-## Current M13I Diagnosis
-- `M13I` is the active internal honesty + isolation hardening slice.
-- Goal:
-  - remove Pipeline A mock metrics writes
-  - harden backend org resolution so missing org context fails clearly instead of silently collapsing onto the dev org
-  - leave Metrics UI in an honest empty state until real ingestion lands
-- Current checkpoint state:
-  - the Metrics page has already been switched to an honest empty state and no longer presents seeded placeholder analytics as live data
-  - the active backend path has now been hardened so missing org context fails clearly instead of silently falling back to a dev org
-  - Pipeline A no longer writes placeholder `platform_metrics` snapshots
-- Diagnosis locked before code:
-  - Metrics UI is org-scoped in the frontend query layer and is not directly hardcoded
-  - identical values across separate workspaces are caused by Pipeline A seeding the same placeholder `platform_metrics` snapshot into each org
-  - several active edge functions still contain silent default-org fallbacks; these are not the reason for the identical metrics, but they are a real isolation-risk pattern
-- Scope to keep narrow:
-  - active-path hardening only:
-    - `pipeline-a-engagement`
-    - `pipeline-b-weekly`
-    - `pipeline-c-campaign`
-    - `pipeline-d-post`
-    - `coordinator-chat`
-  - do not broaden this slice into live metrics ingestion, analytics connectors, or a general frontend auth refactor
-- Verification target:
-  - no new mock metric snapshots are written
-  - missing org context fails loudly on the active edge-function path
-  - Metrics page no longer presents seeded placeholder numbers as if they were live analytics
-
-## Constraints To Preserve
-- Do not do a broad `samm` workspace redesign.
-- Keep the product professional and restrained.
-- Keep scope narrow and milestone-shaped.
-- For `M13A-M13D`, keep stable checkpoints provider-by-provider. Parallel scaffolding is allowed, but do not collapse Facebook, WhatsApp, YouTube, and email into one unverified commit.
-
-
-
-
-
+Success looks like:
+- every meaningful async coordinator action creates a durable coordinator task
+- follow-up promises create obligations
+- conversation routes and thread state are persisted
+- scheduler and pipeline lifecycle can update linked task state
+- no external follow-up sending is attempted yet
