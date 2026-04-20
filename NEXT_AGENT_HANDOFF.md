@@ -25,6 +25,7 @@ Before touching code, reread:
 - `NEXT_AGENT_HANDOFF.md`
 - `SAMM_IMPLEMENTATION_ROADMAP.md`
 - `SAMM_FULL_SYSTEM_ARCHITECTURE.md`
+- `SAMM_RUNTIME_SPLIT_CONTRACT.md`
 - `SAMM_RUNTIME_SPEC.md`
 - `SAMM_SCHEDULER_CONTRACT.md`
 - `SAMM_CODEBASE_MAPPING.md`
@@ -34,11 +35,12 @@ Before touching code, reread:
 - `VALIDATION_FOUNDATIONS.md`
 
 ## Current Build Status
-Stable through `M13I` on `main`.
+Stable through `M14A` in repo and on `main`, with one live validation gap still open.
 
-Latest pushed `M13I` commits:
-- `3ee8edc` `feat(M13I): make metrics UI honest`
-- `32eb52f` `fix(M13I): remove mock metrics writes and harden org scope`
+Latest pushed `M14A` commits:
+- `a68b790` `docs: lock SAMM 2.0 milestone and contract docs`
+- `a326633` `feat(M14A): add SAMM memory foundation`
+- `e3829c9` `feat(M14A): wire SAMM memory into run lifecycle`
 
 The source of truth is now:
 - `SAMM_IMPLEMENTATION_ROADMAP.md` for milestone order and acceptance boundaries
@@ -46,19 +48,29 @@ The source of truth is now:
 - this file for current institutional memory and next-slice guidance
 
 ## Current Active Slice
-No implementation has started for `M14A` yet.
+`M14A` has been implemented and pushed, but it exposed a deployability blocker.
 
-The next allowed execution slice is:
-- `M14A` `SAMM Memory Layer`
+Open blocker:
+- the database migration is live
+- pipelines still run successfully
+- `channel_routes` and `conversation_threads` remained empty in production validation
+- repeated deploy attempts for updated Supabase functions fail with hosted bundle generation timeouts
 
-`M14A` is intentionally narrow:
+The active next step is now:
+- lock and execute `M14A.1` `Thin Ingress Runtime Split`
+- keep Supabase as source of truth
+- make ingress thin enough to deploy again
+- move heavy execution into a dedicated Node worker runtime
+- follow `SAMM_RUNTIME_SPLIT_CONTRACT.md` as the execution contract for this redesign
+
+`M14A` remains intentionally narrow:
 - schema
 - write/read contracts
 - coordinator creates tasks, obligations, routes, and thread state
 - scheduler updates linked task states
 - linkage between `pipeline_runs` and `coordinator_tasks`
 
-Explicitly out of scope for `M14A`:
+Still explicitly out of scope for `M14A`:
 - outbound follow-up delivery
 - multi-channel delivery
 - CRM
@@ -165,7 +177,8 @@ It does not exist for:
 - summarization-as-truth
 
 ## Immediate Milestone Queue
-- `M14A` `SAMM Memory Layer`
+- `M14A` `SAMM Memory Layer` (implemented; blocked on hosted deployability for live validation)
+- `M14A.1` `Thin Ingress Runtime Split`
 - `M14B` `Structured Config Expansion`
 - `M14C` `CRM P1`
 - `M15D` `Validation Foundations`
@@ -256,3 +269,41 @@ Success looks like:
 - conversation routes and thread state are persisted
 - scheduler and pipeline lifecycle can update linked task state
 - no external follow-up sending is attempted yet
+
+## Latest Validation Read
+Manual product validation already confirmed:
+- Pipeline A runs successfully
+- Pipeline B runs successfully and writes drafts
+- Pipeline C runs successfully with calendar -> inbox -> content flow
+- Pipeline D runs successfully
+
+Open issue:
+- `/samm` chat remains non-persistent in the UI
+- this is a separate frontend/UI slice, not an `M14A` backend blocker
+
+Current backend concern:
+- SQL checks for `channel_routes` and `conversation_threads` returned no rows after coordinator-triggered runs
+- hosted deploys for updated functions fail with `Bundle generation timed out`
+- this is now treated as a runtime packaging/platform issue, not a schema issue
+- close `M14A.1` before starting the first generative UI adoption slice
+
+## Runtime Direction
+Locked decision:
+- do not brute-force larger hosted Supabase edge bundles
+- keep Supabase for DB/Auth/durable state
+- keep thin ingress functions in Supabase
+- use a dedicated Node worker runtime for heavy execution
+- selected first worker host target: Railway
+
+This is a partial runtime split, not a rewrite and not a platform reset.
+
+Locked worker host target:
+- Railway
+
+Locked first moved execution paths:
+- `pipeline-b-weekly`
+- `pipeline-c-campaign`
+
+Locked ingress/worker rule:
+- scheduler authority stays in ingress
+- worker executes approved work against existing durable contracts

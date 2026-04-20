@@ -3,6 +3,11 @@
 ## Purpose
 `samm` is the coordinating runtime for the product, not just a chat endpoint. Its job is to observe workspace state, decide what should happen next, request or execute bounded actions, and report back to the operator in a way that is inspectable and controllable.
 
+Current runtime redesign note:
+- hosted Supabase edge deployability has become a real blocker for the heavier runtime
+- the locked response is a thin-ingress split described in `SAMM_RUNTIME_SPLIT_CONTRACT.md`
+- the scheduler remains the authority even when heavier execution moves to a worker
+
 The runtime should be boringly effective:
 - prefer inspection over guessing
 - prefer reversible actions over irreversible ones
@@ -205,6 +210,8 @@ The current stable runtime now has:
 - introduce normalized scheduler request and result types
 - add capability gating and per-request hard-limit enforcement
 - return scheduler state directly to the UI for polling by `run_id`
+- keep ingress thin enough to deploy reliably
+- move heavier execution paths behind the worker contract without changing durable truth tables
 
 ### Later State
 - dedicated runtime module separate from UI wiring

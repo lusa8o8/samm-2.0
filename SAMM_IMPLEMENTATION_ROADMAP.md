@@ -6,7 +6,8 @@ This document is the milestone source of truth for `samm 2.0`.
 The current strategy is:
 - preserve the active scheduler-first marketing core
 - weave in the missing deterministic layers
-- keep the build Supabase-first and single-server for now
+- keep the build Supabase-first
+- stay single-server only until a blocker forces a controlled split
 - execute in narrow, reversible milestone slices
 
 ## Current Stable Baseline
@@ -18,6 +19,26 @@ Current backbone to preserve:
 - pipelines `A / B / C / D` plus `publish-scheduled`
 - `_shared/*` as the reusable runtime layer
 - Supabase as the durable truth for org state, runs, approvals, content, calendar, and metrics
+
+## Current Redesign Trigger
+The first forced architecture redesign has now been reached.
+
+Observed blocker:
+- `M14A` schema is live
+- `M14A` code is implemented and pushed
+- live production validation shows `channel_routes` / `conversation_threads` are still empty
+- deploying updated edge functions fails with hosted Supabase bundle generation timeouts
+
+Conclusion:
+- the blocker is deployability of the heavy hosted edge runtime
+- not the memory schema
+- not the scheduler logic
+- not the pipeline contracts themselves
+
+Response rule:
+- do not brute-force bigger hosted edge bundles
+- do not rewrite the product around the blocker
+- introduce a controlled runtime split that keeps Supabase as the source of truth
 
 ## Cross-Layer Invariants
 These remain true across all future milestones:
@@ -44,6 +65,7 @@ These remain true across all future milestones:
 - persisted human gates through `human_inbox`
 
 ### Weave In
+- thin-ingress runtime split
 - `SAMM` memory layer
 - structured config expansion
 - CRM `P1 / P2 / P3`
@@ -68,7 +90,7 @@ Checkpoint commits:
 
 ## M14A - SAMM Memory Layer
 Status:
-- planned
+- implemented in repo and pushed; live function deployment validation still open
 
 Goal:
 - make `SAMM` a durable async coordinator before adding CRM, Sales, or learning logic
@@ -104,8 +126,80 @@ Acceptance criteria:
 - linked pipeline state can update task lifecycle deterministically
 - no outbound follow-up sending exists yet
 
+Delivered in code:
+- memory tables + `pipeline_runs.coordinator_task_id` migration
+- shared `samm-memory` helper module
+- `coordinator-chat` dashboard memory context creation
+- scheduler task/obligation creation + run linkage
+- pipeline lifecycle sync back into `coordinator_tasks`
+
+Open validation note:
+- production migration is applied
+- manual product testing shows pipelines A/B/C/D still run cleanly
+- production SQL checks returned no rows in `channel_routes` / `conversation_threads`
+- hosted Supabase deploys for the updated runtime are timing out during bundle generation
+- `M14A` is therefore blocked on runtime deployability, not backend semantics
+
 Rollback boundary:
 - tables and runtime wiring can be reverted without touching CRM, Sales, or UI architecture
+
+## M14A.1 - Thin Ingress Runtime Split
+Status:
+- planned
+
+Goal:
+- restore deployability and preserve the scheduler-first architecture by moving heavy execution out of hosted Supabase edge bundling while keeping Supabase as the durable control/data plane
+
+Decision:
+- frontend remains unchanged for this slice
+- Supabase remains the source of truth
+- heavy execution moves to a dedicated Node worker runtime
+- selected host target: Railway
+- exact split contract lives in `SAMM_RUNTIME_SPLIT_CONTRACT.md`
+
+What stays in Supabase:
+- auth-aware ingress
+- lightweight `coordinator-chat` admission path
+- durable writes to:
+  - `coordinator_tasks`
+  - `coordinator_obligations`
+  - `pipeline_runs`
+  - `human_inbox`
+  - `content_registry`
+  - `org_config`
+  - physical `academic_calendar`
+- thin status and control endpoints
+
+What moves first:
+- heavy scheduler orchestration logic where necessary
+- pipeline execution entry for the heaviest paths
+- long-running / retry-prone execution paths
+
+In scope:
+- define first worker contract
+- define how Supabase ingress enqueues work for the worker
+- keep `coordinator-chat` thin enough to deploy reliably
+- preserve all existing state contracts
+- move only the minimum execution surface required to unblock deployability
+- create a dedicated worker directory and service surface instead of linking the repo root
+
+Out of scope:
+- full infra rewrite
+- replacing Supabase functions entirely
+- UI adoption work
+- CRM / Sales implementation
+- pattern learning
+- obligation delivery engine
+
+Acceptance criteria:
+- production deploy path no longer depends on a heavyweight hosted edge bundle
+- `coordinator-chat` becomes reliably deployable again
+- at least one blocked execution path has a worker-ready contract
+- first moved execution paths are `pipeline-b-weekly` then `pipeline-c-campaign`
+- `M14A` memory writes can be validated live after the ingress/runtime split
+
+Rollback boundary:
+- worker introduction can be reverted without changing frontend contracts or database truth tables
 
 ## M14B - Structured Config Expansion
 Status:
@@ -343,7 +437,6 @@ Acceptance criteria:
 
 ## Deferred Work
 Do not pull these into the current critical path:
-- split worker architecture
 - MCP / Apps SDK integration
 - external workspace integration
 - creative add-on agents
@@ -358,4 +451,4 @@ No code starts for a milestone until:
 - rollback boundary is clear
 
 The next allowed implementation slice is:
-- `M14A` only
+- `M14A.1` only
