@@ -35,7 +35,7 @@ Before touching code, reread:
 - `VALIDATION_FOUNDATIONS.md`
 
 ## Current Build Status
-Stable through `M14A` in repo and on `main`, with one live validation gap still open.
+Stable through `M14A` on `main`, with `M14A.1` now validated locally and partly deployed.
 
 Latest pushed `M14A` commits:
 - `a68b790` `docs: lock SAMM 2.0 milestone and contract docs`
@@ -48,31 +48,40 @@ The source of truth is now:
 - this file for current institutional memory and next-slice guidance
 
 ## Current Active Slice
-`M14A` has been implemented and pushed, but it exposed a deployability blocker.
+`M14A` is now live-validated through the new thin ingress path, and `M14A.1` has its first successful worker execution path.
 
-Open blocker:
+Resolved blocker:
 - the database migration is live
-- pipelines still run successfully
-- `channel_routes` and `conversation_threads` remained empty in production validation
-- repeated deploy attempts for updated Supabase functions fail with hosted bundle generation timeouts
+- `coordinator-ingress` is deployed and authenticates correctly
+- `channel_routes` and `conversation_threads` now populate in production validation
+- hosted bundle timeouts still block heavy `coordinator-chat`, but explicit scheduler paths no longer depend on that deploy surface
 
 The active next step is now:
-- lock and execute `M14A.1` `Thin Ingress Runtime Split`
+- continue `M14A.1` `Thin Ingress Runtime Split`
 - keep Supabase as source of truth
-- make ingress thin enough to deploy again
-- move heavy execution into a dedicated Node worker runtime
+- keep ingress thin and deployable
+- move the next heavy execution path into the Node worker runtime
 - follow `SAMM_RUNTIME_SPLIT_CONTRACT.md` as the execution contract for this redesign
 
 Current `M14A.1` delivered slice:
 - worker-claim contract added to `pipeline_runs`
 - SQL claim / release / heartbeat functions added
 - isolated `samm-worker/` scaffold added
-- worker currently polls and claims deterministically but does not yet execute live pipeline logic
+- worker now claims deterministically and dispatches `pipeline-b-weekly`
 - deployable thin ingress function added:
   - `coordinator-ingress`
 - ingress handles explicit scheduler paths directly
 - ingress proxies non-explicit chat requests to the currently live `coordinator-chat`
 - frontend hook now points locally to `coordinator-ingress`
+- `coordinator-ingress` is configured with `verify_jwt = false` and auth-bound session verification
+- `pipeline-b-weekly` can reuse a claimed worker run via `worker_run_id`
+- local validation proved:
+  - `run pipeline b` queues through thin ingress
+  - worker claims the queued run
+  - drafts land in Content Registry
+  - approval gate still works
+  - resume path still works
+  - Pipeline B completes successfully after approval
 
 `M14A` remains intentionally narrow:
 - schema
@@ -282,21 +291,24 @@ Success looks like:
 - no external follow-up sending is attempted yet
 
 ## Latest Validation Read
-Manual product validation already confirmed:
+Manual product validation now confirms:
 - Pipeline A runs successfully
 - Pipeline B runs successfully and writes drafts
 - Pipeline C runs successfully with calendar -> inbox -> content flow
 - Pipeline D runs successfully
+- `/samm` explicit scheduler traffic works through `coordinator-ingress`
+- `channel_routes` rows are present
+- `conversation_threads` rows are present
+- first worker handoff path for Pipeline B is validated end to end
 
 Open issue:
 - `/samm` chat remains non-persistent in the UI
-- this is a separate frontend/UI slice, not an `M14A` backend blocker
+- this is a separate frontend/UI slice, not an `M14A` or `M14A.1` backend blocker
 
 Current backend concern:
-- SQL checks for `channel_routes` and `conversation_threads` returned no rows after coordinator-triggered runs
-- hosted deploys for updated functions fail with `Bundle generation timed out`
-- this is now treated as a runtime packaging/platform issue, not a schema issue
-- close `M14A.1` before starting the first generative UI adoption slice
+- hosted deploys for heavier functions still fail with `Bundle generation timed out`
+- thin ingress now works around that blocker for explicit scheduler paths
+- continue `M14A.1` before starting the first generative UI adoption slice
 
 ## Runtime Direction
 Locked decision:
@@ -320,5 +332,6 @@ Locked ingress/worker rule:
 - worker executes approved work against existing durable contracts
 
 Current immediate next implementation step:
-- validate `coordinator-ingress` against live `/samm` traffic
-- then wire worker-targeted enqueueing for `pipeline-b-weekly`
+- commit the validated `M14A.1` slice
+- deploy `samm-worker` to Railway
+- move `pipeline-c-campaign` behind the worker path next

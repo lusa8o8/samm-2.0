@@ -59,10 +59,11 @@ Deno.serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 
-    if (!supabaseUrl || !serviceRoleKey) {
-      throw new Error('Missing Supabase service credentials in function environment')
+    if (!supabaseUrl || !anonKey || !serviceRoleKey) {
+      throw new Error('Missing Supabase credentials in function environment')
     }
 
     const authHeader = req.headers.get('Authorization')
@@ -73,10 +74,17 @@ Deno.serve(async (req) => {
     }
 
     const supabase = createClient(supabaseUrl, serviceRoleKey)
+    const authClient = createClient(supabaseUrl, anonKey, {
+      global: {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      },
+    })
     const {
       data: { user },
       error: userError,
-    } = await supabase.auth.getUser(accessToken)
+    } = await authClient.auth.getUser()
 
     if (userError || !user) {
       return jsonResponse({ error: userError?.message ?? 'Unauthorized' }, 401)

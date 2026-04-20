@@ -25,6 +25,7 @@ function parsePipelineList(value: string | undefined) {
 export const workerConfig = {
   supabaseUrl: requireEnv('SUPABASE_URL'),
   supabaseServiceRoleKey: requireEnv('SUPABASE_SERVICE_ROLE_KEY'),
+  functionsBaseUrl: `${requireEnv('SUPABASE_URL')}/functions/v1`,
   workerId: process.env.SAMM_WORKER_ID?.trim() || `worker-${process.pid}`,
   pollIntervalMs: parsePositiveInt(process.env.SAMM_WORKER_POLL_INTERVAL_MS, DEFAULT_POLL_INTERVAL_MS),
   pipelines: parsePipelineList(process.env.SAMM_WORKER_PIPELINES),

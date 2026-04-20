@@ -150,6 +150,11 @@ Deno.serve(async (req) => {
     : typeof payload?.resumeRunId === 'string'
       ? payload.resumeRunId
       : null
+  const workerRunId = typeof payload?.worker_run_id === 'string'
+    ? payload.worker_run_id
+    : typeof payload?.workerRunId === 'string'
+      ? payload.workerRunId
+      : null
   const coordinatorTaskId = typeof payload?.coordinator_task_id === 'string'
     ? payload.coordinator_task_id
     : null
@@ -173,7 +178,12 @@ Deno.serve(async (req) => {
   }
 
   try {
-    runId = await createPipelineBRun(supabase, context.orgId, coordinatorTaskId)
+    if (workerRunId) {
+      const existingRun = await loadPipelineBRun(supabase, context.orgId, workerRunId)
+      runId = existingRun.id
+    } else {
+      runId = await createPipelineBRun(supabase, context.orgId, coordinatorTaskId)
+    }
 
     console.log('Starting parallel fetch phase...')
 

@@ -90,7 +90,7 @@ Checkpoint commits:
 
 ## M14A - SAMM Memory Layer
 Status:
-- implemented in repo and pushed; live function deployment validation still open
+- complete and live-validated through thin ingress
 
 Goal:
 - make `SAMM` a durable async coordinator before adding CRM, Sales, or learning logic
@@ -133,12 +133,13 @@ Delivered in code:
 - scheduler task/obligation creation + run linkage
 - pipeline lifecycle sync back into `coordinator_tasks`
 
-Open validation note:
+Validation result:
 - production migration is applied
 - manual product testing shows pipelines A/B/C/D still run cleanly
-- production SQL checks returned no rows in `channel_routes` / `conversation_threads`
-- hosted Supabase deploys for the updated runtime are timing out during bundle generation
-- `M14A` is therefore blocked on runtime deployability, not backend semantics
+- production SQL checks now return rows in:
+  - `channel_routes`
+  - `conversation_threads`
+- `M14A` is now considered closed through the thin ingress path
 
 Rollback boundary:
 - tables and runtime wiring can be reverted without touching CRM, Sales, or UI architecture
@@ -201,11 +202,24 @@ Delivered in second slice:
 - ingress proxies non-explicit chat requests to the current live `coordinator-chat`
 - frontend function slug switched locally from `coordinator-chat` to `coordinator-ingress`
 
+Delivered in third slice:
+- `coordinator-ingress` configured for ES256-authenticated browser sessions
+- explicit scheduler traffic now validates `M14A` memory writes in production
+- `pipeline-b-weekly` is queued with `execution_target = 'worker'`
+- worker claims and dispatches Pipeline B through the existing edge executor
+- `pipeline-b-weekly` accepts `worker_run_id` and reuses the claimed run
+- first worker path is validated end to end:
+  - queue
+  - claim
+  - draft creation
+  - approval gate
+  - resume
+  - success
+
 Still open in `M14A.1`:
-- wire ingress to enqueue worker-targeted runs for the first moved execution path
-- move the first live execution path behind the worker
 - deploy the worker scaffold to Railway
-- revalidate `M14A` memory writes in production
+- move `pipeline-c-campaign` behind the worker path
+- decide whether Pipeline B resume should also route through the worker later or remain edge-backed for now
 
 Out of scope:
 - full infra rewrite

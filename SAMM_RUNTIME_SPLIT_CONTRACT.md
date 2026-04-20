@@ -226,6 +226,12 @@ The worker must not depend on frontend-only env vars.
 - linked run/task state still behaves deterministically
 - `M14A` memory writes can finally be validated in production
 
+Current validation state:
+- `coordinator-ingress` is deployed and handling explicit scheduler traffic successfully
+- `channel_routes` and `conversation_threads` now populate in production validation
+- the first worker path is proven for `pipeline-b-weekly`
+- Railway deployment is the next operational step, not a design unknown
+
 ## Explicit Non-Goals
 `M14A.1` does not include:
 - CRM

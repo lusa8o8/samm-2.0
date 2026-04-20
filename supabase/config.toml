@@ -412,6 +412,12 @@ verify_jwt = false
 import_map = "./functions/coordinator-chat/deno.json"
 entrypoint = "./functions/coordinator-chat/index.ts"
 
+[functions.coordinator-ingress]
+enabled = true
+verify_jwt = false
+import_map = "./functions/coordinator-ingress/deno.json"
+entrypoint = "./functions/coordinator-ingress/index.ts"
+
 [functions.pipeline-a-engagement]
 enabled = true
 verify_jwt = false

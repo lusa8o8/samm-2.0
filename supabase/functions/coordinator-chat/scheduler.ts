@@ -22,6 +22,7 @@ const PIPELINE_TARGETS: Record<string, string> = {
   'pipeline-c-campaign': 'pipeline-c-campaign',
   'pipeline-d-post': 'pipeline-d-post',
 }
+const WORKER_PIPELINE_TARGETS = new Set<string>(['pipeline-b-weekly'])
 
 const STALE_RUN_MINUTES = 10
 
@@ -462,6 +463,42 @@ async function schedulePipelineRun(
 
     coordinatorTaskId = taskRecord.taskId
     invokeBody.coordinator_task_id = coordinatorTaskId
+  }
+
+  if (WORKER_PIPELINE_TARGETS.has(pipeline.id)) {
+    const { data: queuedRun, error: queueError } = await supabase
+      .from('pipeline_runs')
+      .insert({
+        org_id: orgId,
+        pipeline: pipeline.id,
+        coordinator_task_id: coordinatorTaskId,
+        status: PIPELINE_RUN_STATUS.QUEUED,
+        execution_target: 'worker',
+      })
+      .select('id')
+      .single()
+
+    if (queueError || !queuedRun?.id) {
+      throw new Error(`Failed to queue ${pipeline.id} for worker execution: ${queueError?.message ?? 'Missing run id'}`)
+    }
+
+    if (coordinatorTaskId) {
+      await linkCoordinatorTaskToPipelineRun(supabase, {
+        taskId: coordinatorTaskId,
+        runId: queuedRun.id,
+      })
+    }
+
+    return {
+      message: `${pipeline.title} has been queued for worker execution. Check Operations for live status.`,
+      suggestions: ['Check pipeline results', 'What needs my approval?', 'Summarize this week'],
+      invoked_action: {
+        type: 'run_pipeline',
+        pipeline: pipeline.id,
+        status: PIPELINE_RUN_STATUS.QUEUED,
+        run_id: queuedRun.id,
+      },
+    }
   }
 
   // Fire the pipeline in the background so coordinator-chat returns immediately.
