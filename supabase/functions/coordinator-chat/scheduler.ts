@@ -7,10 +7,15 @@ import {
   COORDINATOR_TASK_STATUS,
   COORDINATOR_TASK_TYPE,
   createCoordinatorTask,
+  linkCoordinatorTaskToPipelineRun,
   type DashboardMemoryContext,
   syncCoordinatorTaskFromRun,
   updateCoordinatorTaskStatus,
 } from '../_shared/samm-memory.ts'
+import {
+  evaluatePipelineAdmission,
+  loadCampaignCalendarPlanningContext,
+} from '../_shared/calendar-coordination.ts'
 
 // EdgeRuntime is a Supabase Edge Runtime global — not in standard Deno types.
 declare const EdgeRuntime: { waitUntil: (promise: Promise<unknown>) => void }
@@ -403,23 +408,36 @@ async function schedulePipelineRun(
     }
   }
 
-  if (pipeline.id === 'pipeline-c-campaign' && !eventContext) {
-    const today = new Date().toISOString().slice(0, 10)
-    const { data: nextEvents, error } = await supabase
-      .from('academic_calendar')
-      .select('id, label, event_date')
-      .eq('org_id', orgId)
-      .gte('event_date', today)
-      .order('event_date', { ascending: true })
-      .limit(1)
+  const today = new Date().toISOString().slice(0, 10)
+  let schedulerDecisionLogs: Array<Record<string, unknown>> = []
+  let calendarPlanningSummary: Record<string, unknown> | null = null
 
-    if (error) {
-      throw new Error(`Failed to check calendar events: ${error.message}`)
+  if (WORKER_PIPELINE_TARGETS.has(pipeline.id)) {
+    const planningContext = await loadCampaignCalendarPlanningContext(supabase, orgId, today)
+    const admission = evaluatePipelineAdmission({
+      pipelineId: pipeline.id,
+      planningContext,
+      explicitEventId: eventContext ? 'from-nl-trigger' : null,
+    })
+
+    schedulerDecisionLogs = admission.logs
+    calendarPlanningSummary = {
+      planning_horizon_days: planningContext.planning_horizon_days,
+      calendar_windows_considered: planningContext.windows.length,
+      resolved_slots: planningContext.slots.length,
+      baseline_slots: planningContext.baseline_slots.length,
+      support_slots: planningContext.support_slots.length,
+      campaign_slots: planningContext.campaign_slots.length,
     }
 
-    if (!nextEvents?.[0]) {
+    if (!admission.allowed) {
+      const blockedLog = admission.logs[0] ?? null
       return {
-        message: 'Pipeline C needs a future event before it can start. Add an event to the calendar first, then run the campaign again.',
+        message: blockedLog?.reason_code === 'blocked_by_exclusive_campaign'
+          ? `${pipeline.title} is blocked by an exclusive campaign window right now.`
+          : blockedLog?.reason_code === 'blocked_no_campaign_window'
+            ? 'Pipeline C needs a future event before it can start. Add an event to the calendar first, then run the campaign again.'
+            : `${pipeline.title} is blocked by current calendar rules.`,
         suggestions: ['Add a calendar event for next week', 'Show upcoming events', 'Create a campaign for my next event'],
       }
     }
@@ -466,14 +484,16 @@ async function schedulePipelineRun(
   }
 
   if (WORKER_PIPELINE_TARGETS.has(pipeline.id)) {
-    const queuedResult =
-      pipeline.id === 'pipeline-c-campaign' && invokeBody.calendarEvent
-        ? {
-            worker_payload: {
-              calendarEvent: invokeBody.calendarEvent,
-            },
-          }
-        : null
+    const queuedResult: Record<string, unknown> = {
+      scheduler_decisions: schedulerDecisionLogs,
+      calendar_planning: calendarPlanningSummary,
+    }
+
+    if (pipeline.id === 'pipeline-c-campaign' && invokeBody.calendarEvent) {
+      queuedResult.worker_payload = {
+        calendarEvent: invokeBody.calendarEvent,
+      }
+    }
 
     const { data: queuedRun, error: queueError } = await supabase
       .from('pipeline_runs')

@@ -18,6 +18,17 @@ import {
   linkCoordinatorTaskToPipelineRun,
   syncCoordinatorTaskFromRun,
 } from '../_shared/samm-memory.ts'
+import {
+  buildStructuredConfigSummary,
+  loadStructuredConfigSnapshot,
+  type StructuredConfigSnapshot,
+} from '../_shared/structured-config.ts'
+import {
+  deriveCampaignConstraintOutput,
+  resolveCampaignWindow,
+  loadCampaignCalendarPlanningContext,
+  type ResolvedCampaignWindow,
+} from '../_shared/calendar-coordination.ts'
 
 // ── types ─────────────────────────────────────────────────────────────
 interface CalendarEvent {
@@ -50,6 +61,11 @@ interface PipelineCResults {
   campaign_brief_inbox_id?: string | null
   campaign_brief?: CampaignBrief | null
   calendar_event?: CalendarEvent | null
+  campaign_window?: ResolvedCampaignWindow | null
+  campaign_constraints?: CampaignConstraintOutput | null
+  planning_horizon_days?: number
+  calendar_windows_considered?: number
+  resolved_slots?: number
 }
 
 interface CampaignBrief {
@@ -63,6 +79,25 @@ interface CampaignBrief {
   call_to_action: string
   content_needed: string[]
   expected_signups: number
+}
+
+interface CampaignConstraintOutput {
+  owner_pipeline: string
+  exclusive_campaign: boolean
+  support_content_allowed: boolean
+  channels_in_scope: string[]
+  primary_message: string | null
+  allowed_ctas: string[]
+  disallowed_ctas: string[]
+  content_types_required: string[]
+  support_content_types: string[]
+  posting_frequency: string | null
+  priority: number
+  max_posts_per_day: number | null
+  max_posts_per_week: number | null
+  min_gap_between_posts: number | null
+  window_ref: string | null
+  campaign_ref: string | null
 }
 
 // ── org config helper ─────────────────────────────────────────────────
@@ -134,6 +169,7 @@ Deno.serve(async (req) => {
     calendarEvent: undefined,
   }
   let config: any = null
+  let structuredConfig: StructuredConfigSnapshot | null = null
 
   let runId: string | null = null
   const results: PipelineCResults = {
@@ -149,7 +185,12 @@ Deno.serve(async (req) => {
     errors: [],
     campaign_brief_inbox_id: null,
     campaign_brief: null,
-    calendar_event: context.calendarEvent ?? null
+    calendar_event: context.calendarEvent ?? null,
+    campaign_window: null,
+    campaign_constraints: null,
+    planning_horizon_days: 0,
+    calendar_windows_considered: 0,
+    resolved_slots: 0,
   }
 
   try {
@@ -180,6 +221,7 @@ Deno.serve(async (req) => {
     }
 
     config = await getOrgConfig(supabase, context.orgId)
+    structuredConfig = await loadStructuredConfigSnapshot(supabase, context.orgId)
 
     if (resumeRunId) {
       return await resumePipelineCRun({ supabase, anthropic, context, config, runId: resumeRunId })
@@ -197,6 +239,14 @@ Deno.serve(async (req) => {
     }
 
     results.calendar_event = event
+    const campaignWindow = resolveCampaignWindow(event, {
+      defaultChannels: structuredConfig?.campaignDefaults?.default_channels ?? undefined,
+    })
+    results.campaign_window = campaignWindow
+    const planningContext = await loadCampaignCalendarPlanningContext(supabase, context.orgId, context.today)
+    results.planning_horizon_days = planningContext.planning_horizon_days
+    results.calendar_windows_considered = planningContext.windows.length
+    results.resolved_slots = planningContext.slots.length
 
     console.log(`Pipeline C triggered for: ${event.label}`)
 
@@ -225,10 +275,12 @@ Deno.serve(async (req) => {
     const campaignBrief = await runCampaignPlanner(
       anthropic,
       event,
+      campaignWindow,
       perfResult,
       competitorResult,
       ambassadorResult,
-      context.today
+      context.today,
+      structuredConfig
     )
 
     results.campaign_name = campaignBrief.name
@@ -241,6 +293,7 @@ Deno.serve(async (req) => {
         priority: 'urgent',
         payload: {
           campaign_brief: campaignBrief,
+          campaign_constraints: deriveCampaignConstraintOutput(campaignWindow, { campaignBrief }),
           event_label: event.label,
           event_date: event.event_date,
           universities: event.universities,
@@ -262,6 +315,7 @@ Deno.serve(async (req) => {
     results.campaign_name = campaignBrief.name
     results.campaign_brief = campaignBrief
     results.campaign_brief_inbox_id = inboxRow?.id ?? null
+    results.campaign_constraints = deriveCampaignConstraintOutput(campaignWindow, { campaignBrief }) as CampaignConstraintOutput | null
     console.log(`Campaign brief sent to CEO inbox: "${campaignBrief.name}"`)
 
     await updatePipelineCRun(
@@ -377,7 +431,12 @@ async function resumePipelineCRun(params: { supabase: any; anthropic: ReturnType
     errors: Array.isArray(stored.errors) ? stored.errors : [],
     campaign_brief_inbox_id: stored.campaign_brief_inbox_id ?? null,
     campaign_brief: stored.campaign_brief ?? null,
-    calendar_event: stored.calendar_event ?? context.calendarEvent ?? null
+    calendar_event: stored.calendar_event ?? context.calendarEvent ?? null,
+    campaign_window: stored.campaign_window ?? null,
+    campaign_constraints: stored.campaign_constraints ?? null,
+    planning_horizon_days: stored.planning_horizon_days ?? 0,
+    calendar_windows_considered: stored.calendar_windows_considered ?? 0,
+    resolved_slots: stored.resolved_slots ?? 0,
   }
 
   await updatePipelineCRun(supabase, runId, PIPELINE_RUN_STATUS.RESUMED, results)
@@ -408,6 +467,11 @@ async function resumePipelineCRun(params: { supabase: any; anthropic: ReturnType
     const campaignBrief = results.campaign_brief
     const event = results.calendar_event
     if (!campaignBrief || !event) throw new Error('Pipeline C resume is missing stored campaign brief or calendar event context')
+    const campaignWindow = results.campaign_window ?? resolveCampaignWindow(event)
+    const campaignConstraints = results.campaign_constraints
+      ?? (deriveCampaignConstraintOutput(campaignWindow, { campaignBrief }) as CampaignConstraintOutput | null)
+    results.campaign_window = campaignWindow
+    results.campaign_constraints = campaignConstraints
 
     // ── STAGE 2: marketer approval gate ───────────────────────────────
     // If copy assets have already been created, this is the second resume.
@@ -502,7 +566,16 @@ async function resumePipelineCRun(params: { supabase: any; anthropic: ReturnType
           campaign_name: campaignBrief.name,
           pipeline_run_id: runId,
           scheduled_at: schedules[i],
-          created_by: 'pipeline-c-campaign'
+          created_by: 'pipeline-c-campaign',
+          metadata: {
+            owner_pipeline: 'pipeline-c-campaign',
+            purpose: 'campaign',
+            content_type: asset.type ?? 'campaign',
+            cta_text: campaignConstraints?.allowed_ctas?.[0] ?? campaignBrief.call_to_action,
+            window_ref: campaignWindow.window_id,
+            campaign_ref: campaignWindow.event_id,
+            campaign_constraints: campaignConstraints,
+          },
         })
     }
 
@@ -514,7 +587,14 @@ async function resumePipelineCRun(params: { supabase: any; anthropic: ReturnType
       is_campaign_post: true,
       campaign_name: campaignBrief.name,
       pipeline_run_id: runId,
-      created_by: 'pipeline-c-campaign'
+      created_by: 'pipeline-c-campaign',
+      metadata: {
+        owner_pipeline: 'pipeline-c-campaign',
+        purpose: 'campaign',
+        content_type: 'design_brief',
+        window_ref: campaignWindow.window_id,
+        campaign_ref: campaignWindow.event_id,
+      },
     })
 
     if (briefInsertError) {
@@ -619,12 +699,14 @@ async function runAmbassadorReporter(supabase: any, context: PipelineContext) {
 async function runCampaignPlanner(
   anthropic: ReturnType<typeof createAnthropicClient>,
   event: CalendarEvent,
+  campaignWindow: ResolvedCampaignWindow,
   perfData: any,
   competitorData: any,
   ambassadorData: any,
-  today: string
+  today: string,
+  structuredConfig: StructuredConfigSnapshot,
 ): Promise<CampaignBrief> {
-
+  const structuredSummary = buildStructuredConfigSummary(structuredConfig, today)
   const daysUntilEvent = Math.max(
     1,
     Math.ceil((new Date(event.event_date).getTime() - new Date(today).getTime()) / (1000 * 60 * 60 * 24))
@@ -638,6 +720,7 @@ async function runCampaignPlanner(
     maxTokens: 1000,
     system: `You are the campaign strategist for this workspace.
 Create a focused campaign brief for the upcoming event.
+Treat the campaign calendar, ICP, offer catalog, seasonality, approval policy, and outreach defaults as source-of-truth business constraints.
 Respond with JSON only matching this structure exactly:
 {
   "name": "campaign name",
@@ -658,10 +741,14 @@ Event date: ${event.event_date}
 Audience tags: ${event.universities.join(', ')}
 Days until event: ${daysUntilEvent}
 Maximum campaign duration: ${maxDurationDays} days. This is days, not weeks. duration_days in your response must be a number between 1 and ${maxDurationDays}. Do not write "week" or "weeks" anywhere in the brief - use days only.
+Campaign window owner: ${campaignWindow.owner_pipeline}
+Campaign window constraints: ${JSON.stringify(deriveCampaignConstraintOutput(campaignWindow), null, 2)}
 
 Performance context: ${JSON.stringify(perfData)}
 Competitor opportunity: ${JSON.stringify(competitorData)}
 Ambassador coverage: ${JSON.stringify(ambassadorData)}
+Structured business config:
+${structuredSummary}
 
 Create the campaign brief.`
     }],
@@ -1003,29 +1090,27 @@ Current platform metrics: ${JSON.stringify(metrics?.slice(0, 4))}`
 // (e.g. standalone "run the campaign pipeline" command). Queries for the
 // nearest upcoming event rather than falling back to a hardcoded demo.
 async function getNextCalendarEvent(supabase: any, orgId: string, today: string): Promise<CalendarEvent> {
-  const { data, error } = await supabase
-    .from('academic_calendar')
-    .select('id, event_type, event_date, event_end_date, label, universities, lead_days, creative_override_allowed')
-    .eq('org_id', orgId)
-    .gte('event_date', today)
-    .order('event_date', { ascending: true })
-    .limit(1)
-    .single()
+  const planningContext = await loadCampaignCalendarPlanningContext(supabase, orgId, today)
+  const nextWindow = planningContext.windows.find((window) => window.owner_pipeline === 'pipeline-c-campaign')
+  const nextEvent = nextWindow
+    ? planningContext.events.find((event) => event.id === nextWindow.event_id)
+    : null
 
-  if (error || !data) {
+  if (!nextWindow) {
     throw new Error(
       'No upcoming calendar event found. Add an event to the calendar before running a campaign.'
     )
   }
 
   return {
-    id: data.id,
-    event_type: data.event_type ?? 'other',
-    event_date: data.event_date,
-    event_end_date: data.event_end_date ?? null,
-    label: data.label,
-    universities: data.universities ?? [],
-    lead_days: data.lead_days ?? 21,
+    id: nextWindow.event_id,
+    event_type: nextWindow.event_type ?? 'other',
+    event_date: nextWindow.event_date,
+    event_end_date: nextWindow.event_end_date ?? null,
+    label: nextWindow.label,
+    universities: nextWindow.universities ?? [],
+    lead_days: nextWindow.lead_days ?? 21,
+    creative_override_allowed: Boolean(nextEvent?.creative_override_allowed ?? false),
   }
 }
 

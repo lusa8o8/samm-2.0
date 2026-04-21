@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import {
   useGetOrgConfig,
   useUpdateOrgConfig,
@@ -101,6 +101,69 @@ export default function AgentSettings() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
+  const isActiveRecord = (value: unknown) =>
+    value === true || value === undefined || value === null || value === 1 || value === "true";
+
+  const activeIcpCount = useMemo(
+    () => icpCategories.filter((item) => isActiveRecord(item.active)).length,
+    [icpCategories]
+  );
+
+  const activeOfferCount = useMemo(
+    () => offerCatalog.filter((item) => isActiveRecord(item.active)).length,
+    [offerCatalog]
+  );
+
+  const displaySeasonalityProfiles = useMemo(() => {
+    const byName = new Map<string, (typeof seasonalityProfiles)[number]>();
+
+    for (const profile of seasonalityProfiles) {
+      const key = (profile.name ?? "").trim().toLowerCase() || profile.id;
+      const existing = byName.get(key);
+
+      if (!existing) {
+        byName.set(key, profile);
+        continue;
+      }
+
+      const existingScore =
+        ((existing.seasonality_periods ?? []).length * 10000) +
+        (isActiveRecord(existing.active) ? 1000 : 0) +
+        new Date(existing.updated_at ?? existing.created_at ?? 0).getTime();
+      const nextScore =
+        ((profile.seasonality_periods ?? []).length * 10000) +
+        (isActiveRecord(profile.active) ? 1000 : 0) +
+        new Date(profile.updated_at ?? profile.created_at ?? 0).getTime();
+
+      if (nextScore >= existingScore) {
+        byName.set(key, profile);
+      }
+    }
+
+    return Array.from(byName.values()).sort((a, b) => {
+      const aScore =
+        ((a.seasonality_periods ?? []).length * 10000) +
+        (isActiveRecord(a.active) ? 1000 : 0) +
+        new Date(a.updated_at ?? a.created_at ?? 0).getTime();
+      const bScore =
+        ((b.seasonality_periods ?? []).length * 10000) +
+        (isActiveRecord(b.active) ? 1000 : 0) +
+        new Date(b.updated_at ?? b.created_at ?? 0).getTime();
+
+      return bScore - aScore;
+    });
+  }, [seasonalityProfiles]);
+
+  const activeSeasonalityProfileCount = useMemo(
+    () => displaySeasonalityProfiles.filter((profile) => isActiveRecord(profile.active)).length,
+    [displaySeasonalityProfiles]
+  );
+
+  const configuredSeasonalityPeriods = useMemo(
+    () => displaySeasonalityProfiles.reduce((total, profile) => total + (profile.seasonality_periods?.length ?? 0), 0),
+    [displaySeasonalityProfiles]
+  );
+
   const [orgData, setOrgData] = useState<any>({});
   const [brandData, setBrandData] = useState<any>({});
   const [visualData, setVisualData] = useState<any>({});
@@ -194,14 +257,14 @@ export default function AgentSettings() {
   }, [offerCatalog]);
 
   useEffect(() => {
-    if (seasonalityProfiles.length && !seasonalityInitialized.current) {
+    if (displaySeasonalityProfiles.length && !seasonalityInitialized.current) {
       setSeasonalityEditor({
-        ...seasonalityProfiles[0],
-        seasonality_periods_json: JSON.stringify(seasonalityProfiles[0].seasonality_periods ?? [], null, 2),
+        ...displaySeasonalityProfiles[0],
+        seasonality_periods_json: JSON.stringify(displaySeasonalityProfiles[0].seasonality_periods ?? [], null, 2),
       });
       seasonalityInitialized.current = true;
     }
-  }, [seasonalityProfiles]);
+  }, [displaySeasonalityProfiles]);
 
   useEffect(() => {
     if (discountPolicies.length && !discountInitialized.current) {
@@ -623,7 +686,21 @@ export default function AgentSettings() {
         discount_allowed: false,
         approval_required: false,
         priority_score: 0,
-      }
+        }
+      );
+
+  const hydrateOfferEditor = (next?: any) =>
+    resetOfferEditor(
+      next
+        ? {
+            ...next,
+            active: next.active ?? true,
+            base_price: next.base_price ?? "",
+            applicable_channels_csv: Array.isArray(next.applicable_channels)
+              ? next.applicable_channels.join(", ")
+              : "",
+          }
+        : undefined
     );
 
   const resetSeasonalityEditor = (next?: any) =>
@@ -634,6 +711,17 @@ export default function AgentSettings() {
         active: true,
         seasonality_periods_json: "[]",
       }
+    );
+
+  const hydrateSeasonalityEditor = (next?: any) =>
+    resetSeasonalityEditor(
+      next
+        ? {
+            ...next,
+            active: next.active ?? true,
+            seasonality_periods_json: JSON.stringify(next.seasonality_periods ?? [], null, 2),
+          }
+        : undefined
     );
 
   const resetDiscountEditor = (next?: any) =>
@@ -692,7 +780,7 @@ export default function AgentSettings() {
 
   const handleSaveOffer = async () => {
     try {
-      await upsertOfferCatalogItem.mutateAsync({
+      const saved = await upsertOfferCatalogItem.mutateAsync({
         data: {
           id: offerEditor.id,
           name: offerEditor.name?.trim(),
@@ -715,7 +803,8 @@ export default function AgentSettings() {
           priority_score: Number(offerEditor.priority_score ?? 0),
         },
       });
-      queryClient.invalidateQueries({ queryKey: getListOfferCatalogQueryKey() });
+      hydrateOfferEditor(saved);
+      await queryClient.invalidateQueries({ queryKey: getListOfferCatalogQueryKey() });
       toast({ title: "Offer saved", description: "Offer catalog item updated successfully." });
     } catch (err) {
       toast({ title: "Save failed", description: (err as Error).message, variant: "destructive" });
@@ -724,7 +813,7 @@ export default function AgentSettings() {
 
   const handleSaveSeasonality = async () => {
     try {
-      await upsertSeasonalityProfile.mutateAsync({
+      const saved = await upsertSeasonalityProfile.mutateAsync({
         data: {
           id: seasonalityEditor.id,
           name: seasonalityEditor.name?.trim(),
@@ -736,7 +825,8 @@ export default function AgentSettings() {
           ),
         },
       });
-      queryClient.invalidateQueries({ queryKey: getListSeasonalityProfilesQueryKey() });
+      hydrateSeasonalityEditor(saved);
+      await queryClient.invalidateQueries({ queryKey: getListSeasonalityProfilesQueryKey() });
       toast({ title: "Seasonality saved", description: "Demand profile updated successfully." });
     } catch (err) {
       toast({ title: "Save failed", description: (err as Error).message, variant: "destructive" });
@@ -909,7 +999,7 @@ export default function AgentSettings() {
                     </div>
                     <div className="mt-3 text-2xl font-semibold">{icpCategories.length}</div>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {icpCategories.length ? `${icpCategories.filter((item) => item.active).length} active audience segments configured.` : "No audience segments configured yet."}
+                      {icpCategories.length ? `${activeIcpCount} active audience segments configured.` : "No audience segments configured yet."}
                     </p>
                   </div>
                   <div className="rounded-lg border bg-background p-4">
@@ -918,7 +1008,7 @@ export default function AgentSettings() {
                     </div>
                     <div className="mt-3 text-2xl font-semibold">{offerCatalog.length}</div>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {offerCatalog.length ? `${offerCatalog.filter((item) => item.active).length} active offers available for campaigns.` : "No offers configured yet."}
+                      {offerCatalog.length ? `${activeOfferCount} active offers available for campaigns.` : "No offers configured yet."}
                     </p>
                   </div>
                   <div className="rounded-lg border bg-background p-4">
@@ -926,10 +1016,12 @@ export default function AgentSettings() {
                       <CalendarRange className="h-3.5 w-3.5" /> Seasonality
                     </div>
                     <div className="mt-3 text-2xl font-semibold">
-                      {seasonalityProfiles.reduce((total, profile) => total + (profile.seasonality_periods?.length ?? 0), 0)}
+                      {configuredSeasonalityPeriods}
                     </div>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {seasonalityProfiles.length ? `${seasonalityProfiles.length} profiles controlling demand and campaign intensity.` : "No seasonality profiles configured yet."}
+                      {displaySeasonalityProfiles.length
+                        ? `${activeSeasonalityProfileCount} active profiles controlling demand and campaign intensity.`
+                        : "No seasonality profiles configured yet."}
                     </p>
                   </div>
                 </div>
@@ -985,10 +1077,10 @@ export default function AgentSettings() {
 
                 <div className="mt-5 rounded-lg border bg-background p-4">
                   <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Seasonality &amp; outreach overview</div>
-                  {seasonalityProfiles.length || outreachPolicies.length ? (
+                  {displaySeasonalityProfiles.length || outreachPolicies.length ? (
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                       <div className="space-y-3">
-                        {seasonalityProfiles.slice(0, 2).map((profile) => (
+                        {displaySeasonalityProfiles.slice(0, 2).map((profile) => (
                           <div key={profile.id} className="rounded-md border p-3">
                             <div className="text-sm font-medium">{profile.name}</div>
                             <p className="mt-1 text-xs text-muted-foreground">{profile.description || "No description yet."}</p>
@@ -1227,7 +1319,7 @@ export default function AgentSettings() {
                     </Button>
                   </div>
                   <div className="mb-4 flex flex-wrap gap-2">
-                    {seasonalityProfiles.map((profile) => (
+                    {displaySeasonalityProfiles.map((profile) => (
                       <Button
                         key={profile.id}
                         size="sm"

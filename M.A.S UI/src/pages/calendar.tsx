@@ -46,6 +46,7 @@ type EventFormData = {
   label: string;
   universities: string[];
   creative_override_allowed: boolean;
+  support_content_allowed: boolean;
 };
 
 
@@ -160,18 +161,34 @@ function EventForm({
         </p>
       </div>
       {["seasonal", "promotion", "other"].includes(value.event_type) && (
-        <div className="flex items-start gap-3 rounded-md border border-amber-100 bg-amber-50/50 p-3">
-          <Switch
-            checked={value.creative_override_allowed}
-            onCheckedChange={(v) => onChange({ ...value, creative_override_allowed: v })}
-          />
-          <div>
-            <Label className="flex items-center gap-1.5 text-xs font-semibold text-amber-800">
-              <Sparkles className="h-3 w-3" /> Allow creative deviation
-            </Label>
-            <p className="mt-0.5 text-[11px] leading-snug text-amber-700/80">
-              Permits the design agent to deviate from the brand palette within the accent color family. Use for seasonal or celebratory events.
-            </p>
+        <div className="space-y-3 rounded-md border border-amber-100 bg-amber-50/50 p-3">
+          <div className="flex items-start gap-3">
+            <Switch
+              checked={value.support_content_allowed}
+              onCheckedChange={(v) => onChange({ ...value, support_content_allowed: v })}
+            />
+            <div>
+              <Label className="text-xs font-semibold text-amber-800">
+                Allow support content
+              </Label>
+              <p className="mt-0.5 text-[11px] leading-snug text-amber-700/80">
+                Lets Pipeline B fill support-only slots inside this campaign window. Support content must follow the campaign CTA, message, and channel rules.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3">
+            <Switch
+              checked={value.creative_override_allowed}
+              onCheckedChange={(v) => onChange({ ...value, creative_override_allowed: v })}
+            />
+            <div>
+              <Label className="flex items-center gap-1.5 text-xs font-semibold text-amber-800">
+                <Sparkles className="h-3 w-3" /> Allow creative deviation
+              </Label>
+              <p className="mt-0.5 text-[11px] leading-snug text-amber-700/80">
+                Permits the design agent to deviate from the brand palette within the accent color family. Use for seasonal or celebratory events.
+              </p>
+            </div>
           </div>
         </div>
       )}
@@ -191,6 +208,7 @@ const BLANK_FORM: EventFormData = {
   label: "",
   universities: [],
   creative_override_allowed: false,
+  support_content_allowed: false,
 };
 
 export default function Calendar() {
@@ -230,6 +248,7 @@ export default function Calendar() {
       label: event.label,
       universities: event.universities ?? [],
       creative_override_allowed: event.creative_override_allowed ?? false,
+      support_content_allowed: event.support_content_allowed ?? false,
     });
     setEditEvent(event);
   }

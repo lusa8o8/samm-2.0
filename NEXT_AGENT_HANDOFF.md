@@ -36,7 +36,7 @@ Before touching code, reread:
 - `VALIDATION_FOUNDATIONS.md`
 
 ## Current Build Status
-Stable through `M14A` on `main`, with `M14A.1` now validated locally and on Railway for both initial worker paths.
+Stable through `M14A` on `main`, with `M14A.1` validated locally and on Railway for both initial worker paths, and `M14B` now materially advanced through the first deterministic calendar-control slices.
 
 Latest pushed `M14A` commits:
 - `a68b790` `docs: lock SAMM 2.0 milestone and contract docs`
@@ -49,7 +49,7 @@ The source of truth is now:
 - this file for current institutional memory and next-slice guidance
 
 ## Current Active Slice
-`M14A` is now live-validated through the new thin ingress path, and the initial `M14A.1` worker split slice is now validated for both `pipeline-b-weekly` and `pipeline-c-campaign`.
+`M14A` is live-validated, `M14A.1` is validated for both initial worker paths, and `M14B` is the active milestone.
 
 Resolved blocker:
 - the database migration is live
@@ -63,12 +63,12 @@ The runtime blocker is now resolved for the scoped heavy paths:
 - keep Railway worker as the active execution plane for the moved heavy paths
 - follow `SAMM_RUNTIME_SPLIT_CONTRACT.md` as the execution contract for future runtime moves
 
-The next planning focus is now explicitly:
+The active planning focus is now explicitly:
 - `M14B` as universal structured config with ICP retained as first-class targeting truth
 - incremental adoption of the packaged `samm 2.0 UI` shared-workspace shell
 - use `M.A.S UI` as grounding for missing operational/admin surfaces rather than replacing the whole frontend at once
 
-`M14B` has now started in backend-first form:
+`M14B` has now moved well past the schema foundation and into deterministic calendar-control behavior:
 - the universal config schema foundation is live in Supabase
 - `provision-org` now seeds default rows for:
   - `campaign_defaults`
@@ -87,6 +87,72 @@ The next planning focus is now explicitly:
   - `outreach_policy`
 - these write forms intentionally use compact fields and JSON-backed inputs where needed to keep `M14B` narrow
 - ICP remains explicitly locked in the config model
+- both planners now read structured config through:
+  - `supabase/functions/_shared/structured-config.ts`
+- `Pipeline C` is now materially more grounded by config than before this slice
+- `Pipeline B` is improved but still under-grounded relative to the configured offer / ICP / seasonality / CTA
+- current settings summary / persistence cleanup is validated for:
+  - active ICP counts
+  - active offer counts
+  - seasonality persistence
+  - active seasonality profile counts
+- `campaign_calendar` semantics now resolve through the shared calendar helper
+- scheduler admission checks now gate:
+  - `pipeline-b-weekly`
+  - `pipeline-c-campaign`
+- `Pipeline C` now emits structured campaign constraints into runs, inbox payloads, and campaign asset metadata
+- `Pipeline B` now plans only against resolved baseline/support slots and tags output metadata with slot/window/campaign context
+- `publish-scheduled` now runs calendar preflight before final publish/schedule actions
+- the `Pipeline C` resume-path regression (`campaignWindow is not defined`) is fixed and revalidated on the live happy path
+- current validated live behavior is:
+  - `Pipeline C` owns exclusive campaign windows
+  - `Pipeline B` is blocked during those exclusive windows
+  - `Pipeline C` still lands `6` copy assets plus the design brief
+- `Pipeline B` still lands `9` drafts when the calendar allows it
+- the latest `Pipeline B` planner-fidelity slice is also live:
+  - deterministic slot directives are built before planning
+  - directives now push required content type, CTA intent, and angle constraints per slot
+  - planner/copywriter now receive stronger structured-config grounding:
+    - primary offer
+    - primary audience / ICP
+    - active seasonality
+    - structured config summary
+    - approved hashtags
+    - post-format preference
+- current honest read:
+  - `Pipeline C` remains the more grounded path
+  - `Pipeline B` is better, but not yet considered fully tuned
+  - some “Chililabombwe/raw/wild” repetition still comes from explicit brand config, not only from planner drift
+
+The next `M14B` focus is explicitly:
+- not a new milestone expansion
+- not UI-first work
+- deterministic tightening of the remaining business-truth and planning-truth layers through:
+  - deterministic baseline content strategy / distribution rules for `Pipeline B`
+  - richer slot budgeting and support-content behavior beyond the current exclusive-window gate
+  - final grounding pass so `Pipeline B` reflects slot directives and config with less residual brand-keyword overuse
+
+From this point forward, implementation must move in test-checkpoint slices:
+- lock contract
+- implement one narrow layer
+- run a concrete validation checkpoint
+- only then continue
+
+The current `M14B` checkpoint sequence that is already implemented and validated is:
+1. calendar-domain helper / slot resolution
+2. scheduler conflict checks + decision logs
+3. `Pipeline C` campaign-constraint output tightening
+4. `Pipeline B` planning against allowed baseline/support slots
+5. schedule/publish preflight validation
+
+The next allowed `M14B` slice now starts after that checkpoint, not before it.
+
+Calendar Studio note:
+- do not implement the UI yet
+- treat it as a backend/domain contract target
+- preserve explainable windows, slots, constraints, linked content refs, and decision reasons for future UI consumption
+
+This remains a continuation of `M14B`, not a new branch of work.
 
 Current `M14A.1` delivered slice:
 - worker-claim contract added to `pipeline_runs`
@@ -249,6 +315,16 @@ It does not exist for:
 - `M16A` `Pipeline Standardization`
 
 This order is locked unless the roadmap docs are explicitly amended first.
+
+## Current Source-Of-Truth Clarification
+Current roadmap truth:
+- `M14A` and `M14A.1` are complete for the scoped foundation and worker split
+- `M14B` is active and now includes:
+  - universal config schema
+  - current-settings read/write surfaces
+  - first planner adoption
+- the next planning work remains inside `M14B`
+- do not let the new baseline content-strategy and B/C calendar coordination contracts masquerade as a separate milestone family before `M14B` is tightened
 
 ## Product State
 `samm` remains the product anchor.

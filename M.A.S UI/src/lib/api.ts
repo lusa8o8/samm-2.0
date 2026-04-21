@@ -1491,12 +1491,23 @@ export function useUpsertSeasonalityProfile(options?: MutationHookOptions) {
       if (deletePeriodsError) throw deletePeriodsError;
 
       if (data.seasonality_periods.length) {
-        const periodsPatch = data.seasonality_periods.map((period) => ({
-          ...period,
-          id: period.id,
-          org_id: getOrgId(),
-          seasonality_profile_id: profileId,
-        }));
+        const periodsPatch = data.seasonality_periods.map((period) => {
+          const { id, name, period_type, starts_on, ends_on, demand_level, allow_discounts, outreach_intensity, campaign_priority, notes } = period;
+          return {
+            ...(id ? { id } : {}),
+            name,
+            period_type,
+            starts_on,
+            ends_on,
+            demand_level,
+            allow_discounts,
+            outreach_intensity,
+            campaign_priority,
+            notes,
+            org_id: getOrgId(),
+            seasonality_profile_id: profileId,
+          };
+        });
 
         const { error: insertPeriodsError } = await supabase
           .from("seasonality_periods")
@@ -1677,12 +1688,21 @@ export function useCreateCalendarEvent(options?: MutationHookOptions) {
     mutationFn: async ({
       data,
     }: {
-      data: { event_type: string; event_date: string; event_end_date?: string | null; label: string; universities: string[]; creative_override_allowed?: boolean };
+      data: {
+        event_type: string;
+        event_date: string;
+        event_end_date?: string | null;
+        label: string;
+        universities: string[];
+        creative_override_allowed?: boolean;
+        support_content_allowed?: boolean;
+      };
     }) => {
       const payload = {
         ...data,
         event_end_date: data.event_end_date || null,
         creative_override_allowed: data.creative_override_allowed ?? false,
+        support_content_allowed: data.support_content_allowed ?? false,
         org_id: getOrgId(),
         triggered: false,
         lead_days: 21,
@@ -1709,7 +1729,15 @@ export function useUpdateCalendarEvent(options?: MutationHookOptions) {
       data,
     }: {
       id: string;
-      data: Partial<{ event_type: string; event_date: string; event_end_date?: string | null; label: string; universities: string[]; creative_override_allowed?: boolean }>;
+      data: Partial<{
+        event_type: string;
+        event_date: string;
+        event_end_date?: string | null;
+        label: string;
+        universities: string[];
+        creative_override_allowed?: boolean;
+        support_content_allowed?: boolean;
+      }>;
     }) => {
       const { data: updated, error } = await supabase
         .from("academic_calendar")

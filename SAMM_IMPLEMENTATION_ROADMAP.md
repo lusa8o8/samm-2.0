@@ -7,8 +7,9 @@ The current strategy is:
 - preserve the active scheduler-first marketing core
 - weave in the missing deterministic layers
 - keep the build Supabase-first
-- stay single-server only until a blocker forces a controlled split
+- keep the current thin-ingress plus Railway worker split controlled and minimal
 - execute in narrow, reversible milestone slices
+- end every implementation slice at a real test checkpoint before the next slice begins
 
 ## Current Stable Baseline
 Stable through `M13I` on `main`.
@@ -258,7 +259,97 @@ Rollback boundary:
 
 ## M14B - Structured Config Expansion
 Status:
-- in progress, with schema foundation, read contracts, and current-settings write surfaces live
+- in progress
+
+Goal:
+- make config and calendar the deterministic planning-truth layers for `Pipeline B` and `Pipeline C`
+
+Delivered so far:
+- universal config schema foundation
+- current settings read/write surfaces for:
+  - ICP
+  - offers
+  - seasonality
+  - discount policies
+  - outreach policies
+- planner access to structured config through `_shared/structured-config.ts`
+- first planner adoption in `pipeline-b-weekly` and `pipeline-c-campaign`
+- settings cleanup slices for:
+  - active ICP counts
+  - active offer counts
+  - seasonality persistence
+  - seasonality duplicate-profile display cleanup
+- calendar-domain helper and slot resolution through:
+  - `supabase/functions/_shared/calendar-coordination.ts`
+- scheduler admission checks and structured decision output for:
+  - `pipeline-b-weekly`
+  - `pipeline-c-campaign`
+- `Pipeline C` structured campaign-constraint output in:
+  - `pipeline_runs.result`
+  - `human_inbox.payload`
+  - campaign draft metadata in `content_registry`
+- `Pipeline B` slot-aware planning against allowed baseline / support slots only
+- calendar-aware publish preflight validation in `publish-scheduled`
+
+Current validation read:
+- `Pipeline C` is materially more grounded by config
+- `Pipeline B` remains under-grounded relative to configured offer / ICP / seasonality / CTA
+- weekly planning drift is now treated as a missing deterministic contract issue, not merely prompt quality
+- calendar authority is now live:
+  - `Pipeline C` owns exclusive campaign windows
+  - `Pipeline B` is blocked during exclusive windows
+- `Pipeline C` happy path is validated after the resume-path fix:
+  - campaign brief lands
+  - `6` copy assets land
+  - design brief lands
+- `Pipeline B` still runs normally when allowed and lands `9` drafts
+- publish/send legality now has a deterministic calendar firewall before final action
+- the latest `Pipeline B` planner-fidelity slice is now live and validated:
+  - baseline slot directives are derived deterministically before planning
+  - slot directives now carry:
+    - required content type
+    - stronger CTA rule
+    - angle constraint
+  - planner and copywriter prompts now treat brand keywords as supporting proof, not the central idea of every baseline post
+  - planner/copywriter now see:
+    - primary offer CTA
+    - primary audience segment and description
+    - active seasonality summary
+    - structured config summary
+    - approved hashtags
+    - post-format preference
+- practical read:
+  - `Pipeline C` remains the stronger grounded path
+  - `Pipeline B` grounding is improved but still not considered final
+  - some repeated local/source language can still appear because it is explicitly present in brand config, not only because of planner drift
+
+Locked expansion inside `M14B`:
+- baseline content strategy / distribution rules
+- `Pipeline B` / `Pipeline C` calendar coordination rules
+- slot contract and support-content contract
+- scheduler decision logs
+- campaign constraint schema
+- planning horizon and deterministic tie-break rules
+- Calendar Studio backend readiness as a domain contract, not as a UI implementation task
+
+Implementation rule from this point forward:
+- every `M14B` code slice must end at a test checkpoint
+- no next slice starts until the current slice has a concrete validation read
+
+Next allowed `M14B` sequence:
+1. lock contracts in docs
+2. add calendar-domain helpers and slot resolution
+3. add scheduler conflict checks and decision logging
+4. update `Pipeline C` to claim and expose campaign constraints
+5. update `Pipeline B` to plan only against allowed baseline/support slots
+6. add schedule/publish preflight validation
+7. tighten remaining config fidelity and posting-control behavior without leaving `M14B`
+
+Out of scope for the current `M14B` extension:
+- Calendar Studio UI implementation
+- visual redesign work
+- full calendar normalization into new physical tables unless wrappers become inadequate
+- in progress, with schema foundation, read/write surfaces, and first planner adoption live
 
 Goal:
 - turn business truth into deterministic universal structured config before outreach or sales automation expands
@@ -342,9 +433,78 @@ Delivered in third slice:
   - `outreach_policy`
 - the current admin UI intentionally uses compact inputs and JSON-backed fields where needed to keep this milestone narrow and reversible
 
+Delivered in fourth slice:
+- `pipeline-b-weekly` now loads structured config and includes it in weekly planning context
+- `pipeline-c-campaign` now loads structured config and includes it in campaign planner context
+- shared structured-config loader now exists in:
+  - `supabase/functions/_shared/structured-config.ts`
+- seasonality save path in the current settings UI is fixed against the real schema:
+  - unsupported `active` field removed from `seasonality_periods`
+  - new periods now omit `id` so DB-generated UUIDs work
+- `coordinator-ingress` explicit pipeline-start path is fixed again after the missing `linkCoordinatorTaskToPipelineRun` import
+- `pipeline-b-weekly` and `pipeline-c-campaign` are redeployed against the corrected structured-config loader
+
+Current validation read:
+- `Pipeline C` is now materially more grounded by config than before the `M14B` planner adoption slice
+- `Pipeline B` is improved, but still not strongly enough governed by config to call fidelity complete
+- `Pipeline B` drift is now understood as an under-specified deterministic layer issue, not a runtime issue
+- settings summary / persistence cleanup is now validated for:
+  - active ICP counts
+  - active offer counts
+  - seasonality persistence
+  - active seasonality profile counts
+- duplicate retry-created seasonality profiles no longer distort the current admin summary surfaces
+
+Delivered in fifth slice:
+- current `Operations -> Settings` now rehydrates saved offer and seasonality state correctly after writes
+- active ICP and active-offer summary counts now reflect stored state correctly
+- seasonality profile views now prefer the populated saved profile over duplicate retry-created rows
+- seasonality periods now persist and re-open correctly in the editor
+
+Delivered in sixth slice:
+- shared calendar-domain helper now resolves:
+  - campaign windows
+  - slot ownership
+  - planning horizon
+  - support/baseline slot semantics
+- `pipeline-b-weekly` and `pipeline-c-campaign` now write calendar-planning metadata into `pipeline_runs.result`
+- scheduler admission checks now persist structured `scheduler_decisions` / `calendar_planning`
+- explicit `Pipeline B` requests are now blocked during exclusive `Pipeline C` windows instead of improvising around them
+
+Delivered in seventh slice:
+- `Pipeline C` now emits structured campaign constraints into:
+  - `pipeline_runs.result`
+  - campaign brief inbox payloads
+  - campaign draft metadata
+- `Pipeline B` now plans only against resolved baseline/support slots and tags drafts with:
+  - `slot_ref`
+  - `window_ref`
+  - `campaign_ref`
+  - `purpose`
+  - `content_type`
+  - `cta_text`
+- support content rules are now enforced in the weekly planner prompt contract
+- `publish-scheduled` now runs calendar preflight before publish/schedule execution
+- the `Pipeline C` resume-path regression (`campaignWindow is not defined`) was fixed and revalidated
+
 Still open in `M14B`:
 - explicit carryover from current settings forms into the full universal model beyond the first narrow editor
-- pipeline adoption of structured config reads
+- stronger planner weighting so primary ICP, primary offer, active seasonality, and default CTA dominate output more clearly
+- deterministic baseline content strategy and posting-control rules for `Pipeline B`
+- richer slot budgeting / support-content behavior beyond the current exclusive-window gate
+- final content-strategy / distribution-rule wiring for `Pipeline B`
+- UI-facing explanation surfaces remain future work even though backend decision reasons are now being produced
+- current calendar UI now carries the explicit support-content control:
+  - `Allow support content` maps to `support_content_allowed`
+  - `Allow creative deviation` remains design-only
+
+Locked interpretation for the next `M14B` sub-slice:
+- `Pipeline B` drift is not a prompt-tuning problem first
+- it is a missing deterministic contract problem
+- the next config expansion must therefore include:
+  - baseline content strategy / distribution rules
+  - campaign-calendar coordination rules between B and C
+- these remain part of `M14B`, not a separate milestone family, because they extend the same business-truth / planning-truth layer
 
 Rollback boundary:
 - config tables and read helpers can be removed without disturbing existing marketing pipelines
@@ -642,4 +802,7 @@ No code starts for a milestone until:
 - rollback boundary is clear
 
 The next allowed implementation slice is:
-- `M14A.1` only
+- `M14B` config-fidelity tightening only:
+  - settings summary cleanup
+  - baseline content strategy / distribution contract
+  - Pipeline B / Pipeline C calendar coordination contract

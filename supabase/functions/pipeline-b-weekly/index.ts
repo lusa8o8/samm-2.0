@@ -19,6 +19,19 @@ import {
   linkCoordinatorTaskToPipelineRun,
   syncCoordinatorTaskFromRun,
 } from '../_shared/samm-memory.ts'
+import {
+  buildStructuredConfigSummary,
+  getPrimaryIcpCategory,
+  getPrimaryOffer,
+  loadStructuredConfigSnapshot,
+  type StructuredConfigSnapshot,
+} from '../_shared/structured-config.ts'
+import {
+  DEFAULT_SUPPORT_CONTENT_TYPES,
+  loadCampaignCalendarPlanningContext,
+  type CalendarPlanningContext,
+  type ResolvedCalendarSlot,
+} from '../_shared/calendar-coordination.ts'
 
 // ── types ─────────────────────────────────────────────────────────────
 interface NewContent {
@@ -37,12 +50,66 @@ interface WeeklyPost {
   subject_line?: string
   content_source?: string
   scheduled_day: string
+  scheduled_at?: string
+  slot_id?: string
+  purpose?: 'baseline' | 'support'
+  content_type?: string
+  cta_text?: string | null
+  window_ref?: string | null
+  campaign_ref?: string | null
 }
 
 interface PipelineContext {
   orgId: string
   today: string
   calendarEvents?: any[]
+}
+
+interface PipelineBResults {
+  content_items_found: number
+  posts_drafted: number
+  drafts_sent_for_approval: number
+  posts_published: number
+  ambassador_update_sent: boolean
+  report_generated: boolean
+  errors: string[]
+  draft_content_ids: string[]
+  planning_horizon_days: number
+  calendar_windows_considered: number
+  resolved_slots: number
+  baseline_slots: number
+  support_slots: number
+  campaign_slots: number
+  content_strategy_summary?: Record<string, unknown> | null
+}
+
+type BaselineContentCategory =
+  | 'education'
+  | 'inspiration'
+  | 'interactive'
+  | 'trust'
+  | 'promotional'
+
+type PlannedSlotDirective = {
+  slot_id: string
+  channel: WeeklyPost['platform']
+  purpose: 'baseline' | 'support'
+  required_content_type: string
+  required_cta_text: string | null
+  angle_constraint: string
+  audience_anchor: string | null
+  offer_anchor: string | null
+  seasonality_anchor: string | null
+}
+
+type WeeklyContentStrategy = {
+  profile: string
+  active_channels: string[]
+  baseline_mix: Record<BaselineContentCategory, number>
+  weekly_post_budget: number
+  channel_targets: Record<string, number>
+  selected_slot_ids: string[]
+  directives: Record<string, PlannedSlotDirective>
 }
 
 // ── org config helper ─────────────────────────────────────────────────
@@ -84,20 +151,26 @@ ${badExample ? `Bad post example: "${badExample}"` : ''}`.trim()
 
 // ── JSON extractor — handles markdown code fences safely ──────────────
 // ── mock new content feed ─────────────────────────────────────────────
-function getMockNewContent(config: any): NewContent[] {
+function getMockNewContent(config: any, structuredConfig: StructuredConfigSnapshot): NewContent[] {
   const orgLabel = config?.full_name?.trim() || config?.org_name?.trim() || 'Your brand'
   const primaryUrl = config?.primary_cta_url
     || config?.social_handles?.custom_app_url
     || config?.social_handles?.studyhub_url
     || 'https://example.com'
-  const audience = config?.brand_voice?.target_audience?.trim() || 'your core audience'
+  const primaryIcp = getPrimaryIcpCategory(structuredConfig)
+  const primaryOffer = getPrimaryOffer(structuredConfig)
+  const audience = primaryIcp?.description?.trim()
+    || config?.brand_voice?.target_audience?.trim()
+    || 'your core audience'
+  const featuredOfferLabel = primaryOffer?.name?.trim() || `${orgLabel} featured offer`
+  const defaultCta = primaryOffer?.default_cta?.trim() || config?.brand_voice?.cta_preference || 'Learn more'
 
   return [
     {
       id: 'content_001',
       type: 'content_piece',
-      title: `${orgLabel} featured offer`,
-      description: `A timely highlight built for ${audience}.`,
+      title: featuredOfferLabel,
+      description: `A timely highlight built for ${audience}. CTA focus: ${defaultCta}.`,
       url: primaryUrl,
       subject: 'Offer',
       university_relevance: []
@@ -160,13 +233,14 @@ Deno.serve(async (req) => {
     : null
 
   const config = await getOrgConfig(supabase, context.orgId)
+  const structuredConfig = await loadStructuredConfigSnapshot(supabase, context.orgId)
 
   if (resumeRunId) {
     return await resumePipelineBRun({ supabase, anthropic, context, config, runId: resumeRunId })
   }
 
   let runId: string | null = null
-  const results = {
+  const results: PipelineBResults = {
     content_items_found: 0,
     posts_drafted: 0,
     drafts_sent_for_approval: 0,
@@ -174,7 +248,14 @@ Deno.serve(async (req) => {
     ambassador_update_sent: false,
     report_generated: false,
     errors: [] as string[],
-    draft_content_ids: [] as string[]
+    draft_content_ids: [] as string[],
+    planning_horizon_days: 0,
+    calendar_windows_considered: 0,
+    resolved_slots: 0,
+    baseline_slots: 0,
+    support_slots: 0,
+    campaign_slots: 0,
+    content_strategy_summary: null,
   }
 
   try {
@@ -187,42 +268,84 @@ Deno.serve(async (req) => {
 
     console.log('Starting parallel fetch phase...')
 
-    const [metricsResult, calendarResult, contentResult] = await Promise.all([
+    const [metricsResult, planningContext, contentResult] = await Promise.all([
       supabase
         .from('platform_metrics')
         .select('*')
         .eq('org_id', context.orgId)
         .order('snapshot_date', { ascending: false })
         .limit(8),
+      loadCampaignCalendarPlanningContext(supabase, context.orgId, context.today),
 
-      supabase
-        .from('academic_calendar')
-        .select('*')
-        .eq('org_id', context.orgId)
-        .eq('triggered', false)
-        .gte('event_date', context.today)
-        .lte('event_date', addDays(context.today, 21))
-        .order('event_date', { ascending: true }),
-
-      Promise.resolve({ data: getMockNewContent(config), error: null })
+      Promise.resolve({ data: getMockNewContent(config, structuredConfig), error: null })
     ])
 
     const lastWeekMetrics = metricsResult.data ?? []
-    const upcomingEvents = calendarResult.data ?? []
+    const resolvedPlanning = planningContext as CalendarPlanningContext
+    const upcomingEvents = resolvedPlanning.windows.map((window) => ({
+      id: window.event_id,
+      label: window.label,
+      event_type: window.event_type,
+      event_date: window.event_date,
+      event_end_date: window.event_end_date,
+      universities: window.universities,
+      owner_pipeline: window.owner_pipeline,
+      window_start: window.window_start,
+      window_end: window.window_end,
+      exclusive_campaign: window.constraints.exclusive_campaign,
+      support_content_allowed: window.constraints.support_content_allowed,
+      channels_in_scope: window.constraints.channels_in_scope,
+      allowed_ctas: window.constraints.allowed_ctas,
+      priority: window.constraints.priority,
+    }))
     const newContent = contentResult.data ?? []
 
     results.content_items_found = newContent.length
+    results.planning_horizon_days = resolvedPlanning.planning_horizon_days
+    results.calendar_windows_considered = resolvedPlanning.windows.length
+    results.resolved_slots = resolvedPlanning.slots.length
+    results.baseline_slots = resolvedPlanning.baseline_slots.length
+    results.support_slots = resolvedPlanning.support_slots.length
+    results.campaign_slots = resolvedPlanning.campaign_slots.length
     console.log(`Fetched: ${lastWeekMetrics.length} metric rows, ${upcomingEvents.length} upcoming events, ${newContent.length} new content items`)
+
+    const allowedSlots = resolvedPlanning.slots.filter((slot) => slot.purpose === 'baseline' || slot.purpose === 'support')
+    if (allowedSlots.length === 0) {
+      throw new Error('No allowed baseline or support slots are available in the current planning horizon')
+    }
+    const contentStrategy = buildWeeklyContentStrategy(allowedSlots, structuredConfig, config, context.today)
+    const planningSlots = allowedSlots.filter((slot) => contentStrategy.selected_slot_ids.includes(slot.slot_id))
+    if (planningSlots.length === 0) {
+      throw new Error('No planning slots were selected from the current baseline/support horizon')
+    }
+    results.content_strategy_summary = {
+      profile: contentStrategy.profile,
+      active_channels: contentStrategy.active_channels,
+      baseline_mix: contentStrategy.baseline_mix,
+      weekly_post_budget: contentStrategy.weekly_post_budget,
+      channel_targets: contentStrategy.channel_targets,
+      selected_slot_ids: contentStrategy.selected_slot_ids,
+      directives: Object.values(contentStrategy.directives).map((directive) => ({
+        slot_id: directive.slot_id,
+        purpose: directive.purpose,
+        channel: directive.channel,
+        required_content_type: directive.required_content_type,
+        required_cta_text: directive.required_cta_text,
+      })),
+    }
 
     console.log('Running plan agent...')
     const weeklyPlan = await runPlanAgent(
       anthropic,
+      planningSlots,
+      contentStrategy,
       lastWeekMetrics,
       upcomingEvents,
       newContent,
       context.today,
       config.posting_limits,
-      config
+      config,
+      structuredConfig
     )
     console.log(`Plan created: ${weeklyPlan.length} posts planned`)
 
@@ -230,7 +353,7 @@ Deno.serve(async (req) => {
     const draftedPosts: WeeklyPost[] = []
 
     for (const planItem of weeklyPlan) {
-      const post = await runCopyWriter(anthropic, planItem, newContent, config.brand_voice)
+      const post = await runCopyWriter(anthropic, planItem, newContent, config.brand_voice, structuredConfig, contentStrategy)
       draftedPosts.push(post)
       results.posts_drafted++
     }
@@ -247,8 +370,18 @@ Deno.serve(async (req) => {
           subject_line: post.subject_line ?? null,
           status: 'draft',
           pipeline_run_id: runId,
-          scheduled_at: getScheduledTime(post.scheduled_day, context.today),
-          created_by: 'pipeline-b-weekly'
+          scheduled_at: post.scheduled_at ?? getScheduledTime(post.scheduled_day, context.today),
+          created_by: 'pipeline-b-weekly',
+          metadata: {
+            owner_pipeline: 'pipeline-b-weekly',
+            purpose: post.purpose ?? 'baseline',
+            content_type: post.content_type ?? null,
+            cta_text: post.cta_text ?? null,
+            slot_ref: post.slot_id ?? null,
+            window_ref: post.window_ref ?? null,
+            campaign_ref: post.campaign_ref ?? null,
+            planning_horizon_days: results.planning_horizon_days,
+          },
         })
         .select('id')
         .single()
@@ -506,43 +639,77 @@ async function resumePipelineBRun(params: {
 // plan agent ────────────────────────────────────────────────────────
 async function runPlanAgent(
   anthropic: ReturnType<typeof createAnthropicClient>,
+  allowedSlots: ResolvedCalendarSlot[],
+  contentStrategy: WeeklyContentStrategy,
   metrics: any[],
   upcomingEvents: any[],
   newContent: NewContent[],
   today: string,
   postingLimits: any,
-  config: any
+  config: any,
+  structuredConfig: StructuredConfigSnapshot
 ): Promise<any[]> {
-
+  const structuredSummary = buildStructuredConfigSummary(structuredConfig, today)
   const limitsStr = postingLimits
     ? `Weekly posting limits per platform: ${JSON.stringify(postingLimits)}`
     : 'Default: plan 5 posts across platforms.'
+  const slotInputs = allowedSlots.map((slot) => ({
+    slot_id: slot.slot_id,
+    date: slot.date,
+    channel: slot.channel,
+    purpose: slot.purpose,
+    allowed_ctas: slot.allowed_ctas,
+    allowed_content_types: slot.allowed_content_types,
+    window_ref: slot.window_ref,
+    campaign_ref: slot.campaign_ref,
+    directive: contentStrategy.directives[slot.slot_id] ?? null,
+  }))
+  const maxPosts = Math.min(allowedSlots.length, 9)
 
   try {
-    return await generateJsonWithAnthropic<any[]>(anthropic, {
+    const proposedPlan = await generateJsonWithAnthropic<any[]>(anthropic, {
       task: 'weekly_planner',
-      maxTokens: 800,
+      maxTokens: 1200,
       system: `${buildSystemPrompt(config?.brand_voice, config?.full_name?.trim() || config?.org_name?.trim() || 'this brand')}
 
 You are the weekly content planner for this business.
-Use the featured content, upcoming events, and recent metrics to plan a balanced week of posts.
-Prioritize timely offers, proof, education, trust, and calls to action that fit the brand.
+You do not invent free-form weekly posts. You fill only the allowed slots provided to you.
+Each slot may be used at most once. Never invent a slot_id, date, channel, or purpose.
+Treat the campaign calendar, ICP, offer catalog, seasonality, approval policy, and outreach defaults as source-of-truth business constraints.
+Support content means:
+- it does NOT introduce a new offer
+- it does NOT override the allowed CTA
+- it reinforces the active campaign message
+- it must stay within the slot's allowed content types
+Brand keywords are supporting language, not the central angle for every post.
+Use them only when they naturally support the required content type.
+Treat each slot directive as mandatory:
+- respect the required content type
+- respect the required CTA when supplied
+- anchor each baseline post to the named audience use case, offer, or seasonality trigger instead of falling back to generic source-story copy
 
 ${limitsStr}
 
-Respond with JSON only - an array of plan items:
+Respond with JSON only - an array of up to ${maxPosts} plan items:
 [
   {
+    "slot_id": "must match one allowed slot exactly",
     "platform": "facebook|whatsapp|youtube|email",
     "content_id": "id of the new content to feature, or null for original",
     "angle": "what angle or hook to use",
     "scheduled_day": "monday|tuesday|wednesday|thursday|friday",
-    "goal": "awareness|trust|action|loyalty"
+    "goal": "awareness|trust|action|loyalty",
+    "purpose": "baseline|support",
+    "content_type": "education|inspiration|interactive|trust|promotional|reminder|reinforcement|faq|testimonial|countdown",
+    "cta_text": "exact CTA text to use for this slot, or null"
   }
 ]`,
       messages: [{
         role: 'user',
         content: `Today: ${today}
+
+Allowed slots for this planning horizon:
+${JSON.stringify(slotInputs, null, 2)}
 
 New content available:
 ${JSON.stringify(newContent, null, 2)}
@@ -562,24 +729,147 @@ ${JSON.stringify(metrics.slice(0, 4).map(m => ({
   reach: m.post_reach
 })), null, 2)}
 
+Structured business config:
+${structuredSummary}
+
+Weekly content strategy profile:
+${JSON.stringify({
+  profile: contentStrategy.profile,
+  active_channels: contentStrategy.active_channels,
+  baseline_mix: contentStrategy.baseline_mix,
+}, null, 2)}
+
 Create this week's content plan.`
       }],
       fallback: '[]',
     })
+    return normalizeWeeklyPlan(proposedPlan, allowedSlots, structuredConfig, contentStrategy)
   } catch (e) {
     console.error('Plan agent JSON parse failed:', e)
-    return []
+    return buildFallbackPlan(allowedSlots, structuredConfig, contentStrategy)
   }
 }
 // ── copy writer ───────────────────────────────────────────────────────
+function toScheduledDay(date: string) {
+  return new Date(date).toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' }).toLowerCase()
+}
+
+function toScheduledAt(date: string) {
+  return new Date(`${date}T09:00:00.000Z`).toISOString()
+}
+
+function normalizeWeeklyPlan(
+  rawPlan: any[],
+  allowedSlots: ResolvedCalendarSlot[],
+  structuredConfig: StructuredConfigSnapshot,
+  contentStrategy: WeeklyContentStrategy,
+): any[] {
+  const slotMap = new Map(allowedSlots.map((slot) => [slot.slot_id, slot]))
+  const usedSlots = new Set<string>()
+  const normalized: any[] = []
+  const primaryOffer = getPrimaryOffer(structuredConfig)
+
+  for (const item of Array.isArray(rawPlan) ? rawPlan : []) {
+    const slotId = typeof item?.slot_id === 'string' ? item.slot_id : ''
+    if (!slotMap.has(slotId) || usedSlots.has(slotId)) continue
+
+    const slot = slotMap.get(slotId)!
+    const directive = contentStrategy.directives[slot.slot_id]
+    const requestedType = typeof item?.content_type === 'string' && item.content_type.trim().length > 0
+      ? item.content_type.trim().toLowerCase()
+      : directive?.required_content_type ?? (slot.purpose === 'support'
+        ? DEFAULT_SUPPORT_CONTENT_TYPES[0]
+        : 'education')
+    const preferredType = directive?.required_content_type ?? requestedType
+    const contentType = slot.allowed_content_types.length > 0 && !slot.allowed_content_types.includes(preferredType)
+      ? slot.allowed_content_types[0]
+      : preferredType
+    const requestedCta = typeof item?.cta_text === 'string' && item.cta_text.trim().length > 0
+      ? item.cta_text.trim()
+      : null
+    const ctaText = directive?.required_cta_text
+      ?? requestedCta
+      ?? slot.allowed_ctas[0]
+      ?? primaryOffer?.default_cta
+      ?? null
+
+    normalized.push({
+      slot_id: slot.slot_id,
+      platform: slot.channel,
+      content_id: typeof item?.content_id === 'string' ? item.content_id : null,
+      angle: typeof item?.angle === 'string' && item.angle.trim().length > 0
+        ? item.angle.trim()
+        : directive?.angle_constraint ?? (slot.purpose === 'support'
+          ? 'reinforce the active campaign message without introducing a new offer'
+          : 'deliver a useful, concrete post grounded in current config'),
+      scheduled_day: toScheduledDay(slot.date),
+      scheduled_at: toScheduledAt(slot.date),
+      goal: typeof item?.goal === 'string' ? item.goal : (slot.purpose === 'support' ? 'action' : 'trust'),
+      purpose: slot.purpose,
+      content_type: contentType,
+      cta_text: ctaText,
+      window_ref: slot.window_ref,
+      campaign_ref: slot.campaign_ref,
+    })
+    usedSlots.add(slot.slot_id)
+  }
+
+  return normalized.length > 0 ? normalized : buildFallbackPlan(allowedSlots, structuredConfig, contentStrategy)
+}
+
+function buildFallbackPlan(
+  allowedSlots: ResolvedCalendarSlot[],
+  structuredConfig: StructuredConfigSnapshot,
+  contentStrategy: WeeklyContentStrategy,
+): any[] {
+  return allowedSlots.slice(0, Math.min(allowedSlots.length, 6)).map((slot, index) => {
+    const directive = contentStrategy.directives[slot.slot_id]
+    return {
+    slot_id: slot.slot_id,
+    platform: slot.channel,
+    content_id: null,
+    angle: directive?.angle_constraint ?? (slot.purpose === 'support'
+      ? 'reinforce the active campaign message and urgency'
+      : index % 2 === 0
+        ? 'educate with a practical angle tied to the current offer'
+        : 'build trust with proof, source story, or product reality'),
+    scheduled_day: toScheduledDay(slot.date),
+    scheduled_at: toScheduledAt(slot.date),
+    goal: slot.purpose === 'support' ? 'action' : (index % 2 === 0 ? 'awareness' : 'trust'),
+    purpose: slot.purpose,
+    content_type: directive?.required_content_type ?? (slot.purpose === 'support'
+      ? DEFAULT_SUPPORT_CONTENT_TYPES[0]
+      : index % 2 === 0
+        ? 'education'
+        : 'trust'),
+    cta_text: directive?.required_cta_text ?? slot.allowed_ctas[0] ?? null,
+    window_ref: slot.window_ref,
+    campaign_ref: slot.campaign_ref,
+    }
+  })
+}
+
 async function runCopyWriter(
   anthropic: ReturnType<typeof createAnthropicClient>,
   planItem: any,
   newContent: NewContent[],
-  brandVoice: any
+  brandVoice: any,
+  structuredConfig: StructuredConfigSnapshot,
+  contentStrategy: WeeklyContentStrategy,
 ): Promise<WeeklyPost> {
 
   const featuredContent = newContent.find(c => c.id === planItem.content_id)
+  const primaryOffer = getPrimaryOffer(structuredConfig)
+  const primaryIcp = getPrimaryIcpCategory(structuredConfig)
+  const structuredSummary = buildStructuredConfigSummary(structuredConfig, new Date().toISOString().split('T')[0])
+  const hashtags = Array.isArray(brandVoice?.hashtags) && brandVoice.hashtags.length > 0
+    ? brandVoice.hashtags.join(' ')
+    : ''
+  const postFormatPreference = brandVoice?.post_format_preference?.trim() || ''
+  const directive = contentStrategy.directives[planItem.slot_id]
+  const supportRule = planItem.purpose === 'support'
+    ? 'This is support content inside an active campaign window. Reinforce the campaign message only. Do not introduce a new offer or a different CTA.'
+    : 'This is baseline content. Stay within the configured business truth, anchor the post to the named audience, offer, or seasonality cue, and avoid inventing a campaign.'
 
   const response = await generateTextWithAnthropic(anthropic, {
     task: 'weekly_copywriter',
@@ -590,6 +880,11 @@ For email: include a subject line on the first line starting with "Subject: "
 For WhatsApp: keep under 200 characters, conversational
 For Facebook: 2-3 sentences, engaging hook, emoji ok
 For YouTube community: short, drives comments
+Use the provided CTA exactly when one is supplied.
+${supportRule}
+Use at most 1-2 "always say" keywords when they are naturally relevant. Do not force all brand keywords into every post.
+If approved hashtags exist, only use those hashtags and do not invent new ones.
+Treat geographic/source language as supporting proof, not the whole idea, unless the required content type is trust or testimonial.
 
 Write the post copy only — no preamble.`,
     messages: [{
@@ -598,6 +893,17 @@ Write the post copy only — no preamble.`,
 Goal: ${planItem.goal}
 Angle: ${planItem.angle}
 Scheduled: ${planItem.scheduled_day}
+Purpose: ${planItem.purpose ?? 'baseline'}
+Content type: ${planItem.content_type ?? 'education'}
+Required CTA: ${planItem.cta_text ?? 'none'}
+Primary offer: ${primaryOffer?.name ?? 'none configured'}
+Primary audience segment: ${primaryIcp?.name ?? 'none configured'}
+Primary offer CTA: ${primaryOffer?.default_cta ?? 'none configured'}
+Audience description: ${primaryIcp?.description ?? 'none configured'}
+Slot directive: ${directive ? JSON.stringify(directive, null, 2) : 'none'}
+Structured config summary: ${structuredSummary}
+Approved hashtags: ${hashtags || 'none'}
+Post format preference: ${postFormatPreference || 'none'}
 ${featuredContent
   ? `Featured content:\nTitle: ${featuredContent.title}\nURL: ${featuredContent.url}`
   : 'No specific content — write an original engagement post.'}`
@@ -621,7 +927,362 @@ ${featuredContent
     body: postBody,
     subject_line,
     content_source: featuredContent?.url,
-    scheduled_day: planItem.scheduled_day
+    scheduled_day: planItem.scheduled_day,
+    scheduled_at: planItem.scheduled_at,
+    slot_id: planItem.slot_id,
+    purpose: planItem.purpose,
+    content_type: planItem.content_type,
+    cta_text: planItem.cta_text ?? null,
+    window_ref: planItem.window_ref ?? null,
+    campaign_ref: planItem.campaign_ref ?? null,
+  }
+}
+
+function buildWeeklyContentStrategy(
+  allowedSlots: ResolvedCalendarSlot[],
+  structuredConfig: StructuredConfigSnapshot,
+  config: any,
+  today: string,
+): WeeklyContentStrategy {
+  const primaryOffer = getPrimaryOffer(structuredConfig)
+  const primaryIcp = getPrimaryIcpCategory(structuredConfig)
+  const structuredSummary = JSON.parse(buildStructuredConfigSummary(structuredConfig, today))
+  const activeSeasonality = structuredSummary.active_seasonality as Record<string, unknown> | null
+  const defaultChannels = Array.isArray(structuredConfig.campaignDefaults?.default_channels)
+    ? structuredConfig.campaignDefaults.default_channels
+    : Array.isArray(primaryIcp?.default_channels)
+      ? primaryIcp.default_channels
+      : []
+  const activeChannels = Array.from(new Set([
+    ...defaultChannels,
+    ...allowedSlots.map((slot) => slot.channel),
+  ]))
+  const profile = isRetailProductOffer(primaryOffer)
+    ? 'b2c_retail_cpg_default'
+    : 'general_default'
+
+  let baselineMix: Record<BaselineContentCategory, number> = isRetailProductOffer(primaryOffer)
+    ? {
+        education: 15,
+        inspiration: 25,
+        interactive: 10,
+        trust: 25,
+        promotional: 25,
+      }
+    : {
+        education: 30,
+        inspiration: 20,
+        interactive: 10,
+        trust: 25,
+        promotional: 15,
+      }
+
+  const defaultObjective = (structuredConfig.campaignDefaults?.default_objective ?? '').toString().toLowerCase()
+  if (defaultObjective === 'conversion' || defaultObjective === 'sales') {
+    baselineMix = {
+      education: Math.max(10, baselineMix.education - 5),
+      inspiration: baselineMix.inspiration,
+      interactive: Math.max(5, baselineMix.interactive - 5),
+      trust: baselineMix.trust,
+      promotional: baselineMix.promotional + 10,
+    }
+  } else if (defaultObjective === 'awareness') {
+    baselineMix = {
+      education: baselineMix.education + 5,
+      inspiration: baselineMix.inspiration + 5,
+      interactive: Math.max(5, baselineMix.interactive - 5),
+      trust: baselineMix.trust,
+      promotional: Math.max(10, baselineMix.promotional - 5),
+    }
+  }
+
+  if (activeSeasonality?.demand_level === 'high') {
+    baselineMix = {
+      education: Math.max(10, baselineMix.education - 5),
+      inspiration: baselineMix.inspiration,
+      interactive: Math.max(5, baselineMix.interactive - 5),
+      trust: baselineMix.trust + 5,
+      promotional: baselineMix.promotional + 5,
+    }
+  }
+
+  const baselineSlots = allowedSlots.filter((slot) => slot.purpose === 'baseline')
+  const supportSlots = allowedSlots.filter((slot) => slot.purpose === 'support')
+  const weeklyPostBudget = deriveWeeklyPostBudget(activeChannels, activeSeasonality, profile, structuredConfig, supportSlots.length)
+  const channelTargets = buildChannelTargets(activeChannels, weeklyPostBudget, profile)
+  const selectedBaselineSlots = selectBaselineSlots(baselineSlots, channelTargets)
+  const selectedSupportSlots = selectSupportSlots(supportSlots, weeklyPostBudget - selectedBaselineSlots.length)
+  const selectedSlotIds = [
+    ...selectedBaselineSlots.map((slot) => slot.slot_id),
+    ...selectedSupportSlots.map((slot) => slot.slot_id),
+  ]
+  const baselineAssignments = assignBaselineContentTypes(baselineSlots, baselineMix)
+  const directives: Record<string, PlannedSlotDirective> = {}
+
+  for (const slot of baselineSlots) {
+    const requiredContentType = baselineAssignments[slot.slot_id] ?? 'education'
+    const requiredCtaText = requiredContentType === 'promotional' || requiredContentType === 'trust'
+      ? slot.allowed_ctas[0] ?? primaryOffer?.default_cta ?? config?.brand_voice?.cta_preference ?? null
+      : slot.allowed_ctas[0] ?? null
+    directives[slot.slot_id] = {
+      slot_id: slot.slot_id,
+      channel: slot.channel,
+      purpose: 'baseline',
+      required_content_type: requiredContentType,
+      required_cta_text: requiredCtaText,
+      angle_constraint: buildBaselineAngleConstraint(requiredContentType, primaryOffer, primaryIcp, activeSeasonality),
+      audience_anchor: primaryIcp?.name ?? null,
+      offer_anchor: primaryOffer?.name ?? null,
+      seasonality_anchor: activeSeasonality?.period_name?.toString() ?? null,
+    }
+  }
+
+  for (const slot of supportSlots) {
+    const requiredContentType = slot.allowed_content_types.find((value) => DEFAULT_SUPPORT_CONTENT_TYPES.includes(value))
+      ?? DEFAULT_SUPPORT_CONTENT_TYPES[0]
+    directives[slot.slot_id] = {
+      slot_id: slot.slot_id,
+      channel: slot.channel,
+      purpose: 'support',
+      required_content_type: requiredContentType,
+      required_cta_text: slot.allowed_ctas[0] ?? primaryOffer?.default_cta ?? null,
+      angle_constraint: 'Reinforce the active campaign message and urgency without introducing a new offer or narrative.',
+      audience_anchor: primaryIcp?.name ?? null,
+      offer_anchor: primaryOffer?.name ?? null,
+      seasonality_anchor: activeSeasonality?.period_name?.toString() ?? null,
+    }
+  }
+
+  return {
+    profile,
+    active_channels: activeChannels,
+    baseline_mix: baselineMix,
+    weekly_post_budget: weeklyPostBudget,
+    channel_targets: channelTargets,
+    selected_slot_ids: selectedSlotIds,
+    directives,
+  }
+}
+
+function deriveWeeklyPostBudget(
+  activeChannels: string[],
+  activeSeasonality: Record<string, unknown> | null,
+  profile: string,
+  structuredConfig: StructuredConfigSnapshot,
+  supportSlotCount: number,
+) {
+  let budget = profile === 'b2c_retail_cpg_default' ? 6 : 5
+  if (activeChannels.length <= 2) {
+    budget = Math.min(budget, Math.max(3, activeChannels.length + 2))
+  }
+  if (activeSeasonality?.demand_level === 'high') {
+    budget += 1
+  } else if (activeSeasonality?.demand_level === 'low') {
+    budget = Math.max(4, budget - 1)
+  }
+  if (supportSlotCount > 0) {
+    budget += 1
+  }
+  const horizonCap = Math.max(4, Math.min(9, activeChannels.length * 2 + 1))
+  const baselineAllowed = structuredConfig.campaignDefaults?.baseline_content_allowed
+  if (baselineAllowed === false) {
+    return Math.min(Math.max(1, supportSlotCount), horizonCap)
+  }
+  return Math.min(Math.max(4, budget), horizonCap)
+}
+
+function buildChannelTargets(
+  activeChannels: string[],
+  weeklyPostBudget: number,
+  profile: string,
+) {
+  const defaults = profile === 'b2c_retail_cpg_default'
+    ? { facebook: 0.34, whatsapp: 0.33, youtube: 0.17, email: 0.16 }
+    : { facebook: 0.3, whatsapp: 0.2, youtube: 0.3, email: 0.2 }
+
+  const targets: Record<string, number> = {}
+  const activeSet = new Set(activeChannels)
+  const weightedChannels = Object.entries(defaults).filter(([channel]) => activeSet.has(channel))
+  const fallbackChannels = activeChannels.filter((channel) => !(channel in defaults))
+
+  let assigned = 0
+  for (const [channel, weight] of weightedChannels) {
+    const count = Math.floor(weight * weeklyPostBudget)
+    targets[channel] = count
+    assigned += count
+  }
+  for (const channel of fallbackChannels) {
+    targets[channel] = 0
+  }
+
+  const priority = [
+    ...weightedChannels
+      .sort((a, b) => b[1] - a[1])
+      .map(([channel]) => channel),
+    ...fallbackChannels,
+  ]
+
+  let cursor = 0
+  while (assigned < weeklyPostBudget && priority.length > 0) {
+    const channel = priority[cursor % priority.length]
+    targets[channel] = (targets[channel] ?? 0) + 1
+    assigned += 1
+    cursor += 1
+  }
+
+  for (const channel of activeChannels) {
+    if ((targets[channel] ?? 0) === 0 && weeklyPostBudget >= activeChannels.length) {
+      targets[channel] = 1
+    }
+  }
+
+  return targets
+}
+
+function selectBaselineSlots(
+  baselineSlots: ResolvedCalendarSlot[],
+  channelTargets: Record<string, number>,
+) {
+  const remainingTargets = { ...channelTargets }
+  const selected: ResolvedCalendarSlot[] = []
+  const usedSlotIds = new Set<string>()
+  const dailyCounts = new Map<string, number>()
+  const slotsByDate = new Map<string, ResolvedCalendarSlot[]>()
+
+  for (const slot of baselineSlots) {
+    const existing = slotsByDate.get(slot.date) ?? []
+    existing.push(slot)
+    slotsByDate.set(slot.date, existing)
+  }
+
+  const dates = [...slotsByDate.keys()].sort((a, b) => a.localeCompare(b))
+  let progress = true
+  while (progress) {
+    progress = false
+    for (const date of dates) {
+      const postsOnDate = dailyCounts.get(date) ?? 0
+      if (postsOnDate >= 2) continue
+
+      const candidates = (slotsByDate.get(date) ?? [])
+        .filter((slot) => !usedSlotIds.has(slot.slot_id))
+        .filter((slot) => (remainingTargets[slot.channel] ?? 0) > 0)
+        .sort((a, b) => {
+          const delta = (remainingTargets[b.channel] ?? 0) - (remainingTargets[a.channel] ?? 0)
+          if (delta !== 0) return delta
+          return a.channel.localeCompare(b.channel)
+        })
+
+      const next = candidates[0]
+      if (!next) continue
+
+      selected.push(next)
+      usedSlotIds.add(next.slot_id)
+      remainingTargets[next.channel] = Math.max(0, (remainingTargets[next.channel] ?? 0) - 1)
+      dailyCounts.set(date, postsOnDate + 1)
+      progress = true
+    }
+  }
+
+  return selected.sort((a, b) => a.date.localeCompare(b.date) || a.channel.localeCompare(b.channel))
+}
+
+function selectSupportSlots(
+  supportSlots: ResolvedCalendarSlot[],
+  remainingBudget: number,
+) {
+  if (remainingBudget <= 0) return []
+  return [...supportSlots]
+    .sort((a, b) => a.date.localeCompare(b.date) || a.channel.localeCompare(b.channel))
+    .slice(0, remainingBudget)
+}
+
+function isRetailProductOffer(primaryOffer: any) {
+  const type = (primaryOffer?.type ?? '').toString().toLowerCase()
+  const category = (primaryOffer?.category ?? '').toString().toLowerCase()
+  return type === 'product' || category.includes('bundle') || category.includes('gift')
+}
+
+function assignBaselineContentTypes(
+  slots: ResolvedCalendarSlot[],
+  baselineMix: Record<BaselineContentCategory, number>,
+) {
+  const categories = Object.keys(baselineMix) as BaselineContentCategory[]
+  const baselineCount = Math.max(slots.length, 1)
+  const targetCounts: Record<BaselineContentCategory, number> = {
+    education: 0,
+    inspiration: 0,
+    interactive: 0,
+    trust: 0,
+    promotional: 0,
+  }
+
+  let assigned = 0
+  for (const category of categories) {
+    const count = Math.floor((baselineMix[category] / 100) * baselineCount)
+    targetCounts[category] = count
+    assigned += count
+  }
+
+  const sortedCategories = [...categories].sort((a, b) => baselineMix[b] - baselineMix[a])
+  let cursor = 0
+  while (assigned < baselineCount) {
+    targetCounts[sortedCategories[cursor % sortedCategories.length]] += 1
+    assigned += 1
+    cursor += 1
+  }
+
+  const remaining = { ...targetCounts }
+  const assignments: Record<string, BaselineContentCategory> = {}
+
+  for (const slot of slots) {
+    const preference = getChannelCategoryPreference(slot.channel)
+    const nextCategory = preference.find((category) => remaining[category] > 0)
+      ?? sortedCategories.find((category) => remaining[category] > 0)
+      ?? 'education'
+    assignments[slot.slot_id] = nextCategory
+    remaining[nextCategory] = Math.max(0, remaining[nextCategory] - 1)
+  }
+
+  return assignments
+}
+
+function getChannelCategoryPreference(channel: string): BaselineContentCategory[] {
+  switch (channel) {
+    case 'facebook':
+      return ['trust', 'inspiration', 'interactive', 'promotional', 'education']
+    case 'whatsapp':
+      return ['promotional', 'trust', 'interactive', 'education', 'inspiration']
+    case 'youtube':
+      return ['education', 'trust', 'inspiration', 'interactive', 'promotional']
+    case 'email':
+      return ['promotional', 'trust', 'education', 'inspiration', 'interactive']
+    default:
+      return ['education', 'trust', 'inspiration', 'interactive', 'promotional']
+  }
+}
+
+function buildBaselineAngleConstraint(
+  contentType: BaselineContentCategory,
+  primaryOffer: any,
+  primaryIcp: any,
+  activeSeasonality: Record<string, unknown> | null,
+) {
+  const offerName = primaryOffer?.name ?? 'the primary offer'
+  const audienceName = primaryIcp?.name ?? 'the primary audience'
+  const seasonalityName = activeSeasonality?.period_name?.toString() ?? 'the current demand window'
+
+  switch (contentType) {
+    case 'promotional':
+      return `Center the post on ${offerName} for ${audienceName}. Make the CTA explicit and concrete.`
+    case 'trust':
+      return `Build confidence in ${offerName} for ${audienceName} using proof, testimonials, or product-reality cues.`
+    case 'inspiration':
+      return `Frame ${offerName} around the aspirational use case that matters to ${audienceName} during ${seasonalityName}.`
+    case 'interactive':
+      return `Invite a simple response from ${audienceName} that still points back to ${offerName} or its use case.`
+    case 'education':
+    default:
+      return `Teach something practical for ${audienceName} that naturally leads back to ${offerName} or ${seasonalityName}.`
   }
 }
 

@@ -1,4 +1,8 @@
 import { getIntegrationDefinition } from './integration-registry.ts'
+import {
+  loadCampaignCalendarPlanningContext,
+  validateContentAgainstCalendar,
+} from './calendar-coordination.ts'
 
 type PlatformConnection = Record<string, string | boolean | null | undefined>
 
@@ -12,6 +16,9 @@ type PublishableContentRow = {
   scheduled_at?: string | null
   status: string
   metadata?: Record<string, unknown> | null
+  is_campaign_post?: boolean | null
+  campaign_name?: string | null
+  pipeline_run_id?: string | null
 }
 
 type OrgPublishConfig = {
@@ -107,6 +114,13 @@ export async function publishDueContentRows(params: {
     }
 
     try {
+      const preflight = await runCalendarPublishPreflight(supabase, claimed)
+      if (!preflight.allowed) {
+        await markPublishFailed(supabase, claimed, preflight.message)
+        results.push({ id: row.id, platform: row.platform, outcome: 'failed', error: preflight.message })
+        continue
+      }
+
       const publishResult = await dispatchPublish(claimed, platformConnection, orgConfig.org_name)
       await markPublished(supabase, claimed, publishResult)
       results.push({
@@ -168,7 +182,7 @@ async function claimContentRow(supabase: any, row: PublishableContentRow, claimP
     })
     .eq('id', row.id)
     .in('status', ['scheduled', 'approved'])
-    .select('id, org_id, platform, body, subject_line, media_url, scheduled_at, status, metadata')
+    .select('id, org_id, platform, body, subject_line, media_url, scheduled_at, status, metadata, is_campaign_post, campaign_name, pipeline_run_id')
     .single()
 
   if (error) {
@@ -177,6 +191,73 @@ async function claimContentRow(supabase: any, row: PublishableContentRow, claimP
   }
 
   return data as PublishableContentRow
+}
+
+async function runCalendarPublishPreflight(supabase: any, row: PublishableContentRow) {
+  const scheduledDate = (row.scheduled_at ?? new Date().toISOString()).split('T')[0]
+  const planningContext = await loadCampaignCalendarPlanningContext(supabase, row.org_id, scheduledDate, {
+    horizonDays: 1,
+  })
+
+  const metadata = row.metadata && typeof row.metadata === 'object' ? row.metadata : {}
+  const purpose = typeof metadata.purpose === 'string'
+    ? metadata.purpose
+    : row.is_campaign_post
+      ? 'campaign'
+      : 'baseline'
+  const ownerPipeline = typeof metadata.owner_pipeline === 'string'
+    ? metadata.owner_pipeline
+    : row.is_campaign_post
+      ? 'pipeline-c-campaign'
+      : 'pipeline-b-weekly'
+  const ctaText = typeof metadata.cta_text === 'string' ? metadata.cta_text : null
+  const contentType = typeof metadata.content_type === 'string' ? metadata.content_type : null
+
+  const validation = validateContentAgainstCalendar({
+    planningContext,
+    scheduledDate,
+    platform: row.platform,
+    purpose: purpose === 'support' ? 'support' : purpose === 'campaign' ? 'campaign' : 'baseline',
+    contentType,
+    ctaText,
+    ownerPipeline,
+  })
+
+  if (!validation.allowed) {
+    return validation
+  }
+
+  if (validation.slot) {
+    const dayStart = `${scheduledDate}T00:00:00.000Z`
+    const nextDay = new Date(`${scheduledDate}T00:00:00.000Z`)
+    nextDay.setUTCDate(nextDay.getUTCDate() + 1)
+    const dayEnd = nextDay.toISOString()
+
+    const { count, error } = await supabase
+      .from('content_registry')
+      .select('id', { count: 'exact', head: true })
+      .eq('org_id', row.org_id)
+      .eq('platform', row.platform)
+      .gte('scheduled_at', dayStart)
+      .lt('scheduled_at', dayEnd)
+      .in('status', ['scheduled', 'approved', 'publishing', 'published'])
+
+    if (error) {
+      throw new Error(`Failed to run calendar publish preflight: ${error.message}`)
+    }
+
+    if (typeof count === 'number' && count > validation.slot.max_posts) {
+      return {
+        allowed: false,
+        reason_code: 'slot_budget_exceeded',
+        message: `Slot ${validation.slot.slot_id} exceeds its max posts budget for ${scheduledDate}.`,
+        slot: validation.slot,
+        window: validation.window,
+      }
+    }
+  }
+
+  return validation
 }
 
 async function markPublished(supabase: any, row: PublishableContentRow, publishResult: PublishDispatchResult) {

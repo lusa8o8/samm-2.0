@@ -188,6 +188,7 @@ Every workspace should be able to express these through structured config:
 - seasonality
 - outreach policy
 - approval policy
+- baseline content strategy and distribution rules
 
 Domain-specific data should remain pluggable through:
 - custom fields
@@ -205,6 +206,41 @@ Not by hardcoding domain assumptions into the core layer.
 5. No model may invent seasonality or offer logic outside config.
 6. If something affects targeting, pricing, timing, or messaging, it must come from config or campaign input, not model inference.
 7. ICP / audience truth must remain explicit and queryable, not buried in prose.
+8. Baseline content mix, content categories, posting cadence, and promo density must come from config or calendar rules, not model intuition.
+
+## Content Strategy Extension
+The next `M14B` sub-slice should extend structured config with a universal baseline content-strategy layer.
+
+Purpose:
+- give `Pipeline B` deterministic weekly planning rules
+- reduce hallucinated weekly content drift
+- make weekly volume, channel mix, and content-type mix explicit
+
+Core universal categories:
+- `education`
+- `inspiration`
+- `interactive`
+- `trust`
+- `promotional`
+
+Config should eventually define:
+- baseline posts per week
+- per-channel min/max or caps
+- content-category percentage targets
+- maximum promotional ratio
+- CTA density rules
+- reuse / repetition spacing
+- baseline vs support-content classification
+
+Interpretation:
+- default matrices may be seeded by industry cluster
+- but defaults are not immutable truth
+- org-level config must be able to override them
+
+Locked rule:
+- content strategy belongs to structured config first
+- calendar may override it for a specific campaign window
+- prompts must not invent weekly content mix when config or calendar rules exist
 
 ## Acceptance Criteria
 - low/high demand can be configured without prompt rewriting

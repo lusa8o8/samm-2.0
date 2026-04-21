@@ -26,7 +26,7 @@ Deno.serve(async (req) => {
     const nowIso = new Date().toISOString()
     const { data: rows, error } = await supabase
       .from('content_registry')
-      .select('id, org_id, platform, body, subject_line, media_url, scheduled_at, status, metadata')
+      .select('id, org_id, platform, body, subject_line, media_url, scheduled_at, status, metadata, is_campaign_post, campaign_name, pipeline_run_id')
       .in('status', ['scheduled', 'approved'])
       .lte('scheduled_at', nowIso)
       .neq('platform', 'design_brief')
