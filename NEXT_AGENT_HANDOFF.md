@@ -129,13 +129,17 @@ Support-content alignment note:
 - `academic_calendar.support_content_allowed` now exists in the live schema
 - existing rows were backfilled from `creative_override_allowed` so prior event behavior remains stable
 
-The next `M14B` focus is explicitly:
-- not a new milestone expansion
-- not UI-first work
-- deterministic tightening of the remaining business-truth and planning-truth layers through:
-  - deterministic baseline content strategy / distribution rules for `Pipeline B`
-  - richer slot budgeting and support-content behavior beyond the current exclusive-window gate
-  - final grounding pass so `Pipeline B` reflects slot directives and config with less residual brand-keyword overuse
+`M14B` is now considered closed at a validated checkpoint:
+- universal structured config is live and editable
+- calendar authority is live
+- scheduler precedence between `Pipeline B` and `Pipeline C` is deterministic
+- `Pipeline B` support-only behavior is live and validated
+- successful `Pipeline B` runs now preserve content-strategy metadata through resume/success
+
+Queued immediately after `M14B` closes:
+- remove the temporary UI-to-DB calendar `event_type` translation shim
+- migrate the physical `academic_calendar.event_type` contract to the universal event types already used by the UI/domain layer
+- keep this as a dedicated post-`M14B` cleanup slice so the active milestone stays focused on deterministic planning truth
 
 From this point forward, implementation must move in test-checkpoint slices:
 - lock contract
@@ -143,14 +147,19 @@ From this point forward, implementation must move in test-checkpoint slices:
 - run a concrete validation checkpoint
 - only then continue
 
-The current `M14B` checkpoint sequence that is already implemented and validated is:
+The full `M14B` checkpoint sequence that is now implemented and validated is:
 1. calendar-domain helper / slot resolution
 2. scheduler conflict checks + decision logs
 3. `Pipeline C` campaign-constraint output tightening
 4. `Pipeline B` planning against allowed baseline/support slots
 5. schedule/publish preflight validation
+6. support-content calendar control alignment
+7. final `Pipeline B` content-strategy / distribution tightening and metadata persistence
 
-The next allowed `M14B` slice now starts after that checkpoint, not before it.
+The next allowed slice is no longer inside `M14B`.
+It is the queued post-`M14B` cleanup:
+- remove the temporary UI-to-DB `academic_calendar.event_type` translation shim
+- widen the physical calendar event-type contract to the universal UI/domain values
 
 Calendar Studio note:
 - do not implement the UI yet

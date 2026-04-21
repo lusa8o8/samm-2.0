@@ -259,7 +259,7 @@ Rollback boundary:
 
 ## M14B - Structured Config Expansion
 Status:
-- in progress
+- complete
 
 Goal:
 - make config and calendar the deterministic planning-truth layers for `Pipeline B` and `Pipeline C`
@@ -290,38 +290,41 @@ Delivered so far:
   - campaign draft metadata in `content_registry`
 - `Pipeline B` slot-aware planning against allowed baseline / support slots only
 - calendar-aware publish preflight validation in `publish-scheduled`
+- explicit calendar support-content control aligned end to end:
+  - `Allow support content` maps to `support_content_allowed`
+  - `Allow creative deviation` remains design-only
+- support-slot behavior now live:
+  - exclusive campaign windows suppress baseline planning
+  - support-only slots reopen when `Allow support content` is enabled
+  - support-mode output is constrained to campaign-aligned reminder/reinforcement behavior
+- final `Pipeline B` planner-fidelity slice now live:
+  - support slots reserve budget before baseline allocation
+  - weekly strategy now persists:
+    - `support_slot_budget`
+    - `content_type_targets`
+    - `selected_baseline_slot_ids`
+    - `selected_support_slot_ids`
+  - resume/success paths preserve strategy metadata instead of dropping it
 
 Current validation read:
-- `Pipeline C` is materially more grounded by config
-- `Pipeline B` remains under-grounded relative to configured offer / ICP / seasonality / CTA
-- weekly planning drift is now treated as a missing deterministic contract issue, not merely prompt quality
-- calendar authority is now live:
-  - `Pipeline C` owns exclusive campaign windows
-  - `Pipeline B` is blocked during exclusive windows
+- `Pipeline C` is materially grounded by structured config and calendar constraints
 - `Pipeline C` happy path is validated after the resume-path fix:
   - campaign brief lands
   - `6` copy assets land
   - design brief lands
-- `Pipeline B` still runs normally when allowed and lands `9` drafts
+- calendar authority is now live:
+  - `Pipeline C` owns exclusive campaign windows
+  - `Pipeline B` is blocked during exclusive windows unless support is explicitly allowed
+- `Pipeline B` now has two validated modes:
+  - normal baseline mode when the horizon is open
+  - support-only mode when an exclusive campaign window allows support content
+- the latest `Pipeline B` support-only checkpoint is validated:
+  - run is constrained to `2` support drafts
+  - drafts stay aligned to the campaign CTA/message
+  - no competing offer is introduced
+- strategy metadata now persists on successful `Pipeline B` runs, including channel/content targets and selected slot groups
 - publish/send legality now has a deterministic calendar firewall before final action
-- the latest `Pipeline B` planner-fidelity slice is now live and validated:
-  - baseline slot directives are derived deterministically before planning
-  - slot directives now carry:
-    - required content type
-    - stronger CTA rule
-    - angle constraint
-  - planner and copywriter prompts now treat brand keywords as supporting proof, not the central idea of every baseline post
-  - planner/copywriter now see:
-    - primary offer CTA
-    - primary audience segment and description
-    - active seasonality summary
-    - structured config summary
-    - approved hashtags
-    - post-format preference
-- practical read:
-  - `Pipeline C` remains the stronger grounded path
-  - `Pipeline B` grounding is improved but still not considered final
-  - some repeated local/source language can still appear because it is explicitly present in brand config, not only because of planner drift
+- some repeated local/source language may still appear because it is explicitly present in brand config, not because planning truth is still missing
 
 Locked expansion inside `M14B`:
 - baseline content strategy / distribution rules
@@ -335,15 +338,6 @@ Locked expansion inside `M14B`:
 Implementation rule from this point forward:
 - every `M14B` code slice must end at a test checkpoint
 - no next slice starts until the current slice has a concrete validation read
-
-Next allowed `M14B` sequence:
-1. lock contracts in docs
-2. add calendar-domain helpers and slot resolution
-3. add scheduler conflict checks and decision logging
-4. update `Pipeline C` to claim and expose campaign constraints
-5. update `Pipeline B` to plan only against allowed baseline/support slots
-6. add schedule/publish preflight validation
-7. tighten remaining config fidelity and posting-control behavior without leaving `M14B`
 
 Out of scope for the current `M14B` extension:
 - Calendar Studio UI implementation
@@ -497,6 +491,11 @@ Still open in `M14B`:
 - current calendar UI now carries the explicit support-content control:
   - `Allow support content` maps to `support_content_allowed`
   - `Allow creative deviation` remains design-only
+
+Locked post-`M14B` cleanup:
+- once `M14B` closes, remove the temporary UI-to-DB event-type translation shim around `academic_calendar.event_type`
+- widen the physical calendar event-type contract to the universal values already used by the UI/domain layer
+- keep this as a dedicated cleanup slice after `M14B`, not folded into the current milestone while deterministic planning work is still open
 
 Locked interpretation for the next `M14B` sub-slice:
 - `Pipeline B` drift is not a prompt-tuning problem first

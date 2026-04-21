@@ -107,7 +107,11 @@ type WeeklyContentStrategy = {
   active_channels: string[]
   baseline_mix: Record<BaselineContentCategory, number>
   weekly_post_budget: number
+  support_slot_budget: number
   channel_targets: Record<string, number>
+  content_type_targets: Record<BaselineContentCategory, number>
+  selected_baseline_slot_ids: string[]
+  selected_support_slot_ids: string[]
   selected_slot_ids: string[]
   directives: Record<string, PlannedSlotDirective>
 }
@@ -323,7 +327,11 @@ Deno.serve(async (req) => {
       active_channels: contentStrategy.active_channels,
       baseline_mix: contentStrategy.baseline_mix,
       weekly_post_budget: contentStrategy.weekly_post_budget,
+      support_slot_budget: contentStrategy.support_slot_budget,
       channel_targets: contentStrategy.channel_targets,
+      content_type_targets: contentStrategy.content_type_targets,
+      selected_baseline_slot_ids: contentStrategy.selected_baseline_slot_ids,
+      selected_support_slot_ids: contentStrategy.selected_support_slot_ids,
       selected_slot_ids: contentStrategy.selected_slot_ids,
       directives: Object.values(contentStrategy.directives).map((directive) => ({
         slot_id: directive.slot_id,
@@ -524,7 +532,14 @@ async function resumePipelineBRun(params: {
     ambassador_update_sent: stored.ambassador_update_sent ?? false,
     report_generated: stored.report_generated ?? false,
     errors: Array.isArray(stored.errors) ? stored.errors : [],
-    draft_content_ids: Array.isArray(stored.draft_content_ids) ? stored.draft_content_ids : []
+    draft_content_ids: Array.isArray(stored.draft_content_ids) ? stored.draft_content_ids : [],
+    planning_horizon_days: stored.planning_horizon_days ?? 0,
+    calendar_windows_considered: stored.calendar_windows_considered ?? 0,
+    resolved_slots: stored.resolved_slots ?? 0,
+    baseline_slots: stored.baseline_slots ?? 0,
+    support_slots: stored.support_slots ?? 0,
+    campaign_slots: stored.campaign_slots ?? 0,
+    content_strategy_summary: stored.content_strategy_summary ?? null,
   }
 
   await updatePipelineBRun(
@@ -737,6 +752,11 @@ ${JSON.stringify({
   profile: contentStrategy.profile,
   active_channels: contentStrategy.active_channels,
   baseline_mix: contentStrategy.baseline_mix,
+  weekly_post_budget: contentStrategy.weekly_post_budget,
+  support_slot_budget: contentStrategy.support_slot_budget,
+  channel_targets: contentStrategy.channel_targets,
+  content_type_targets: contentStrategy.content_type_targets,
+  selected_slot_ids: contentStrategy.selected_slot_ids,
 }, null, 2)}
 
 Create this week's content plan.`
@@ -1009,17 +1029,19 @@ function buildWeeklyContentStrategy(
   const baselineSlots = allowedSlots.filter((slot) => slot.purpose === 'baseline')
   const supportSlots = allowedSlots.filter((slot) => slot.purpose === 'support')
   const weeklyPostBudget = deriveWeeklyPostBudget(activeChannels, activeSeasonality, profile, structuredConfig, supportSlots.length)
-  const channelTargets = buildChannelTargets(activeChannels, weeklyPostBudget, profile)
-  const selectedBaselineSlots = selectBaselineSlots(baselineSlots, channelTargets)
-  const selectedSupportSlots = selectSupportSlots(supportSlots, weeklyPostBudget - selectedBaselineSlots.length)
+  const supportSlotBudget = deriveSupportSlotBudget(supportSlots, weeklyPostBudget, activeSeasonality, structuredConfig)
+  const selectedSupportSlots = selectSupportSlots(supportSlots, supportSlotBudget)
+  const remainingBaselineBudget = Math.max(0, weeklyPostBudget - selectedSupportSlots.length)
+  const channelTargets = buildChannelTargets(activeChannels, remainingBaselineBudget, profile)
+  const selectedBaselineSlots = selectBaselineSlots(baselineSlots, channelTargets, remainingBaselineBudget)
   const selectedSlotIds = [
     ...selectedBaselineSlots.map((slot) => slot.slot_id),
     ...selectedSupportSlots.map((slot) => slot.slot_id),
   ]
-  const baselineAssignments = assignBaselineContentTypes(baselineSlots, baselineMix)
+  const { assignments: baselineAssignments, targetCounts: contentTypeTargets } = assignBaselineContentTypes(selectedBaselineSlots, baselineMix)
   const directives: Record<string, PlannedSlotDirective> = {}
 
-  for (const slot of baselineSlots) {
+  for (const slot of selectedBaselineSlots) {
     const requiredContentType = baselineAssignments[slot.slot_id] ?? 'education'
     const requiredCtaText = requiredContentType === 'promotional' || requiredContentType === 'trust'
       ? slot.allowed_ctas[0] ?? primaryOffer?.default_cta ?? config?.brand_voice?.cta_preference ?? null
@@ -1058,7 +1080,11 @@ function buildWeeklyContentStrategy(
     active_channels: activeChannels,
     baseline_mix: baselineMix,
     weekly_post_budget: weeklyPostBudget,
+    support_slot_budget: selectedSupportSlots.length,
     channel_targets: channelTargets,
+    content_type_targets: contentTypeTargets,
+    selected_baseline_slot_ids: selectedBaselineSlots.map((slot) => slot.slot_id),
+    selected_support_slot_ids: selectedSupportSlots.map((slot) => slot.slot_id),
     selected_slot_ids: selectedSlotIds,
     directives,
   }
@@ -1139,10 +1165,33 @@ function buildChannelTargets(
   return targets
 }
 
+function deriveSupportSlotBudget(
+  supportSlots: ResolvedCalendarSlot[],
+  weeklyPostBudget: number,
+  activeSeasonality: Record<string, unknown> | null,
+  structuredConfig: StructuredConfigSnapshot,
+) {
+  if (supportSlots.length === 0 || weeklyPostBudget <= 0) return 0
+
+  const baselineAllowed = structuredConfig.campaignDefaults?.baseline_content_allowed
+  if (baselineAllowed === false) {
+    return Math.min(supportSlots.length, Math.max(1, weeklyPostBudget))
+  }
+
+  let budget = Math.max(1, Math.ceil(weeklyPostBudget * 0.34))
+  if (activeSeasonality?.demand_level === 'high') {
+    budget += 1
+  }
+
+  return Math.min(supportSlots.length, Math.min(3, budget))
+}
+
 function selectBaselineSlots(
   baselineSlots: ResolvedCalendarSlot[],
   channelTargets: Record<string, number>,
+  maxBudget: number,
 ) {
+  if (maxBudget <= 0) return []
   const remainingTargets = { ...channelTargets }
   const selected: ResolvedCalendarSlot[] = []
   const usedSlotIds = new Set<string>()
@@ -1176,6 +1225,9 @@ function selectBaselineSlots(
       if (!next) continue
 
       selected.push(next)
+      if (selected.length >= maxBudget) {
+        return selected.sort((a, b) => a.date.localeCompare(b.date) || a.channel.localeCompare(b.channel))
+      }
       usedSlotIds.add(next.slot_id)
       remainingTargets[next.channel] = Math.max(0, (remainingTargets[next.channel] ?? 0) - 1)
       dailyCounts.set(date, postsOnDate + 1)
@@ -1191,9 +1243,34 @@ function selectSupportSlots(
   remainingBudget: number,
 ) {
   if (remainingBudget <= 0) return []
-  return [...supportSlots]
-    .sort((a, b) => a.date.localeCompare(b.date) || a.channel.localeCompare(b.channel))
-    .slice(0, remainingBudget)
+  const selected: ResolvedCalendarSlot[] = []
+  const usedDates = new Set<string>()
+  const channelCounts = new Map<string, number>()
+
+  for (const slot of [...supportSlots].sort((a, b) => a.date.localeCompare(b.date) || a.channel.localeCompare(b.channel))) {
+    if (selected.length >= remainingBudget) break
+
+    const currentChannelCount = channelCounts.get(slot.channel) ?? 0
+    if (usedDates.has(slot.date) && currentChannelCount > 0) {
+      continue
+    }
+
+    selected.push(slot)
+    usedDates.add(slot.date)
+    channelCounts.set(slot.channel, currentChannelCount + 1)
+  }
+
+  if (selected.length >= remainingBudget) {
+    return selected
+  }
+
+  for (const slot of [...supportSlots].sort((a, b) => a.date.localeCompare(b.date) || a.channel.localeCompare(b.channel))) {
+    if (selected.length >= remainingBudget) break
+    if (selected.some((existing) => existing.slot_id === slot.slot_id)) continue
+    selected.push(slot)
+  }
+
+  return selected
 }
 
 function isRetailProductOffer(primaryOffer: any) {
@@ -1243,7 +1320,10 @@ function assignBaselineContentTypes(
     remaining[nextCategory] = Math.max(0, remaining[nextCategory] - 1)
   }
 
-  return assignments
+  return {
+    assignments,
+    targetCounts,
+  }
 }
 
 function getChannelCategoryPreference(channel: string): BaselineContentCategory[] {
