@@ -124,6 +124,11 @@ The active planning focus is now explicitly:
   - `Pipeline B` is better, but not yet considered fully tuned
   - some “Chililabombwe/raw/wild” repetition still comes from explicit brand config, not only from planner drift
 
+Support-content alignment note:
+- calendar UI exposes `Allow support content`
+- `academic_calendar.support_content_allowed` now exists in the live schema
+- existing rows were backfilled from `creative_override_allowed` so prior event behavior remains stable
+
 The next `M14B` focus is explicitly:
 - not a new milestone expansion
 - not UI-first work
