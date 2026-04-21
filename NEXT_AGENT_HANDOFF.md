@@ -136,10 +136,15 @@ Support-content alignment note:
 - `Pipeline B` support-only behavior is live and validated
 - successful `Pipeline B` runs now preserve content-strategy metadata through resume/success
 
-Queued immediately after `M14B` closes:
-- remove the temporary UI-to-DB calendar `event_type` translation shim
-- migrate the physical `academic_calendar.event_type` contract to the universal event types already used by the UI/domain layer
-- keep this as a dedicated post-`M14B` cleanup slice so the active milestone stays focused on deterministic planning truth
+Post-`M14B` cleanup is now complete:
+- the temporary UI-to-DB calendar `event_type` translation shim has been removed
+- the physical `academic_calendar.event_type` contract now matches the universal UI/domain values:
+  - `launch`
+  - `promotion`
+  - `seasonal`
+  - `community`
+  - `deadline`
+  - `other`
 
 From this point forward, implementation must move in test-checkpoint slices:
 - lock contract
@@ -157,9 +162,6 @@ The full `M14B` checkpoint sequence that is now implemented and validated is:
 7. final `Pipeline B` content-strategy / distribution tightening and metadata persistence
 
 The next allowed slice is no longer inside `M14B`.
-It is the queued post-`M14B` cleanup:
-- remove the temporary UI-to-DB `academic_calendar.event_type` translation shim
-- widen the physical calendar event-type contract to the universal UI/domain values
 
 Calendar Studio note:
 - do not implement the UI yet

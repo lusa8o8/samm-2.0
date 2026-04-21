@@ -492,10 +492,15 @@ Still open in `M14B`:
   - `Allow support content` maps to `support_content_allowed`
   - `Allow creative deviation` remains design-only
 
-Locked post-`M14B` cleanup:
-- once `M14B` closes, remove the temporary UI-to-DB event-type translation shim around `academic_calendar.event_type`
-- widen the physical calendar event-type contract to the universal values already used by the UI/domain layer
-- keep this as a dedicated cleanup slice after `M14B`, not folded into the current milestone while deterministic planning work is still open
+Post-`M14B` cleanup completed:
+- the temporary UI-to-DB event-type translation shim around `academic_calendar.event_type` has been removed
+- the physical calendar event-type contract now matches the universal UI/domain values:
+  - `launch`
+  - `promotion`
+  - `seasonal`
+  - `community`
+  - `deadline`
+  - `other`
 
 Locked interpretation for the next `M14B` sub-slice:
 - `Pipeline B` drift is not a prompt-tuning problem first

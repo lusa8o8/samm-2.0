@@ -234,15 +234,6 @@ const PIPELINE_DESCRIPTIONS: Record<string, string> = {
 };
 
 const PLATFORM_ORDER = ["facebook", "whatsapp", "youtube", "email"];
-const CALENDAR_DB_EVENT_TYPE_MAP: Record<string, string> = {
-  launch: "registration",
-  promotion: "graduation",
-  seasonal: "holiday",
-  community: "orientation",
-  deadline: "exam",
-  other: "other",
-};
-
 const PIPELINE_RUN_STATUS = {
   idle: 'idle',
   queued: 'queued',
@@ -567,11 +558,6 @@ function normalizeApprovalPolicy(row?: any): ApprovalPolicy {
     created_at: row?.created_at,
     updated_at: row?.updated_at,
   };
-}
-
-function toStoredCalendarEventType(eventType?: string | null) {
-  if (!eventType) return "other";
-  return CALENDAR_DB_EVENT_TYPE_MAP[eventType] ?? eventType;
 }
 
 async function requireSingleRow(table: string, id: string) {
@@ -1713,7 +1699,6 @@ export function useCreateCalendarEvent(options?: MutationHookOptions) {
     }) => {
       const payload = {
         ...data,
-        event_type: toStoredCalendarEventType(data.event_type),
         event_end_date: data.event_end_date || null,
         creative_override_allowed: data.creative_override_allowed ?? false,
         support_content_allowed: data.support_content_allowed ?? false,
@@ -1755,7 +1740,6 @@ export function useUpdateCalendarEvent(options?: MutationHookOptions) {
     }) => {
       const patch = {
         ...data,
-        ...(data.event_type ? { event_type: toStoredCalendarEventType(data.event_type) } : {}),
         event_end_date: data.event_end_date === "" ? null : data.event_end_date,
       };
       const { data: updated, error } = await supabase
