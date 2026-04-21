@@ -146,7 +146,7 @@ Rollback boundary:
 
 ## M14A.1 - Thin Ingress Runtime Split
 Status:
-- in progress, with first Railway worker path validated
+- complete for the initial worker target set
 
 Goal:
 - restore deployability and preserve the scheduler-first architecture by moving heavy execution out of hosted Supabase edge bundling while keeping Supabase as the durable control/data plane
@@ -222,10 +222,15 @@ Railway validation result:
 - thin ingress queueing still works
 - drafts land in `content_registry`
 - Pipeline B reaches `waiting_human` and remains resumable
+- `pipeline-c-campaign` now runs successfully through Railway with preserved calendar event context
+- campaign briefs land in `human_inbox`
+- the resume path creates copy assets after approval
+- campaign drafts land in `content_registry`
+- Pipeline C reaches terminal success and logs monitor/report execution
 
-Still open in `M14A.1`:
-- move `pipeline-c-campaign` behind the worker path
-- decide whether Pipeline B resume should also route through the worker later or remain edge-backed for now
+Still open after `M14A.1`:
+- decide whether additional paths should move behind the worker or stay edge-backed
+- decide whether Pipeline B / C resume should remain edge-backed or be worker-owned end to end later
 
 Out of scope:
 - full infra rewrite

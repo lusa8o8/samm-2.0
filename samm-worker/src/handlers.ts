@@ -3,6 +3,11 @@ import { workerConfig } from './config.js'
 import type { PipelineRunRecord } from './types.js'
 
 async function invokeEdgePipeline(run: PipelineRunRecord, functionName: string) {
+  const workerPayload =
+    run.result && typeof run.result === 'object' && 'worker_payload' in run.result
+      ? (run.result.worker_payload as Record<string, unknown> | null)
+      : null
+
   const response = await fetch(`${workerConfig.functionsBaseUrl}/${functionName}`, {
     method: 'POST',
     headers: {
@@ -14,6 +19,7 @@ async function invokeEdgePipeline(run: PipelineRunRecord, functionName: string) 
       org_id: run.org_id,
       worker_run_id: run.id,
       coordinator_task_id: run.coordinator_task_id,
+      ...(workerPayload ?? {}),
     }),
   })
 
@@ -66,7 +72,8 @@ export async function dispatchClaimedRun(run: PipelineRunRecord) {
       console.log(`[worker] dispatched ${run.pipeline} run ${run.id} to edge execution`)
       return
     case 'pipeline-c-campaign':
-      console.log(`[worker] claimed ${run.pipeline} run ${run.id}. Execution handoff is not wired yet in this slice.`)
+      await invokeEdgePipeline(run, 'pipeline-c-campaign')
+      console.log(`[worker] dispatched ${run.pipeline} run ${run.id} to edge execution`)
       return
     default:
       console.warn(`[worker] claimed unsupported pipeline ${run.pipeline} for run ${run.id}`)

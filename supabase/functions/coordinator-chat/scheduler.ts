@@ -22,7 +22,7 @@ const PIPELINE_TARGETS: Record<string, string> = {
   'pipeline-c-campaign': 'pipeline-c-campaign',
   'pipeline-d-post': 'pipeline-d-post',
 }
-const WORKER_PIPELINE_TARGETS = new Set<string>(['pipeline-b-weekly'])
+const WORKER_PIPELINE_TARGETS = new Set<string>(['pipeline-b-weekly', 'pipeline-c-campaign'])
 
 const STALE_RUN_MINUTES = 10
 
@@ -466,6 +466,15 @@ async function schedulePipelineRun(
   }
 
   if (WORKER_PIPELINE_TARGETS.has(pipeline.id)) {
+    const queuedResult =
+      pipeline.id === 'pipeline-c-campaign' && invokeBody.calendarEvent
+        ? {
+            worker_payload: {
+              calendarEvent: invokeBody.calendarEvent,
+            },
+          }
+        : null
+
     const { data: queuedRun, error: queueError } = await supabase
       .from('pipeline_runs')
       .insert({
@@ -474,6 +483,7 @@ async function schedulePipelineRun(
         coordinator_task_id: coordinatorTaskId,
         status: PIPELINE_RUN_STATUS.QUEUED,
         execution_target: 'worker',
+        result: queuedResult,
       })
       .select('id')
       .single()

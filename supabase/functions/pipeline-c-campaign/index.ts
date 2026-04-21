@@ -119,6 +119,11 @@ Deno.serve(async (req) => {
     : typeof payload?.resumeRunId === 'string'
       ? payload.resumeRunId
       : null
+  const workerRunId = typeof payload?.worker_run_id === 'string'
+    ? payload.worker_run_id
+    : typeof payload?.workerRunId === 'string'
+      ? payload.workerRunId
+      : null
   const coordinatorTaskId = typeof payload?.coordinator_task_id === 'string'
     ? payload.coordinator_task_id
     : null
@@ -153,8 +158,16 @@ Deno.serve(async (req) => {
     // 2. Query academic_calendar for the next upcoming event (standalone "run the campaign pipeline")
     // 3. Error ??? no upcoming event exists; do not silently fall back to a demo event
     let resolvedCalendarEvent: CalendarEvent | undefined
+    let existingRun: any = null
+
+    if (workerRunId) {
+      existingRun = await loadPipelineCRun(supabase, orgId, workerRunId)
+    }
+
     if (payload?.calendarEvent) {
       resolvedCalendarEvent = payload.calendarEvent as CalendarEvent
+    } else if (existingRun?.result?.worker_payload?.calendarEvent) {
+      resolvedCalendarEvent = existingRun.result.worker_payload.calendarEvent as CalendarEvent
     } else if (!resumeRunId) {
       // Only query for next event on a fresh run; resume uses the stored event from pipeline_runs.result
       resolvedCalendarEvent = await getNextCalendarEvent(supabase, orgId, today)
@@ -172,7 +185,11 @@ Deno.serve(async (req) => {
       return await resumePipelineCRun({ supabase, anthropic, context, config, runId: resumeRunId })
     }
 
-    runId = await createPipelineCRun(supabase, context.orgId, coordinatorTaskId)
+    if (workerRunId) {
+      runId = existingRun.id
+    } else {
+      runId = await createPipelineCRun(supabase, context.orgId, coordinatorTaskId)
+    }
 
     const event = context.calendarEvent
     if (!event) {
@@ -461,7 +478,7 @@ async function resumePipelineCRun(params: { supabase: any; anthropic: ReturnType
     console.log('Starting parallel asset creation...')
 
     const [copyAssets, designBrief] = await Promise.all([
-      runCopyWriter(anthropic, campaignBrief, event, config.brand_voice, canonicalCopy),
+      runPlatformCopyAdapters(anthropic, campaignBrief, event, config.brand_voice, canonicalCopy),
       runDesignBriefAgent(anthropic, campaignBrief, event, config.brand_visual ?? {}, config.markdown_design_spec ?? null, config.social_handles ?? {}, config.primary_cta_url ?? null)
     ])
 

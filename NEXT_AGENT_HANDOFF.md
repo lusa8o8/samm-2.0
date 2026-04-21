@@ -35,7 +35,7 @@ Before touching code, reread:
 - `VALIDATION_FOUNDATIONS.md`
 
 ## Current Build Status
-Stable through `M14A` on `main`, with `M14A.1` now validated locally and on Railway for the first worker path.
+Stable through `M14A` on `main`, with `M14A.1` now validated locally and on Railway for both initial worker paths.
 
 Latest pushed `M14A` commits:
 - `a68b790` `docs: lock SAMM 2.0 milestone and contract docs`
@@ -48,7 +48,7 @@ The source of truth is now:
 - this file for current institutional memory and next-slice guidance
 
 ## Current Active Slice
-`M14A` is now live-validated through the new thin ingress path, and `M14A.1` has its first successful worker execution path.
+`M14A` is now live-validated through the new thin ingress path, and the initial `M14A.1` worker split slice is now validated for both `pipeline-b-weekly` and `pipeline-c-campaign`.
 
 Resolved blocker:
 - the database migration is live
@@ -56,12 +56,11 @@ Resolved blocker:
 - `channel_routes` and `conversation_threads` now populate in production validation
 - hosted bundle timeouts still block heavy `coordinator-chat`, but explicit scheduler paths no longer depend on that deploy surface
 
-The active next step is now:
-- continue `M14A.1` `Thin Ingress Runtime Split`
+The runtime blocker is now resolved for the scoped heavy paths:
 - keep Supabase as source of truth
 - keep ingress thin and deployable
-- move the next heavy execution path into the Node worker runtime
-- follow `SAMM_RUNTIME_SPLIT_CONTRACT.md` as the execution contract for this redesign
+- keep Railway worker as the active execution plane for the moved heavy paths
+- follow `SAMM_RUNTIME_SPLIT_CONTRACT.md` as the execution contract for future runtime moves
 
 Current `M14A.1` delivered slice:
 - worker-claim contract added to `pipeline_runs`
@@ -88,6 +87,13 @@ Current `M14A.1` delivered slice:
   - drafts land in Content Registry
   - Pipeline B reaches `waiting_human`
   - Supabase `pipeline-b-weekly` logs show drafts sent to Content Registry
+- Pipeline C is now validated through the same worker path remotely:
+  - `pipeline-c-campaign` is queued through thin ingress with preserved calendar event context
+  - campaign briefs land in `human_inbox`
+  - the approval resume path now creates copy assets correctly
+  - campaign drafts land in Content Registry
+  - Pipeline C reaches terminal success after approval / resume
+  - Supabase `pipeline-c-campaign` logs confirm copy asset creation, monitor run, and post-campaign report generation
 
 `M14A` remains intentionally narrow:
 - schema
@@ -203,8 +209,8 @@ It does not exist for:
 - summarization-as-truth
 
 ## Immediate Milestone Queue
-- `M14A` `SAMM Memory Layer` (implemented; blocked on hosted deployability for live validation)
-- `M14A.1` `Thin Ingress Runtime Split`
+- `M14A` `SAMM Memory Layer` (implemented and live-validated)
+- `M14A.1` `Thin Ingress Runtime Split` (implemented and validated for initial worker targets)
 - `M14B` `Structured Config Expansion`
 - `M14C` `CRM P1`
 - `M15D` `Validation Foundations`

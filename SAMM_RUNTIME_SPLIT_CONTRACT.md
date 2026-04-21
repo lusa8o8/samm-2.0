@@ -231,6 +231,10 @@ Current validation state:
 - `channel_routes` and `conversation_threads` now populate in production validation
 - the first worker path is proven for `pipeline-b-weekly`
 - `samm-worker` is deployed on Railway and the first remote worker path is validated for `pipeline-b-weekly`
+- the second worker path is now proven for `pipeline-c-campaign`
+- queued Pipeline C runs preserve calendar event context through the worker handoff
+- the approval resume path creates copy assets correctly after the helper mismatch fix
+- Railway is now an active part of the runtime for both initial heavy execution paths
 - Railway is now an active part of the runtime, not a planning assumption
 
 ## Explicit Non-Goals
