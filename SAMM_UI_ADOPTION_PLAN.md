@@ -28,6 +28,11 @@ Reference libraries also exist in:
 
 These are for grounding and best-practice inspection, not for blindly copying architecture into the product.
 
+One explicit unresolved issue must remain visible:
+- conversation persistence in `/samm` was not solved before the `M14` milestone series started
+- backend memory/state milestones did not automatically solve frontend thread persistence
+- persistent conversation rendering must be treated as an explicit UI adoption task
+
 ## Brand Rules
 These are locked:
 - always lowercase `samm`
@@ -57,6 +62,7 @@ Adopt in this order:
 - support structured cards/widgets in the thread
 - support inspector/companion panels
 - keep coordinator outputs UI-addressable
+- add real conversation persistence in the shared workspace thread
 
 3. operational carryover
 - use the old UI for missing pages and details
@@ -69,6 +75,11 @@ Adopt in this order:
 4. config expansion support
 - once `M14B` lands, update settings/config UI to support the universal config model
 - do not hardcode old TSH-specific assumptions into the new forms
+- first `M14B` settings carryover is now live in `M.A.S UI`:
+  - universal-config read surface
+  - editable campaign defaults
+  - editable approval policy
+- keep broader shell/workspace adoption separate from this settings carryover
 
 ## Immediate UI Source Mapping
 Use the packaged `samm 2.0 UI` as the main source for:

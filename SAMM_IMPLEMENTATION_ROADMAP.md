@@ -112,6 +112,7 @@ Out of scope:
 - Sales logic
 - UI overhaul
 - obligation firing engine
+- frontend conversation persistence
 
 Locked decisions:
 - `coordinator_tasks.task_type` is a controlled string set, not a DB enum
@@ -140,6 +141,11 @@ Validation result:
   - `channel_routes`
   - `conversation_threads`
 - `M14A` is now considered closed through the thin ingress path
+
+Important non-goal clarification:
+- conversation persistence in the `/samm` UI was already unresolved before the `M14` series began
+- `M14A` solved durable backend memory/state contracts, not frontend thread-history rendering
+- persistent conversation UI remains a separate frontend/workspace milestone
 
 Rollback boundary:
 - tables and runtime wiring can be reverted without touching CRM, Sales, or UI architecture
@@ -252,7 +258,7 @@ Rollback boundary:
 
 ## M14B - Structured Config Expansion
 Status:
-- in progress, with schema foundation live
+- in progress, with schema foundation, read contracts, and first current-settings expansion live
 
 Goal:
 - turn business truth into deterministic universal structured config before outreach or sales automation expands
@@ -313,10 +319,29 @@ Delivered in first slice:
   - `approval_policy`
   - `outreach_policy`
 
+Delivered in second slice:
+- frontend read contracts now exist for:
+  - `icp_categories`
+  - `offer_catalog`
+  - `seasonality_profile` / `seasonality_periods`
+  - `discount_policies`
+  - `outreach_policy`
+  - `campaign_defaults`
+  - `approval_policy`
+- current `Operations -> Settings` now exposes the first universal-config surface:
+  - read-only snapshot for audience, offers, seasonality, pricing, and outreach
+  - editable `campaign_defaults`
+  - editable `approval_policy`
+
 Still open in `M14B`:
-- read contracts and frontend API surface for the new config layer
-- settings/config UI expansion
-- explicit carryover from current settings forms into the universal model
+- write surfaces for:
+  - `icp_categories`
+  - `offer_catalog`
+  - `seasonality_profile`
+  - `discount_policies`
+  - `outreach_policy`
+- explicit carryover from current settings forms into the full universal model
+- pipeline adoption of structured config reads
 
 Rollback boundary:
 - config tables and read helpers can be removed without disturbing existing marketing pipelines
@@ -351,6 +376,11 @@ Status:
 
 Goal:
 - make the `samm` thread a native shared workspace with structured cards/widgets, not a plain chat transcript
+
+Problem statement:
+- `/samm` conversation persistence was not solved before `M14`
+- it remains intentionally unsolved after `M14A` / `M14A.1`
+- this milestone is where persistent thread rendering should be addressed in the UI layer
 
 In scope:
 - thread-level widget rendering

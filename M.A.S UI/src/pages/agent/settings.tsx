@@ -1,7 +1,38 @@
 import { useState, useEffect, useRef } from "react";
-import { useGetOrgConfig, useUpdateOrgConfig, useTriggerPipeline, getGetOrgConfigQueryKey } from "@/lib/api";
+import {
+  useGetOrgConfig,
+  useUpdateOrgConfig,
+  useTriggerPipeline,
+  getGetOrgConfigQueryKey,
+  useListIcpCategories,
+  useListOfferCatalog,
+  useListSeasonalityProfiles,
+  useListDiscountPolicies,
+  useListOutreachPolicies,
+  useGetCampaignDefaults,
+  useUpdateCampaignDefaults,
+  getGetCampaignDefaultsQueryKey,
+  useGetApprovalPolicy,
+  useUpdateApprovalPolicy,
+  getGetApprovalPolicyQueryKey,
+} from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
-import { Save, Building, MessageSquare, Share2, GitBranch, Target, Check, AlertCircle, Play, Palette } from "lucide-react";
+import {
+  Save,
+  Building,
+  MessageSquare,
+  Share2,
+  GitBranch,
+  Target,
+  Check,
+  AlertCircle,
+  Play,
+  Palette,
+  Users,
+  Package,
+  CalendarRange,
+  ShieldCheck,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -41,6 +72,15 @@ export default function AgentSettings() {
   const { data: config, isLoading } = useGetOrgConfig();
   const updateMutation = useUpdateOrgConfig();
   const triggerPipeline = useTriggerPipeline();
+  const { data: icpCategories = [] } = useListIcpCategories();
+  const { data: offerCatalog = [] } = useListOfferCatalog();
+  const { data: seasonalityProfiles = [] } = useListSeasonalityProfiles();
+  const { data: discountPolicies = [] } = useListDiscountPolicies();
+  const { data: outreachPolicies = [] } = useListOutreachPolicies();
+  const { data: campaignDefaults } = useGetCampaignDefaults();
+  const { data: approvalPolicy } = useGetApprovalPolicy();
+  const updateCampaignDefaults = useUpdateCampaignDefaults();
+  const updateApprovalPolicy = useUpdateApprovalPolicy();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -49,12 +89,16 @@ export default function AgentSettings() {
   const [visualData, setVisualData] = useState<any>({});
   const [kpiData, setKpiData] = useState<any>({});
   const [pipelineData, setPipelineData] = useState<any>({});
+  const [campaignDefaultsData, setCampaignDefaultsData] = useState<any>({});
+  const [approvalPolicyData, setApprovalPolicyData] = useState<any>({});
   const [facebookCredentials, setFacebookCredentials] = useState({ page_id: "", access_token: "" });
   const [facebookPages, setFacebookPages] = useState<FacebookPageOption[]>([]);
   const [selectedFacebookPageId, setSelectedFacebookPageId] = useState("");
   const [isConnectingFacebook, setIsConnectingFacebook] = useState(false);
 
   const initialized = useRef(false);
+  const campaignDefaultsInitialized = useRef(false);
+  const approvalPolicyInitialized = useRef(false);
   const facebookConnectHandled = useRef(false);
 
   useEffect(() => {
@@ -82,6 +126,20 @@ export default function AgentSettings() {
       initialized.current = true;
     }
   }, [config]);
+
+  useEffect(() => {
+    if (campaignDefaults && !campaignDefaultsInitialized.current) {
+      setCampaignDefaultsData(campaignDefaults);
+      campaignDefaultsInitialized.current = true;
+    }
+  }, [campaignDefaults]);
+
+  useEffect(() => {
+    if (approvalPolicy && !approvalPolicyInitialized.current) {
+      setApprovalPolicyData(approvalPolicy);
+      approvalPolicyInitialized.current = true;
+    }
+  }, [approvalPolicy]);
 
   const [triggeringPipeline, setTriggeringPipeline] = useState<string | null>(null);
   const platformConnections = ((config?.platform_connections ?? {}) as Record<string, any>);
@@ -387,6 +445,44 @@ export default function AgentSettings() {
     );
   };
 
+  const handleSaveCampaignDefaults = () => {
+    updateCampaignDefaults.mutate(
+      { data: campaignDefaultsData },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getGetCampaignDefaultsQueryKey() });
+          toast({ title: "Campaign defaults saved", description: "Default campaign rules updated successfully." });
+        },
+        onError: (err) => {
+          toast({
+            title: "Save failed",
+            description: (err as Error).message ?? "Could not save campaign defaults.",
+            variant: "destructive",
+          });
+        },
+      }
+    );
+  };
+
+  const handleSaveApprovalPolicy = () => {
+    updateApprovalPolicy.mutate(
+      { data: approvalPolicyData },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getGetApprovalPolicyQueryKey() });
+          toast({ title: "Approval policy saved", description: "Approval rules updated successfully." });
+        },
+        onError: (err) => {
+          toast({
+            title: "Save failed",
+            description: (err as Error).message ?? "Could not save approval policy.",
+            variant: "destructive",
+          });
+        },
+      }
+    );
+  };
+
   if (isLoading || !initialized.current) {
     return <div className="space-y-4 p-8"><Skeleton className="h-10 w-full" /><Skeleton className="h-64 w-full" /></div>;
   }
@@ -418,6 +514,17 @@ export default function AgentSettings() {
         />
       </div>
     );
+  };
+
+  const toggleDefaultChannel = (channel: string, enabled: boolean) => {
+    const currentChannels = Array.isArray(campaignDefaultsData.default_channels)
+      ? campaignDefaultsData.default_channels
+      : [];
+    const nextChannels = enabled
+      ? Array.from(new Set([...currentChannels, channel]))
+      : currentChannels.filter((value: string) => value !== channel);
+
+    setCampaignDefaultsData({ ...campaignDefaultsData, default_channels: nextChannels });
   };
 
   return (
@@ -474,6 +581,134 @@ export default function AgentSettings() {
                   <Button size="sm" onClick={() => handleSave("org", orgData)} disabled={updateMutation.isPending}>
                     <Save className="mr-2 h-4 w-4" /> Save Organisation
                   </Button>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+
+            <AccordionItem value="item-1b" className="overflow-hidden rounded-lg border bg-card px-2 shadow-sm">
+              <AccordionTrigger className="px-4 py-5 hover:no-underline">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-md bg-muted p-2 text-foreground/70"><Users className="h-4 w-4" /></div>
+                  <div className="text-left">
+                    <h3 className="text-sm font-semibold">Audience, Offers &amp; Seasonality</h3>
+                    <p className="mt-0.5 text-xs text-muted-foreground">Universal config state for ICP, products, outreach, pricing, and demand cycles</p>
+                  </div>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="px-4 pb-6 pt-2">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                  <div className="rounded-lg border bg-background p-4">
+                    <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      <Users className="h-3.5 w-3.5" /> ICP Categories
+                    </div>
+                    <div className="mt-3 text-2xl font-semibold">{icpCategories.length}</div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {icpCategories.length ? `${icpCategories.filter((item) => item.active).length} active audience segments configured.` : "No audience segments configured yet."}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border bg-background p-4">
+                    <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      <Package className="h-3.5 w-3.5" /> Offer Catalog
+                    </div>
+                    <div className="mt-3 text-2xl font-semibold">{offerCatalog.length}</div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {offerCatalog.length ? `${offerCatalog.filter((item) => item.active).length} active offers available for campaigns.` : "No offers configured yet."}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border bg-background p-4">
+                    <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      <CalendarRange className="h-3.5 w-3.5" /> Seasonality
+                    </div>
+                    <div className="mt-3 text-2xl font-semibold">
+                      {seasonalityProfiles.reduce((total, profile) => total + (profile.seasonality_periods?.length ?? 0), 0)}
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {seasonalityProfiles.length ? `${seasonalityProfiles.length} profiles controlling demand and campaign intensity.` : "No seasonality profiles configured yet."}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div className="rounded-lg border bg-background p-4">
+                    <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Audience segments</div>
+                    {icpCategories.length ? (
+                      <div className="space-y-3">
+                        {icpCategories.slice(0, 4).map((item) => (
+                          <div key={item.id} className="rounded-md border p-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="text-sm font-medium">{item.name}</div>
+                              <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
+                                Priority {item.priority_score}
+                              </Badge>
+                            </div>
+                            <p className="mt-1 text-xs text-muted-foreground">{item.description || "No description yet."}</p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">Create ICP categories next to define who samm should target by default.</p>
+                    )}
+                  </div>
+
+                  <div className="rounded-lg border bg-background p-4">
+                    <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Offers &amp; pricing controls</div>
+                    {offerCatalog.length ? (
+                      <div className="space-y-3">
+                        {offerCatalog.slice(0, 4).map((item) => (
+                          <div key={item.id} className="rounded-md border p-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="text-sm font-medium">{item.name}</div>
+                              <Badge variant="outline" className="h-5 px-1.5 text-[10px]">{item.type}</Badge>
+                            </div>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {item.base_price != null && item.currency ? `${item.currency} ${item.base_price}` : "Price not set"} · {item.discount_allowed ? "Discountable" : "No discounts"}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">No offers yet. Campaigns will stay generic until the offer catalog is populated.</p>
+                    )}
+                    <div className="mt-4 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                      <span>{discountPolicies.length} discount policies</span>
+                      <span>·</span>
+                      <span>{outreachPolicies.length} outreach policies</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-5 rounded-lg border bg-background p-4">
+                  <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Seasonality &amp; outreach overview</div>
+                  {seasonalityProfiles.length || outreachPolicies.length ? (
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                      <div className="space-y-3">
+                        {seasonalityProfiles.slice(0, 2).map((profile) => (
+                          <div key={profile.id} className="rounded-md border p-3">
+                            <div className="text-sm font-medium">{profile.name}</div>
+                            <p className="mt-1 text-xs text-muted-foreground">{profile.description || "No description yet."}</p>
+                            <p className="mt-2 text-[11px] text-muted-foreground">
+                              {(profile.seasonality_periods ?? []).length} periods configured
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="space-y-3">
+                        {outreachPolicies.slice(0, 2).map((policy) => (
+                          <div key={policy.id} className="rounded-md border p-3">
+                            <div className="text-sm font-medium">{policy.name}</div>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              Min ICP fit {policy.min_icp_fit_score} · Trigger confidence {policy.min_trigger_confidence}
+                            </p>
+                            <p className="mt-2 text-[11px] text-muted-foreground">
+                              7d cap {policy.max_contacts_per_7d} · 30d cap {policy.max_contacts_per_30d}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Seasonality and outreach policy defaults are present, but no custom profiles have been added yet.</p>
+                  )}
                 </div>
               </AccordionContent>
             </AccordionItem>
@@ -996,6 +1231,146 @@ export default function AgentSettings() {
                   <Button size="sm" onClick={() => handleSave("kpi_targets", kpiData)} disabled={updateMutation.isPending}>
                     <Save className="mr-2 h-4 w-4" /> Save Targets
                   </Button>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+
+            <AccordionItem value="item-5b" className="overflow-hidden rounded-lg border bg-card px-2 shadow-sm">
+              <AccordionTrigger className="px-4 py-5 hover:no-underline">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-md bg-muted p-2 text-foreground/70"><ShieldCheck className="h-4 w-4" /></div>
+                  <div className="text-left">
+                    <h3 className="text-sm font-semibold">Campaign Defaults &amp; Approval Rules</h3>
+                    <p className="mt-0.5 text-xs text-muted-foreground">Baseline campaign behavior and approval boundaries for every workspace</p>
+                  </div>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="px-4 pb-6 pt-2">
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                  <div className="rounded-lg border bg-background p-4">
+                    <div className="mb-4 text-sm font-medium">Campaign defaults</div>
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label className="text-xs">Default duration (days)</Label>
+                        <Input
+                          type="number"
+                          min={1}
+                          value={campaignDefaultsData.default_duration_days ?? 14}
+                          onChange={(e) =>
+                            setCampaignDefaultsData({
+                              ...campaignDefaultsData,
+                              default_duration_days: Number(e.target.value || 14),
+                            })
+                          }
+                          className="h-9"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs">Default objective</Label>
+                        <select
+                          className="h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                          value={campaignDefaultsData.default_objective ?? "engagement"}
+                          onChange={(e) => setCampaignDefaultsData({ ...campaignDefaultsData, default_objective: e.target.value })}
+                        >
+                          <option value="awareness">Awareness</option>
+                          <option value="engagement">Engagement</option>
+                          <option value="conversion">Conversion</option>
+                          <option value="retention">Retention</option>
+                          <option value="announcement">Announcement</option>
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs">Default CTA style</Label>
+                        <select
+                          className="h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                          value={campaignDefaultsData.default_cta_style ?? "educational"}
+                          onChange={(e) => setCampaignDefaultsData({ ...campaignDefaultsData, default_cta_style: e.target.value })}
+                        >
+                          <option value="direct">Direct</option>
+                          <option value="soft">Soft</option>
+                          <option value="educational">Educational</option>
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs">Default audience segment</Label>
+                        <select
+                          className="h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                          value={campaignDefaultsData.default_icp_category_id ?? ""}
+                          onChange={(e) =>
+                            setCampaignDefaultsData({
+                              ...campaignDefaultsData,
+                              default_icp_category_id: e.target.value || null,
+                            })
+                          }
+                        >
+                          <option value="">No default segment</option>
+                          {icpCategories.map((item) => (
+                            <option key={item.id} value={item.id}>
+                              {item.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs">Default channels</Label>
+                        <div className="grid grid-cols-2 gap-2">
+                          {["facebook", "whatsapp", "youtube", "email"].map((channel) => {
+                            const checked = (campaignDefaultsData.default_channels ?? []).includes(channel);
+                            return (
+                              <label key={channel} className="flex items-center gap-2 rounded-md border p-2 text-sm">
+                                <Switch checked={checked} onCheckedChange={(enabled) => toggleDefaultChannel(channel, enabled)} />
+                                <span className="capitalize">{channel}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-6 flex justify-end">
+                      <Button size="sm" onClick={handleSaveCampaignDefaults} disabled={updateCampaignDefaults.isPending}>
+                        <Save className="mr-2 h-4 w-4" /> Save Campaign Defaults
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg border bg-background p-4">
+                    <div className="mb-4 text-sm font-medium">Approval policy</div>
+                    <div className="space-y-3">
+                      {[
+                        { key: "brief_approval_required", label: "Campaign briefs require approval" },
+                        { key: "copy_approval_required", label: "Copy drafts require approval" },
+                        { key: "discount_approval_required", label: "Discounts require approval" },
+                        { key: "outreach_approval_required", label: "Outreach requires approval" },
+                      ].map((item) => (
+                        <div key={item.key} className="flex items-center justify-between rounded-md border p-3">
+                          <div className="pr-4 text-sm">{item.label}</div>
+                          <Switch
+                            checked={Boolean(approvalPolicyData[item.key])}
+                            onCheckedChange={(checked) =>
+                              setApprovalPolicyData({
+                                ...approvalPolicyData,
+                                [item.key]: checked,
+                              })
+                            }
+                          />
+                        </div>
+                      ))}
+                      <div className="space-y-2">
+                        <Label className="text-xs">Policy notes</Label>
+                        <Textarea
+                          value={approvalPolicyData.notes ?? ""}
+                          onChange={(e) => setApprovalPolicyData({ ...approvalPolicyData, notes: e.target.value })}
+                          placeholder="Optional notes about approval boundaries or operator policy."
+                          className="h-28 resize-none text-sm"
+                        />
+                      </div>
+                    </div>
+                    <div className="mt-6 flex justify-end">
+                      <Button size="sm" onClick={handleSaveApprovalPolicy} disabled={updateApprovalPolicy.isPending}>
+                        <Save className="mr-2 h-4 w-4" /> Save Approval Policy
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               </AccordionContent>
             </AccordionItem>

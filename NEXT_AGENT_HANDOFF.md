@@ -74,7 +74,11 @@ The next planning focus is now explicitly:
   - `campaign_defaults`
   - `approval_policy`
   - `outreach_policy`
-- no settings UI changes have landed yet
+- current `Operations -> Settings` now includes the first universal-config slice:
+  - read-only snapshot for audience / offers / seasonality / outreach
+  - editable `campaign_defaults`
+  - editable `approval_policy`
+- read hooks now exist for the new config tables in `M.A.S UI/src/lib/api.ts`
 - ICP remains explicitly locked in the config model
 
 Current `M14A.1` delivered slice:
@@ -332,6 +336,7 @@ Manual product validation now confirms:
 Open issue:
 - `/samm` chat remains non-persistent in the UI
 - this is a separate frontend/UI slice, not an `M14A` or `M14A.1` backend blocker
+- this issue predates the `M14` series and must not be misread as already solved by backend memory work
 
 Current backend concern:
 - hosted deploys for heavier functions still fail with `Bundle generation timed out`

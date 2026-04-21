@@ -76,6 +76,136 @@ type OrgConfig = {
   kpi_targets: Record<string, number>;
 };
 
+export type IcpCategory = {
+  id: string;
+  org_id: string;
+  name: string;
+  active: boolean;
+  description: string;
+  hard_filters: Record<string, unknown>;
+  soft_signals: Record<string, unknown>;
+  exclusion_rules: Record<string, unknown>;
+  default_channels: string[];
+  default_cta_style: string;
+  default_offer_ids: string[];
+  default_outreach_policy_id: string | null;
+  priority_score: number;
+  custom_fields: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type OfferCatalogItem = {
+  id: string;
+  org_id: string;
+  active: boolean;
+  name: string;
+  type: string;
+  category: string;
+  description: string;
+  base_price: number | null;
+  currency: string;
+  pricing_model: string;
+  valid_from: string | null;
+  valid_until: string | null;
+  applicable_icp_ids: string[];
+  applicable_channels: string[];
+  applicable_subjects: string[];
+  applicable_seasons: string[];
+  default_cta: string;
+  delivery_method: string;
+  landing_url: string;
+  discount_allowed: boolean;
+  discount_policy_id: string | null;
+  approval_required: boolean;
+  priority_score: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SeasonalityPeriod = {
+  id: string;
+  org_id: string;
+  seasonality_profile_id: string;
+  name: string;
+  period_type: "recurring" | "override";
+  starts_on: string | null;
+  ends_on: string | null;
+  demand_level: "high" | "normal" | "low";
+  allow_discounts: boolean;
+  outreach_intensity: string;
+  campaign_priority: number;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SeasonalityProfile = {
+  id: string;
+  org_id: string;
+  name: string;
+  description: string;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+  seasonality_periods: SeasonalityPeriod[];
+};
+
+export type DiscountPolicy = {
+  id: string;
+  org_id: string;
+  name: string;
+  max_discount_percent: number;
+  allowed_discount_types: string[];
+  allowed_offer_ids: string[];
+  allowed_icp_ids: string[];
+  allowed_conditions: Record<string, unknown>;
+  forbidden_conditions: Record<string, unknown>;
+  cooldown_days: number;
+  stacking_allowed: boolean;
+  approval_required: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type OutreachPolicy = {
+  id: string;
+  org_id: string;
+  name: string;
+  min_icp_fit_score: number;
+  min_trigger_confidence: number;
+  negative_signal_suppression_days: number;
+  max_contacts_per_7d: number;
+  max_contacts_per_30d: number;
+  channel_rules: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CampaignDefaults = {
+  id?: string;
+  org_id?: string;
+  default_duration_days: number;
+  default_channels: string[];
+  default_objective: string;
+  default_cta_style: string;
+  default_icp_category_id: string | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type ApprovalPolicy = {
+  id?: string;
+  org_id?: string;
+  brief_approval_required: boolean;
+  copy_approval_required: boolean;
+  discount_approval_required: boolean;
+  outreach_approval_required: boolean;
+  notes: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
 const PIPELINE_DESCRIPTIONS: Record<string, string> = {
   coordinator: "Orchestrates all pipelines and schedules.",
   pipeline_a: "Processes engagement and escalations.",
@@ -384,6 +514,34 @@ function toStoredBrandVoice(brandVoice: OrgConfig["brand_voice"], current?: any)
   };
 }
 
+function normalizeCampaignDefaults(row?: any): CampaignDefaults {
+  return {
+    id: row?.id,
+    org_id: row?.org_id,
+    default_duration_days: row?.default_duration_days ?? 14,
+    default_channels: row?.default_channels ?? ["facebook", "whatsapp", "youtube", "email"],
+    default_objective: row?.default_objective ?? "engagement",
+    default_cta_style: row?.default_cta_style ?? "educational",
+    default_icp_category_id: row?.default_icp_category_id ?? null,
+    created_at: row?.created_at,
+    updated_at: row?.updated_at,
+  };
+}
+
+function normalizeApprovalPolicy(row?: any): ApprovalPolicy {
+  return {
+    id: row?.id,
+    org_id: row?.org_id,
+    brief_approval_required: row?.brief_approval_required ?? true,
+    copy_approval_required: row?.copy_approval_required ?? true,
+    discount_approval_required: row?.discount_approval_required ?? true,
+    outreach_approval_required: row?.outreach_approval_required ?? true,
+    notes: row?.notes ?? "",
+    created_at: row?.created_at,
+    updated_at: row?.updated_at,
+  };
+}
+
 async function requireSingleRow(table: string, id: string) {
   const { data, error } = await supabase.from(table).select("*").eq("org_id", getOrgId()).eq("id", id).single();
   if (error) throw error;
@@ -477,6 +635,34 @@ export function getListContentQueryKey(params?: ContentFilter) {
 
 export function getGetOrgConfigQueryKey() {
   return ["org-config", getOrgId()] as const;
+}
+
+export function getListIcpCategoriesQueryKey() {
+  return ["icp-categories", getOrgId()] as const;
+}
+
+export function getListOfferCatalogQueryKey() {
+  return ["offer-catalog", getOrgId()] as const;
+}
+
+export function getListSeasonalityProfilesQueryKey() {
+  return ["seasonality-profiles", getOrgId()] as const;
+}
+
+export function getListDiscountPoliciesQueryKey() {
+  return ["discount-policies", getOrgId()] as const;
+}
+
+export function getListOutreachPoliciesQueryKey() {
+  return ["outreach-policy", getOrgId()] as const;
+}
+
+export function getGetCampaignDefaultsQueryKey() {
+  return ["campaign-defaults", getOrgId()] as const;
+}
+
+export function getGetApprovalPolicyQueryKey() {
+  return ["approval-policy", getOrgId()] as const;
 }
 
 export function getListAmbassadorsQueryKey() {
@@ -963,6 +1149,216 @@ export function useUpdateOrgConfig(options?: MutationHookOptions) {
 
       if (error) throw error;
       return normalizeOrgConfig(updated);
+    },
+    ...options?.mutation,
+  });
+}
+
+export function useListIcpCategories(options?: QueryHookOptions) {
+  return useQuery({
+    queryKey: options?.query?.queryKey ?? getListIcpCategoriesQueryKey(),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("icp_categories")
+        .select("*")
+        .eq("org_id", getOrgId())
+        .order("priority_score", { ascending: false })
+        .order("name", { ascending: true });
+
+      if (error) throw error;
+      return (data ?? []) as IcpCategory[];
+    },
+    ...options?.query,
+  });
+}
+
+export function useListOfferCatalog(options?: QueryHookOptions) {
+  return useQuery({
+    queryKey: options?.query?.queryKey ?? getListOfferCatalogQueryKey(),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("offer_catalog")
+        .select("*")
+        .eq("org_id", getOrgId())
+        .order("priority_score", { ascending: false })
+        .order("name", { ascending: true });
+
+      if (error) throw error;
+      return (data ?? []) as OfferCatalogItem[];
+    },
+    ...options?.query,
+  });
+}
+
+export function useListSeasonalityProfiles(options?: QueryHookOptions) {
+  return useQuery({
+    queryKey: options?.query?.queryKey ?? getListSeasonalityProfilesQueryKey(),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("seasonality_profile")
+        .select("*, seasonality_periods(*)")
+        .eq("org_id", getOrgId())
+        .order("name", { ascending: true });
+
+      if (error) throw error;
+      return (data ?? []).map((row) => ({
+        ...row,
+        seasonality_periods: (row.seasonality_periods ?? []).sort((a: SeasonalityPeriod, b: SeasonalityPeriod) =>
+          a.name.localeCompare(b.name)
+        ),
+      })) as SeasonalityProfile[];
+    },
+    ...options?.query,
+  });
+}
+
+export function useListDiscountPolicies(options?: QueryHookOptions) {
+  return useQuery({
+    queryKey: options?.query?.queryKey ?? getListDiscountPoliciesQueryKey(),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("discount_policies")
+        .select("*")
+        .eq("org_id", getOrgId())
+        .order("name", { ascending: true });
+
+      if (error) throw error;
+      return (data ?? []) as DiscountPolicy[];
+    },
+    ...options?.query,
+  });
+}
+
+export function useListOutreachPolicies(options?: QueryHookOptions) {
+  return useQuery({
+    queryKey: options?.query?.queryKey ?? getListOutreachPoliciesQueryKey(),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("outreach_policy")
+        .select("*")
+        .eq("org_id", getOrgId())
+        .order("name", { ascending: true });
+
+      if (error) throw error;
+      return (data ?? []) as OutreachPolicy[];
+    },
+    ...options?.query,
+  });
+}
+
+export function useGetCampaignDefaults(options?: QueryHookOptions) {
+  return useQuery({
+    queryKey: options?.query?.queryKey ?? getGetCampaignDefaultsQueryKey(),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("campaign_defaults")
+        .select("*")
+        .eq("org_id", getOrgId())
+        .maybeSingle();
+
+      if (error) throw error;
+      return normalizeCampaignDefaults(data);
+    },
+    ...options?.query,
+  });
+}
+
+export function useUpdateCampaignDefaults(options?: MutationHookOptions) {
+  return useMutation({
+    mutationFn: async ({ data }: { data: Partial<CampaignDefaults> }) => {
+      const { data: current, error: currentError } = await supabase
+        .from("campaign_defaults")
+        .select("*")
+        .eq("org_id", getOrgId())
+        .maybeSingle();
+
+      if (currentError) throw currentError;
+
+      const patch = {
+        ...(current ?? {}),
+        ...data,
+        org_id: getOrgId(),
+      };
+
+      if (current?.id) {
+        const { data: updated, error } = await supabase
+          .from("campaign_defaults")
+          .update(patch)
+          .eq("id", current.id)
+          .select("*")
+          .single();
+
+        if (error) throw error;
+        return normalizeCampaignDefaults(updated);
+      }
+
+      const { data: inserted, error } = await supabase
+        .from("campaign_defaults")
+        .insert(patch)
+        .select("*")
+        .single();
+
+      if (error) throw error;
+      return normalizeCampaignDefaults(inserted);
+    },
+    ...options?.mutation,
+  });
+}
+
+export function useGetApprovalPolicy(options?: QueryHookOptions) {
+  return useQuery({
+    queryKey: options?.query?.queryKey ?? getGetApprovalPolicyQueryKey(),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("approval_policy")
+        .select("*")
+        .eq("org_id", getOrgId())
+        .maybeSingle();
+
+      if (error) throw error;
+      return normalizeApprovalPolicy(data);
+    },
+    ...options?.query,
+  });
+}
+
+export function useUpdateApprovalPolicy(options?: MutationHookOptions) {
+  return useMutation({
+    mutationFn: async ({ data }: { data: Partial<ApprovalPolicy> }) => {
+      const { data: current, error: currentError } = await supabase
+        .from("approval_policy")
+        .select("*")
+        .eq("org_id", getOrgId())
+        .maybeSingle();
+
+      if (currentError) throw currentError;
+
+      const patch = {
+        ...(current ?? {}),
+        ...data,
+        org_id: getOrgId(),
+      };
+
+      if (current?.id) {
+        const { data: updated, error } = await supabase
+          .from("approval_policy")
+          .update(patch)
+          .eq("id", current.id)
+          .select("*")
+          .single();
+
+        if (error) throw error;
+        return normalizeApprovalPolicy(updated);
+      }
+
+      const { data: inserted, error } = await supabase
+        .from("approval_policy")
+        .insert(patch)
+        .select("*")
+        .single();
+
+      if (error) throw error;
+      return normalizeApprovalPolicy(inserted);
     },
     ...options?.mutation,
   });
