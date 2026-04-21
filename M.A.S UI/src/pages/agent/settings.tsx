@@ -15,6 +15,16 @@ import {
   useGetApprovalPolicy,
   useUpdateApprovalPolicy,
   getGetApprovalPolicyQueryKey,
+  getListIcpCategoriesQueryKey,
+  getListOfferCatalogQueryKey,
+  getListSeasonalityProfilesQueryKey,
+  getListDiscountPoliciesQueryKey,
+  getListOutreachPoliciesQueryKey,
+  useUpsertIcpCategory,
+  useUpsertOfferCatalogItem,
+  useUpsertSeasonalityProfile,
+  useUpsertDiscountPolicy,
+  useUpsertOutreachPolicy,
 } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -32,6 +42,8 @@ import {
   Package,
   CalendarRange,
   ShieldCheck,
+  PencilLine,
+  Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -81,6 +93,11 @@ export default function AgentSettings() {
   const { data: approvalPolicy } = useGetApprovalPolicy();
   const updateCampaignDefaults = useUpdateCampaignDefaults();
   const updateApprovalPolicy = useUpdateApprovalPolicy();
+  const upsertIcpCategory = useUpsertIcpCategory();
+  const upsertOfferCatalogItem = useUpsertOfferCatalogItem();
+  const upsertSeasonalityProfile = useUpsertSeasonalityProfile();
+  const upsertDiscountPolicy = useUpsertDiscountPolicy();
+  const upsertOutreachPolicy = useUpsertOutreachPolicy();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -91,6 +108,11 @@ export default function AgentSettings() {
   const [pipelineData, setPipelineData] = useState<any>({});
   const [campaignDefaultsData, setCampaignDefaultsData] = useState<any>({});
   const [approvalPolicyData, setApprovalPolicyData] = useState<any>({});
+  const [icpEditor, setIcpEditor] = useState<any>({});
+  const [offerEditor, setOfferEditor] = useState<any>({});
+  const [seasonalityEditor, setSeasonalityEditor] = useState<any>({});
+  const [discountEditor, setDiscountEditor] = useState<any>({});
+  const [outreachEditor, setOutreachEditor] = useState<any>({});
   const [facebookCredentials, setFacebookCredentials] = useState({ page_id: "", access_token: "" });
   const [facebookPages, setFacebookPages] = useState<FacebookPageOption[]>([]);
   const [selectedFacebookPageId, setSelectedFacebookPageId] = useState("");
@@ -99,6 +121,11 @@ export default function AgentSettings() {
   const initialized = useRef(false);
   const campaignDefaultsInitialized = useRef(false);
   const approvalPolicyInitialized = useRef(false);
+  const icpInitialized = useRef(false);
+  const offerInitialized = useRef(false);
+  const seasonalityInitialized = useRef(false);
+  const discountInitialized = useRef(false);
+  const outreachInitialized = useRef(false);
   const facebookConnectHandled = useRef(false);
 
   useEffect(() => {
@@ -140,6 +167,63 @@ export default function AgentSettings() {
       approvalPolicyInitialized.current = true;
     }
   }, [approvalPolicy]);
+
+  useEffect(() => {
+    if (icpCategories.length && !icpInitialized.current) {
+      resetIcpEditor({
+        ...icpCategories[0],
+        hard_filters_json: toJsonText(icpCategories[0].hard_filters),
+        soft_signals_json: toJsonText(icpCategories[0].soft_signals),
+        exclusion_rules_json: toJsonText(icpCategories[0].exclusion_rules),
+        default_channels_csv: (icpCategories[0].default_channels ?? []).join(", "),
+        custom_fields_json: toJsonText(icpCategories[0].custom_fields),
+      });
+      icpInitialized.current = true;
+    }
+  }, [icpCategories]);
+
+  useEffect(() => {
+    if (offerCatalog.length && !offerInitialized.current) {
+      resetOfferEditor({
+        ...offerCatalog[0],
+        base_price: offerCatalog[0].base_price ?? "",
+        applicable_channels_csv: (offerCatalog[0].applicable_channels ?? []).join(", "),
+      });
+      offerInitialized.current = true;
+    }
+  }, [offerCatalog]);
+
+  useEffect(() => {
+    if (seasonalityProfiles.length && !seasonalityInitialized.current) {
+      setSeasonalityEditor({
+        ...seasonalityProfiles[0],
+        seasonality_periods_json: JSON.stringify(seasonalityProfiles[0].seasonality_periods ?? [], null, 2),
+      });
+      seasonalityInitialized.current = true;
+    }
+  }, [seasonalityProfiles]);
+
+  useEffect(() => {
+    if (discountPolicies.length && !discountInitialized.current) {
+      resetDiscountEditor({
+        ...discountPolicies[0],
+        allowed_discount_types_csv: (discountPolicies[0].allowed_discount_types ?? []).join(", "),
+        allowed_conditions_json: toJsonText(discountPolicies[0].allowed_conditions),
+        forbidden_conditions_json: toJsonText(discountPolicies[0].forbidden_conditions),
+      });
+      discountInitialized.current = true;
+    }
+  }, [discountPolicies]);
+
+  useEffect(() => {
+    if (outreachPolicies.length && !outreachInitialized.current) {
+      resetOutreachEditor({
+        ...outreachPolicies[0],
+        channel_rules_json: toJsonText(outreachPolicies[0].channel_rules),
+      });
+      outreachInitialized.current = true;
+    }
+  }, [outreachPolicies]);
 
   const [triggeringPipeline, setTriggeringPipeline] = useState<string | null>(null);
   const platformConnections = ((config?.platform_connections ?? {}) as Record<string, any>);
@@ -483,6 +567,228 @@ export default function AgentSettings() {
     );
   };
 
+  const parseJsonInput = (value: string, fieldLabel: string) => {
+    if (!value.trim()) return {};
+    try {
+      return JSON.parse(value);
+    } catch (_error) {
+      throw new Error(`${fieldLabel} must be valid JSON.`);
+    }
+  };
+
+  const parseJsonArrayInput = (value: string, fieldLabel: string) => {
+    if (!value.trim()) return [];
+    try {
+      const parsed = JSON.parse(value);
+      if (!Array.isArray(parsed)) throw new Error("not-array");
+      return parsed;
+    } catch (_error) {
+      throw new Error(`${fieldLabel} must be a valid JSON array.`);
+    }
+  };
+
+  const toJsonText = (value: unknown, fallback: unknown = {}) => JSON.stringify(value ?? fallback, null, 2);
+
+  const resetIcpEditor = (next?: any) =>
+    setIcpEditor(
+      next ?? {
+        name: "",
+        active: true,
+        description: "",
+        hard_filters_json: "{}",
+        soft_signals_json: "{}",
+        exclusion_rules_json: "{}",
+        default_channels_csv: "",
+        default_cta_style: "",
+        priority_score: 0,
+        custom_fields_json: "{}",
+      }
+    );
+
+  const resetOfferEditor = (next?: any) =>
+    setOfferEditor(
+      next ?? {
+        name: "",
+        type: "product",
+        active: true,
+        category: "",
+        description: "",
+        base_price: "",
+        currency: "",
+        pricing_model: "",
+        applicable_channels_csv: "",
+        default_cta: "",
+        delivery_method: "",
+        landing_url: "",
+        discount_allowed: false,
+        approval_required: false,
+        priority_score: 0,
+      }
+    );
+
+  const resetSeasonalityEditor = (next?: any) =>
+    setSeasonalityEditor(
+      next ?? {
+        name: "",
+        description: "",
+        active: true,
+        seasonality_periods_json: "[]",
+      }
+    );
+
+  const resetDiscountEditor = (next?: any) =>
+    setDiscountEditor(
+      next ?? {
+        name: "",
+        max_discount_percent: 0,
+        allowed_discount_types_csv: "",
+        cooldown_days: 0,
+        stacking_allowed: false,
+        approval_required: true,
+        allowed_conditions_json: "{}",
+        forbidden_conditions_json: "{}",
+      }
+    );
+
+  const resetOutreachEditor = (next?: any) =>
+    setOutreachEditor(
+      next ?? {
+        name: "",
+        min_icp_fit_score: 0,
+        min_trigger_confidence: 0,
+        negative_signal_suppression_days: 7,
+        max_contacts_per_7d: 3,
+        max_contacts_per_30d: 8,
+        channel_rules_json: "{}",
+      }
+    );
+
+  const handleSaveIcp = async () => {
+    try {
+      await upsertIcpCategory.mutateAsync({
+        data: {
+          id: icpEditor.id,
+          name: icpEditor.name?.trim(),
+          active: Boolean(icpEditor.active),
+          description: icpEditor.description ?? "",
+          hard_filters: parseJsonInput(icpEditor.hard_filters_json ?? "{}", "Hard filters"),
+          soft_signals: parseJsonInput(icpEditor.soft_signals_json ?? "{}", "Soft signals"),
+          exclusion_rules: parseJsonInput(icpEditor.exclusion_rules_json ?? "{}", "Exclusion rules"),
+          default_channels: (icpEditor.default_channels_csv ?? "")
+            .split(",")
+            .map((item: string) => item.trim())
+            .filter(Boolean),
+          default_cta_style: icpEditor.default_cta_style ?? "",
+          priority_score: Number(icpEditor.priority_score ?? 0),
+          custom_fields: parseJsonInput(icpEditor.custom_fields_json ?? "{}", "Custom fields"),
+        },
+      });
+      queryClient.invalidateQueries({ queryKey: getListIcpCategoriesQueryKey() });
+      toast({ title: "ICP category saved", description: "Audience segment updated successfully." });
+    } catch (err) {
+      toast({ title: "Save failed", description: (err as Error).message, variant: "destructive" });
+    }
+  };
+
+  const handleSaveOffer = async () => {
+    try {
+      await upsertOfferCatalogItem.mutateAsync({
+        data: {
+          id: offerEditor.id,
+          name: offerEditor.name?.trim(),
+          type: offerEditor.type ?? "product",
+          active: Boolean(offerEditor.active),
+          category: offerEditor.category ?? "",
+          description: offerEditor.description ?? "",
+          base_price: offerEditor.base_price === "" ? null : Number(offerEditor.base_price),
+          currency: offerEditor.currency ?? "",
+          pricing_model: offerEditor.pricing_model ?? "",
+          applicable_channels: (offerEditor.applicable_channels_csv ?? "")
+            .split(",")
+            .map((item: string) => item.trim())
+            .filter(Boolean),
+          default_cta: offerEditor.default_cta ?? "",
+          delivery_method: offerEditor.delivery_method ?? "",
+          landing_url: offerEditor.landing_url ?? "",
+          discount_allowed: Boolean(offerEditor.discount_allowed),
+          approval_required: Boolean(offerEditor.approval_required),
+          priority_score: Number(offerEditor.priority_score ?? 0),
+        },
+      });
+      queryClient.invalidateQueries({ queryKey: getListOfferCatalogQueryKey() });
+      toast({ title: "Offer saved", description: "Offer catalog item updated successfully." });
+    } catch (err) {
+      toast({ title: "Save failed", description: (err as Error).message, variant: "destructive" });
+    }
+  };
+
+  const handleSaveSeasonality = async () => {
+    try {
+      await upsertSeasonalityProfile.mutateAsync({
+        data: {
+          id: seasonalityEditor.id,
+          name: seasonalityEditor.name?.trim(),
+          description: seasonalityEditor.description ?? "",
+          active: Boolean(seasonalityEditor.active),
+          seasonality_periods: parseJsonArrayInput(
+            seasonalityEditor.seasonality_periods_json ?? "[]",
+            "Seasonality periods"
+          ),
+        },
+      });
+      queryClient.invalidateQueries({ queryKey: getListSeasonalityProfilesQueryKey() });
+      toast({ title: "Seasonality saved", description: "Demand profile updated successfully." });
+    } catch (err) {
+      toast({ title: "Save failed", description: (err as Error).message, variant: "destructive" });
+    }
+  };
+
+  const handleSaveDiscount = async () => {
+    try {
+      await upsertDiscountPolicy.mutateAsync({
+        data: {
+          id: discountEditor.id,
+          name: discountEditor.name?.trim(),
+          max_discount_percent: Number(discountEditor.max_discount_percent ?? 0),
+          allowed_discount_types: (discountEditor.allowed_discount_types_csv ?? "")
+            .split(",")
+            .map((item: string) => item.trim())
+            .filter(Boolean),
+          cooldown_days: Number(discountEditor.cooldown_days ?? 0),
+          stacking_allowed: Boolean(discountEditor.stacking_allowed),
+          approval_required: Boolean(discountEditor.approval_required),
+          allowed_conditions: parseJsonInput(discountEditor.allowed_conditions_json ?? "{}", "Allowed conditions"),
+          forbidden_conditions: parseJsonInput(discountEditor.forbidden_conditions_json ?? "{}", "Forbidden conditions"),
+        },
+      });
+      queryClient.invalidateQueries({ queryKey: getListDiscountPoliciesQueryKey() });
+      toast({ title: "Discount policy saved", description: "Pricing rules updated successfully." });
+    } catch (err) {
+      toast({ title: "Save failed", description: (err as Error).message, variant: "destructive" });
+    }
+  };
+
+  const handleSaveOutreach = async () => {
+    try {
+      await upsertOutreachPolicy.mutateAsync({
+        data: {
+          id: outreachEditor.id,
+          name: outreachEditor.name?.trim(),
+          min_icp_fit_score: Number(outreachEditor.min_icp_fit_score ?? 0),
+          min_trigger_confidence: Number(outreachEditor.min_trigger_confidence ?? 0),
+          negative_signal_suppression_days: Number(outreachEditor.negative_signal_suppression_days ?? 0),
+          max_contacts_per_7d: Number(outreachEditor.max_contacts_per_7d ?? 0),
+          max_contacts_per_30d: Number(outreachEditor.max_contacts_per_30d ?? 0),
+          channel_rules: parseJsonInput(outreachEditor.channel_rules_json ?? "{}", "Channel rules"),
+        },
+      });
+      queryClient.invalidateQueries({ queryKey: getListOutreachPoliciesQueryKey() });
+      toast({ title: "Outreach policy saved", description: "Outreach rules updated successfully." });
+    } catch (err) {
+      toast({ title: "Save failed", description: (err as Error).message, variant: "destructive" });
+    }
+  };
+
   if (isLoading || !initialized.current) {
     return <div className="space-y-4 p-8"><Skeleton className="h-10 w-full" /><Skeleton className="h-64 w-full" /></div>;
   }
@@ -709,6 +1015,400 @@ export default function AgentSettings() {
                   ) : (
                     <p className="text-sm text-muted-foreground">Seasonality and outreach policy defaults are present, but no custom profiles have been added yet.</p>
                   )}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+
+            <AccordionItem value="item-1c" className="overflow-hidden rounded-lg border bg-card px-2 shadow-sm">
+              <AccordionTrigger className="px-4 py-5 hover:no-underline">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-md bg-muted p-2 text-foreground/70"><PencilLine className="h-4 w-4" /></div>
+                  <div className="text-left">
+                    <h3 className="text-sm font-semibold">Universal Config Editor</h3>
+                    <p className="mt-0.5 text-xs text-muted-foreground">Create and update ICP, offers, seasonality, discounts, and outreach rules without waiting for the new workspace shell</p>
+                  </div>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="space-y-6 px-4 pb-6 pt-2">
+                <div className="rounded-lg border bg-background p-4">
+                  <div className="mb-4 flex items-center justify-between gap-3">
+                    <div>
+                      <h4 className="text-sm font-medium">ICP categories</h4>
+                      <p className="text-xs text-muted-foreground">Audience segments remain first-class targeting truth.</p>
+                    </div>
+                    <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => resetIcpEditor()}>
+                      <Plus className="mr-1.5 h-3.5 w-3.5" /> New ICP
+                    </Button>
+                  </div>
+                  <div className="mb-4 flex flex-wrap gap-2">
+                    {icpCategories.map((item) => (
+                      <Button
+                        key={item.id}
+                        size="sm"
+                        variant={icpEditor.id === item.id ? "default" : "outline"}
+                        className="h-7 text-[11px]"
+                        onClick={() =>
+                          resetIcpEditor({
+                            ...item,
+                            hard_filters_json: toJsonText(item.hard_filters),
+                            soft_signals_json: toJsonText(item.soft_signals),
+                            exclusion_rules_json: toJsonText(item.exclusion_rules),
+                            default_channels_csv: (item.default_channels ?? []).join(", "),
+                            custom_fields_json: toJsonText(item.custom_fields),
+                          })
+                        }
+                      >
+                        {item.name}
+                      </Button>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label className="text-xs">Name</Label>
+                      <Input value={icpEditor.name ?? ""} onChange={(e) => setIcpEditor({ ...icpEditor, name: e.target.value })} className="h-9" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs">Default CTA style</Label>
+                      <Input value={icpEditor.default_cta_style ?? ""} onChange={(e) => setIcpEditor({ ...icpEditor, default_cta_style: e.target.value })} className="h-9" />
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <Label className="text-xs">Description</Label>
+                      <Textarea value={icpEditor.description ?? ""} onChange={(e) => setIcpEditor({ ...icpEditor, description: e.target.value })} className="h-20 resize-none text-sm" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs">Default channels (comma separated)</Label>
+                      <Input value={icpEditor.default_channels_csv ?? ""} onChange={(e) => setIcpEditor({ ...icpEditor, default_channels_csv: e.target.value })} className="h-9" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs">Priority score</Label>
+                      <Input type="number" value={icpEditor.priority_score ?? 0} onChange={(e) => setIcpEditor({ ...icpEditor, priority_score: Number(e.target.value || 0) })} className="h-9" />
+                    </div>
+                    <div className="flex items-center justify-between rounded-md border p-3 md:col-span-2">
+                      <div className="text-sm">Active segment</div>
+                      <Switch checked={Boolean(icpEditor.active ?? true)} onCheckedChange={(checked) => setIcpEditor({ ...icpEditor, active: checked })} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs">Hard filters (JSON)</Label>
+                      <Textarea value={icpEditor.hard_filters_json ?? "{}"} onChange={(e) => setIcpEditor({ ...icpEditor, hard_filters_json: e.target.value })} className="h-28 resize-none font-mono text-xs" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs">Soft signals (JSON)</Label>
+                      <Textarea value={icpEditor.soft_signals_json ?? "{}"} onChange={(e) => setIcpEditor({ ...icpEditor, soft_signals_json: e.target.value })} className="h-28 resize-none font-mono text-xs" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs">Exclusion rules (JSON)</Label>
+                      <Textarea value={icpEditor.exclusion_rules_json ?? "{}"} onChange={(e) => setIcpEditor({ ...icpEditor, exclusion_rules_json: e.target.value })} className="h-28 resize-none font-mono text-xs" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs">Custom fields (JSON)</Label>
+                      <Textarea value={icpEditor.custom_fields_json ?? "{}"} onChange={(e) => setIcpEditor({ ...icpEditor, custom_fields_json: e.target.value })} className="h-28 resize-none font-mono text-xs" />
+                    </div>
+                  </div>
+                  <div className="mt-4 flex justify-end">
+                    <Button size="sm" onClick={handleSaveIcp} disabled={upsertIcpCategory.isPending}>
+                      <Save className="mr-2 h-4 w-4" /> Save ICP Category
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="rounded-lg border bg-background p-4">
+                  <div className="mb-4 flex items-center justify-between gap-3">
+                    <div>
+                      <h4 className="text-sm font-medium">Offer catalog</h4>
+                      <p className="text-xs text-muted-foreground">Products and services must stay explicit and never be invented in prompts.</p>
+                    </div>
+                    <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => resetOfferEditor()}>
+                      <Plus className="mr-1.5 h-3.5 w-3.5" /> New Offer
+                    </Button>
+                  </div>
+                  <div className="mb-4 flex flex-wrap gap-2">
+                    {offerCatalog.map((item) => (
+                      <Button
+                        key={item.id}
+                        size="sm"
+                        variant={offerEditor.id === item.id ? "default" : "outline"}
+                        className="h-7 text-[11px]"
+                        onClick={() =>
+                          resetOfferEditor({
+                            ...item,
+                            base_price: item.base_price ?? "",
+                            applicable_channels_csv: (item.applicable_channels ?? []).join(", "),
+                          })
+                        }
+                      >
+                        {item.name}
+                      </Button>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label className="text-xs">Name</Label>
+                      <Input value={offerEditor.name ?? ""} onChange={(e) => setOfferEditor({ ...offerEditor, name: e.target.value })} className="h-9" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs">Type</Label>
+                      <select className="h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm" value={offerEditor.type ?? "product"} onChange={(e) => setOfferEditor({ ...offerEditor, type: e.target.value })}>
+                        <option value="product">Product</option>
+                        <option value="service">Service</option>
+                        <option value="subscription">Subscription</option>
+                        <option value="bundle">Bundle</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs">Category</Label>
+                      <Input value={offerEditor.category ?? ""} onChange={(e) => setOfferEditor({ ...offerEditor, category: e.target.value })} className="h-9" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs">Pricing model</Label>
+                      <Input value={offerEditor.pricing_model ?? ""} onChange={(e) => setOfferEditor({ ...offerEditor, pricing_model: e.target.value })} className="h-9" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs">Base price</Label>
+                      <Input value={offerEditor.base_price ?? ""} onChange={(e) => setOfferEditor({ ...offerEditor, base_price: e.target.value })} className="h-9" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs">Currency</Label>
+                      <Input value={offerEditor.currency ?? ""} onChange={(e) => setOfferEditor({ ...offerEditor, currency: e.target.value })} className="h-9" />
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <Label className="text-xs">Description</Label>
+                      <Textarea value={offerEditor.description ?? ""} onChange={(e) => setOfferEditor({ ...offerEditor, description: e.target.value })} className="h-20 resize-none text-sm" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs">Applicable channels (comma separated)</Label>
+                      <Input value={offerEditor.applicable_channels_csv ?? ""} onChange={(e) => setOfferEditor({ ...offerEditor, applicable_channels_csv: e.target.value })} className="h-9" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs">Default CTA</Label>
+                      <Input value={offerEditor.default_cta ?? ""} onChange={(e) => setOfferEditor({ ...offerEditor, default_cta: e.target.value })} className="h-9" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs">Delivery method</Label>
+                      <Input value={offerEditor.delivery_method ?? ""} onChange={(e) => setOfferEditor({ ...offerEditor, delivery_method: e.target.value })} className="h-9" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs">Landing URL</Label>
+                      <Input value={offerEditor.landing_url ?? ""} onChange={(e) => setOfferEditor({ ...offerEditor, landing_url: e.target.value })} className="h-9" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs">Priority score</Label>
+                      <Input type="number" value={offerEditor.priority_score ?? 0} onChange={(e) => setOfferEditor({ ...offerEditor, priority_score: Number(e.target.value || 0) })} className="h-9" />
+                    </div>
+                    <div className="space-y-3 md:col-span-2">
+                      <div className="flex items-center justify-between rounded-md border p-3">
+                        <div className="text-sm">Active offer</div>
+                        <Switch checked={Boolean(offerEditor.active ?? true)} onCheckedChange={(checked) => setOfferEditor({ ...offerEditor, active: checked })} />
+                      </div>
+                      <div className="flex items-center justify-between rounded-md border p-3">
+                        <div className="text-sm">Discount allowed</div>
+                        <Switch checked={Boolean(offerEditor.discount_allowed)} onCheckedChange={(checked) => setOfferEditor({ ...offerEditor, discount_allowed: checked })} />
+                      </div>
+                      <div className="flex items-center justify-between rounded-md border p-3">
+                        <div className="text-sm">Approval required</div>
+                        <Switch checked={Boolean(offerEditor.approval_required)} onCheckedChange={(checked) => setOfferEditor({ ...offerEditor, approval_required: checked })} />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-4 flex justify-end">
+                    <Button size="sm" onClick={handleSaveOffer} disabled={upsertOfferCatalogItem.isPending}>
+                      <Save className="mr-2 h-4 w-4" /> Save Offer
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="rounded-lg border bg-background p-4">
+                  <div className="mb-4 flex items-center justify-between gap-3">
+                    <div>
+                      <h4 className="text-sm font-medium">Seasonality profiles</h4>
+                      <p className="text-xs text-muted-foreground">Demand truth must come from config, not model intuition.</p>
+                    </div>
+                    <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => resetSeasonalityEditor()}>
+                      <Plus className="mr-1.5 h-3.5 w-3.5" /> New Profile
+                    </Button>
+                  </div>
+                  <div className="mb-4 flex flex-wrap gap-2">
+                    {seasonalityProfiles.map((profile) => (
+                      <Button
+                        key={profile.id}
+                        size="sm"
+                        variant={seasonalityEditor.id === profile.id ? "default" : "outline"}
+                        className="h-7 text-[11px]"
+                        onClick={() =>
+                          resetSeasonalityEditor({
+                            ...profile,
+                            seasonality_periods_json: JSON.stringify(profile.seasonality_periods ?? [], null, 2),
+                          })
+                        }
+                      >
+                        {profile.name}
+                      </Button>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label className="text-xs">Profile name</Label>
+                      <Input value={seasonalityEditor.name ?? ""} onChange={(e) => setSeasonalityEditor({ ...seasonalityEditor, name: e.target.value })} className="h-9" />
+                    </div>
+                    <div className="flex items-center justify-between rounded-md border p-3">
+                      <div className="text-sm">Active profile</div>
+                      <Switch checked={Boolean(seasonalityEditor.active ?? true)} onCheckedChange={(checked) => setSeasonalityEditor({ ...seasonalityEditor, active: checked })} />
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <Label className="text-xs">Description</Label>
+                      <Textarea value={seasonalityEditor.description ?? ""} onChange={(e) => setSeasonalityEditor({ ...seasonalityEditor, description: e.target.value })} className="h-20 resize-none text-sm" />
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <Label className="text-xs">Seasonality periods (JSON array)</Label>
+                      <Textarea value={seasonalityEditor.seasonality_periods_json ?? "[]"} onChange={(e) => setSeasonalityEditor({ ...seasonalityEditor, seasonality_periods_json: e.target.value })} className="h-40 resize-none font-mono text-xs" />
+                    </div>
+                  </div>
+                  <div className="mt-4 flex justify-end">
+                    <Button size="sm" onClick={handleSaveSeasonality} disabled={upsertSeasonalityProfile.isPending}>
+                      <Save className="mr-2 h-4 w-4" /> Save Seasonality
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                  <div className="rounded-lg border bg-background p-4">
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <div>
+                        <h4 className="text-sm font-medium">Discount policies</h4>
+                        <p className="text-xs text-muted-foreground">Discount rules stay explicit and bounded.</p>
+                      </div>
+                      <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => resetDiscountEditor()}>
+                        <Plus className="mr-1.5 h-3.5 w-3.5" /> New Policy
+                      </Button>
+                    </div>
+                    <div className="mb-4 flex flex-wrap gap-2">
+                      {discountPolicies.map((policy) => (
+                        <Button
+                          key={policy.id}
+                          size="sm"
+                          variant={discountEditor.id === policy.id ? "default" : "outline"}
+                          className="h-7 text-[11px]"
+                          onClick={() =>
+                            resetDiscountEditor({
+                              ...policy,
+                              allowed_discount_types_csv: (policy.allowed_discount_types ?? []).join(", "),
+                              allowed_conditions_json: toJsonText(policy.allowed_conditions),
+                              forbidden_conditions_json: toJsonText(policy.forbidden_conditions),
+                            })
+                          }
+                        >
+                          {policy.name}
+                        </Button>
+                      ))}
+                    </div>
+                    <div className="space-y-3">
+                      <div className="space-y-2">
+                        <Label className="text-xs">Policy name</Label>
+                        <Input value={discountEditor.name ?? ""} onChange={(e) => setDiscountEditor({ ...discountEditor, name: e.target.value })} className="h-9" />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-2">
+                          <Label className="text-xs">Max discount %</Label>
+                          <Input type="number" value={discountEditor.max_discount_percent ?? 0} onChange={(e) => setDiscountEditor({ ...discountEditor, max_discount_percent: Number(e.target.value || 0) })} className="h-9" />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-xs">Cooldown days</Label>
+                          <Input type="number" value={discountEditor.cooldown_days ?? 0} onChange={(e) => setDiscountEditor({ ...discountEditor, cooldown_days: Number(e.target.value || 0) })} className="h-9" />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs">Allowed discount types (comma separated)</Label>
+                        <Input value={discountEditor.allowed_discount_types_csv ?? ""} onChange={(e) => setDiscountEditor({ ...discountEditor, allowed_discount_types_csv: e.target.value })} className="h-9" />
+                      </div>
+                      <div className="flex items-center justify-between rounded-md border p-3">
+                        <div className="text-sm">Stacking allowed</div>
+                        <Switch checked={Boolean(discountEditor.stacking_allowed)} onCheckedChange={(checked) => setDiscountEditor({ ...discountEditor, stacking_allowed: checked })} />
+                      </div>
+                      <div className="flex items-center justify-between rounded-md border p-3">
+                        <div className="text-sm">Approval required</div>
+                        <Switch checked={Boolean(discountEditor.approval_required ?? true)} onCheckedChange={(checked) => setDiscountEditor({ ...discountEditor, approval_required: checked })} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs">Allowed conditions (JSON)</Label>
+                        <Textarea value={discountEditor.allowed_conditions_json ?? "{}"} onChange={(e) => setDiscountEditor({ ...discountEditor, allowed_conditions_json: e.target.value })} className="h-24 resize-none font-mono text-xs" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs">Forbidden conditions (JSON)</Label>
+                        <Textarea value={discountEditor.forbidden_conditions_json ?? "{}"} onChange={(e) => setDiscountEditor({ ...discountEditor, forbidden_conditions_json: e.target.value })} className="h-24 resize-none font-mono text-xs" />
+                      </div>
+                    </div>
+                    <div className="mt-4 flex justify-end">
+                      <Button size="sm" onClick={handleSaveDiscount} disabled={upsertDiscountPolicy.isPending}>
+                        <Save className="mr-2 h-4 w-4" /> Save Discount Policy
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg border bg-background p-4">
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <div>
+                        <h4 className="text-sm font-medium">Outreach policies</h4>
+                        <p className="text-xs text-muted-foreground">Contact cadence and channel rules stay policy-driven.</p>
+                      </div>
+                      <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => resetOutreachEditor()}>
+                        <Plus className="mr-1.5 h-3.5 w-3.5" /> New Policy
+                      </Button>
+                    </div>
+                    <div className="mb-4 flex flex-wrap gap-2">
+                      {outreachPolicies.map((policy) => (
+                        <Button
+                          key={policy.id}
+                          size="sm"
+                          variant={outreachEditor.id === policy.id ? "default" : "outline"}
+                          className="h-7 text-[11px]"
+                          onClick={() =>
+                            resetOutreachEditor({
+                              ...policy,
+                              channel_rules_json: toJsonText(policy.channel_rules),
+                            })
+                          }
+                        >
+                          {policy.name}
+                        </Button>
+                      ))}
+                    </div>
+                    <div className="space-y-3">
+                      <div className="space-y-2">
+                        <Label className="text-xs">Policy name</Label>
+                        <Input value={outreachEditor.name ?? ""} onChange={(e) => setOutreachEditor({ ...outreachEditor, name: e.target.value })} className="h-9" />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-2">
+                          <Label className="text-xs">Min ICP fit</Label>
+                          <Input type="number" value={outreachEditor.min_icp_fit_score ?? 0} onChange={(e) => setOutreachEditor({ ...outreachEditor, min_icp_fit_score: Number(e.target.value || 0) })} className="h-9" />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-xs">Min trigger confidence</Label>
+                          <Input type="number" value={outreachEditor.min_trigger_confidence ?? 0} onChange={(e) => setOutreachEditor({ ...outreachEditor, min_trigger_confidence: Number(e.target.value || 0) })} className="h-9" />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-xs">Negative signal suppression (days)</Label>
+                          <Input type="number" value={outreachEditor.negative_signal_suppression_days ?? 7} onChange={(e) => setOutreachEditor({ ...outreachEditor, negative_signal_suppression_days: Number(e.target.value || 0) })} className="h-9" />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-xs">7-day contact cap</Label>
+                          <Input type="number" value={outreachEditor.max_contacts_per_7d ?? 0} onChange={(e) => setOutreachEditor({ ...outreachEditor, max_contacts_per_7d: Number(e.target.value || 0) })} className="h-9" />
+                        </div>
+                        <div className="space-y-2 md:col-span-2">
+                          <Label className="text-xs">30-day contact cap</Label>
+                          <Input type="number" value={outreachEditor.max_contacts_per_30d ?? 0} onChange={(e) => setOutreachEditor({ ...outreachEditor, max_contacts_per_30d: Number(e.target.value || 0) })} className="h-9" />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs">Channel rules (JSON)</Label>
+                        <Textarea value={outreachEditor.channel_rules_json ?? "{}"} onChange={(e) => setOutreachEditor({ ...outreachEditor, channel_rules_json: e.target.value })} className="h-32 resize-none font-mono text-xs" />
+                      </div>
+                    </div>
+                    <div className="mt-4 flex justify-end">
+                      <Button size="sm" onClick={handleSaveOutreach} disabled={upsertOutreachPolicy.isPending}>
+                        <Save className="mr-2 h-4 w-4" /> Save Outreach Policy
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               </AccordionContent>
             </AccordionItem>

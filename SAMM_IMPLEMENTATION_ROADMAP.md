@@ -258,7 +258,7 @@ Rollback boundary:
 
 ## M14B - Structured Config Expansion
 Status:
-- in progress, with schema foundation, read contracts, and first current-settings expansion live
+- in progress, with schema foundation, read contracts, and current-settings write surfaces live
 
 Goal:
 - turn business truth into deterministic universal structured config before outreach or sales automation expands
@@ -333,14 +333,17 @@ Delivered in second slice:
   - editable `campaign_defaults`
   - editable `approval_policy`
 
-Still open in `M14B`:
-- write surfaces for:
+Delivered in third slice:
+- current `Operations -> Settings` now supports write surfaces for:
   - `icp_categories`
   - `offer_catalog`
-  - `seasonality_profile`
+  - `seasonality_profile` / `seasonality_periods`
   - `discount_policies`
   - `outreach_policy`
-- explicit carryover from current settings forms into the full universal model
+- the current admin UI intentionally uses compact inputs and JSON-backed fields where needed to keep this milestone narrow and reversible
+
+Still open in `M14B`:
+- explicit carryover from current settings forms into the full universal model beyond the first narrow editor
 - pipeline adoption of structured config reads
 
 Rollback boundary:

@@ -79,6 +79,13 @@ The next planning focus is now explicitly:
   - editable `campaign_defaults`
   - editable `approval_policy`
 - read hooks now exist for the new config tables in `M.A.S UI/src/lib/api.ts`
+- current `Operations -> Settings` now also supports narrow write surfaces for:
+  - `icp_categories`
+  - `offer_catalog`
+  - `seasonality_profile`
+  - `discount_policies`
+  - `outreach_policy`
+- these write forms intentionally use compact fields and JSON-backed inputs where needed to keep `M14B` narrow
 - ICP remains explicitly locked in the config model
 
 Current `M14A.1` delivered slice:

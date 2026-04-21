@@ -206,6 +206,25 @@ export type ApprovalPolicy = {
   updated_at?: string;
 };
 
+export type SeasonalityProfileInput = {
+  id?: string;
+  name: string;
+  description: string;
+  active: boolean;
+  seasonality_periods: Array<{
+    id?: string;
+    name: string;
+    period_type: "recurring" | "override";
+    starts_on: string | null;
+    ends_on: string | null;
+    demand_level: "high" | "normal" | "low";
+    allow_discounts: boolean;
+    outreach_intensity: string;
+    campaign_priority: number;
+    notes: string;
+  }>;
+};
+
 const PIPELINE_DESCRIPTIONS: Record<string, string> = {
   coordinator: "Orchestrates all pipelines and schedules.",
   pipeline_a: "Processes engagement and escalations.",
@@ -1359,6 +1378,210 @@ export function useUpdateApprovalPolicy(options?: MutationHookOptions) {
 
       if (error) throw error;
       return normalizeApprovalPolicy(inserted);
+    },
+    ...options?.mutation,
+  });
+}
+
+export function useUpsertIcpCategory(options?: MutationHookOptions) {
+  return useMutation({
+    mutationFn: async ({ data }: { data: Partial<IcpCategory> & { name: string } }) => {
+      const patch = {
+        ...data,
+        org_id: getOrgId(),
+      };
+
+      if (data.id) {
+        const { data: updated, error } = await supabase
+          .from("icp_categories")
+          .update(patch)
+          .eq("id", data.id)
+          .eq("org_id", getOrgId())
+          .select("*")
+          .single();
+
+        if (error) throw error;
+        return updated as IcpCategory;
+      }
+
+      const { data: inserted, error } = await supabase
+        .from("icp_categories")
+        .insert(patch)
+        .select("*")
+        .single();
+
+      if (error) throw error;
+      return inserted as IcpCategory;
+    },
+    ...options?.mutation,
+  });
+}
+
+export function useUpsertOfferCatalogItem(options?: MutationHookOptions) {
+  return useMutation({
+    mutationFn: async ({ data }: { data: Partial<OfferCatalogItem> & { name: string; type: string } }) => {
+      const patch = {
+        ...data,
+        org_id: getOrgId(),
+      };
+
+      if (data.id) {
+        const { data: updated, error } = await supabase
+          .from("offer_catalog")
+          .update(patch)
+          .eq("id", data.id)
+          .eq("org_id", getOrgId())
+          .select("*")
+          .single();
+
+        if (error) throw error;
+        return updated as OfferCatalogItem;
+      }
+
+      const { data: inserted, error } = await supabase
+        .from("offer_catalog")
+        .insert(patch)
+        .select("*")
+        .single();
+
+      if (error) throw error;
+      return inserted as OfferCatalogItem;
+    },
+    ...options?.mutation,
+  });
+}
+
+export function useUpsertSeasonalityProfile(options?: MutationHookOptions) {
+  return useMutation({
+    mutationFn: async ({ data }: { data: SeasonalityProfileInput }) => {
+      const profilePatch = {
+        name: data.name,
+        description: data.description,
+        active: data.active,
+        org_id: getOrgId(),
+      };
+
+      let profileId = data.id;
+
+      if (profileId) {
+        const { error } = await supabase
+          .from("seasonality_profile")
+          .update(profilePatch)
+          .eq("id", profileId)
+          .eq("org_id", getOrgId());
+
+        if (error) throw error;
+      } else {
+        const { data: inserted, error } = await supabase
+          .from("seasonality_profile")
+          .insert(profilePatch)
+          .select("*")
+          .single();
+
+        if (error) throw error;
+        profileId = inserted.id;
+      }
+
+      const { error: deletePeriodsError } = await supabase
+        .from("seasonality_periods")
+        .delete()
+        .eq("seasonality_profile_id", profileId)
+        .eq("org_id", getOrgId());
+
+      if (deletePeriodsError) throw deletePeriodsError;
+
+      if (data.seasonality_periods.length) {
+        const periodsPatch = data.seasonality_periods.map((period) => ({
+          ...period,
+          id: period.id,
+          org_id: getOrgId(),
+          seasonality_profile_id: profileId,
+        }));
+
+        const { error: insertPeriodsError } = await supabase
+          .from("seasonality_periods")
+          .insert(periodsPatch);
+
+        if (insertPeriodsError) throw insertPeriodsError;
+      }
+
+      const { data: refreshed, error: refreshedError } = await supabase
+        .from("seasonality_profile")
+        .select("*, seasonality_periods(*)")
+        .eq("id", profileId)
+        .eq("org_id", getOrgId())
+        .single();
+
+      if (refreshedError) throw refreshedError;
+      return refreshed as SeasonalityProfile;
+    },
+    ...options?.mutation,
+  });
+}
+
+export function useUpsertDiscountPolicy(options?: MutationHookOptions) {
+  return useMutation({
+    mutationFn: async ({ data }: { data: Partial<DiscountPolicy> & { name: string } }) => {
+      const patch = {
+        ...data,
+        org_id: getOrgId(),
+      };
+
+      if (data.id) {
+        const { data: updated, error } = await supabase
+          .from("discount_policies")
+          .update(patch)
+          .eq("id", data.id)
+          .eq("org_id", getOrgId())
+          .select("*")
+          .single();
+
+        if (error) throw error;
+        return updated as DiscountPolicy;
+      }
+
+      const { data: inserted, error } = await supabase
+        .from("discount_policies")
+        .insert(patch)
+        .select("*")
+        .single();
+
+      if (error) throw error;
+      return inserted as DiscountPolicy;
+    },
+    ...options?.mutation,
+  });
+}
+
+export function useUpsertOutreachPolicy(options?: MutationHookOptions) {
+  return useMutation({
+    mutationFn: async ({ data }: { data: Partial<OutreachPolicy> & { name: string } }) => {
+      const patch = {
+        ...data,
+        org_id: getOrgId(),
+      };
+
+      if (data.id) {
+        const { data: updated, error } = await supabase
+          .from("outreach_policy")
+          .update(patch)
+          .eq("id", data.id)
+          .eq("org_id", getOrgId())
+          .select("*")
+          .single();
+
+        if (error) throw error;
+        return updated as OutreachPolicy;
+      }
+
+      const { data: inserted, error } = await supabase
+        .from("outreach_policy")
+        .insert(patch)
+        .select("*")
+        .single();
+
+      if (error) throw error;
+      return inserted as OutreachPolicy;
     },
     ...options?.mutation,
   });

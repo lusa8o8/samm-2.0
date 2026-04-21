@@ -79,6 +79,12 @@ Adopt in this order:
   - universal-config read surface
   - editable campaign defaults
   - editable approval policy
+- current `M.A.S UI` now also carries the first narrow write surfaces for universal config:
+  - ICP categories
+  - offer catalog
+  - seasonality profiles
+  - discount policies
+  - outreach policies
 - keep broader shell/workspace adoption separate from this settings carryover
 
 ## Immediate UI Source Mapping
