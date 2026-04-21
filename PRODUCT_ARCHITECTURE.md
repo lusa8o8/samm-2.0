@@ -102,6 +102,7 @@ Purpose:
 - workspace settings
 - org identity
 - integrations
+- universal business config
 - user-level and system-level controls
 
 ## Navigation Priority
@@ -146,6 +147,8 @@ Mid-term transition:
 - expand `/samm` into a richer coordination workspace
 - reduce the visibility of raw agent terminology in user-facing surfaces
 - let operational views support trust rather than carry the primary identity
+- adopt the new shared-workspace UI incrementally instead of swapping the whole frontend at once
+- use the current UI as grounding for missing operational/admin surfaces during the transition
 
 Long-term direction:
 - `samm` becomes the clear front door

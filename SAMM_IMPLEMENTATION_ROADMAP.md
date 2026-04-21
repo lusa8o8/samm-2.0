@@ -252,32 +252,141 @@ Rollback boundary:
 
 ## M14B - Structured Config Expansion
 Status:
-- planned
+- in progress, with schema foundation live
 
 Goal:
-- turn business truth into deterministic structured config before outreach or sales automation expands
+- turn business truth into deterministic universal structured config before outreach or sales automation expands
+
+Guiding rule:
+- `samm` is structure-aware, not domain-aware
+- core config must work for any business
+- domain-specific fields remain pluggable, not hardcoded into core schema
+- ICP remains first-class inside the audience/targeting model and must not be dropped
 
 In scope:
-- `icp_categories`
+- audience segments with explicit ICP support
+- `icp_categories` as the initial targeting object if we keep the current name in first implementation
 - `offer_catalog`
 - `seasonality_profile`
 - `discount_policies`
 - `outreach_policy`
 - `campaign_defaults`
 - `approval_policy`
+- organization identity
+- brand and communication rules
+- contact identity / merge rules as config-adjacent reference inputs
+- learning thresholds as a documented config boundary for later milestones
 
 Out of scope:
 - free-form discount overrides
 - live outreach
 - live sales decisions
+- domain-specific hardcoding in core schema
+
+Locked interpretation:
+- `icp_categories` should be treated as the first implementation seam for universal audience segments
+- ICP is not an edtech-only idea; it is the ideal customer profile / targeting truth for any business
+- campaign input must remain distinct from config:
+  - config = stable business truth
+  - campaign = time-bound intent
 
 Acceptance criteria:
 - pipelines can reference structured config instead of redefining business truth in prompts
 - low/high demand and discount rules come from config, not model inference
 - campaign planning can read neutral `campaign_calendar` domain wrappers over physical `academic_calendar`
+- audience targeting works through universal segment / ICP structure rather than domain-specific assumptions
+- organization, brand, offer, pricing, seasonality, outreach, and approval truth can all be configured without prompt rewriting
+
+Delivered in first slice:
+- universal config schema foundation is now live in Supabase
+- new tables added:
+  - `icp_categories`
+  - `offer_catalog`
+  - `seasonality_profile`
+  - `seasonality_periods`
+  - `discount_policies`
+  - `outreach_policy`
+  - `campaign_defaults`
+  - `approval_policy`
+- `provision-org` now seeds safe defaults for:
+  - `campaign_defaults`
+  - `approval_policy`
+  - `outreach_policy`
+
+Still open in `M14B`:
+- read contracts and frontend API surface for the new config layer
+- settings/config UI expansion
+- explicit carryover from current settings forms into the universal model
 
 Rollback boundary:
 - config tables and read helpers can be removed without disturbing existing marketing pipelines
+
+## M14UI1 - Shared Workspace Shell
+Status:
+- planned
+
+Goal:
+- adopt the new generative `samm` shared-workspace shell in narrow slices without replacing the live app wholesale
+
+In scope:
+- lowercase `samm` brand treatment remains intact
+- adopt the new shared workspace shell from `samm 2.0 UI`
+- keep `/samm` as the primary coordination surface
+- preserve existing live routes and backend contracts
+- use current `M.A.S UI` as grounding for missing operational details
+
+Out of scope:
+- full app rewrite
+- replacing all old pages at once
+- backend contract rewrites just to fit the UI
+
+Acceptance criteria:
+- `/samm` uses the new shared-workspace shell
+- the old UI remains available as the reference source for missing surfaces
+- no existing operational page is lost during adoption
+
+## M14UI2 - Tool-First Thread And Widgets
+Status:
+- planned
+
+Goal:
+- make the `samm` thread a native shared workspace with structured cards/widgets, not a plain chat transcript
+
+In scope:
+- thread-level widget rendering
+- inspector / companion panel patterns
+- quick actions and suggested next moves
+- persistence-aware conversation thread rendering
+
+Out of scope:
+- CRM / Sales implementation
+- replacing inbox/content/calendar/metrics logic
+
+Acceptance criteria:
+- coordinator outputs can render as structured workspace objects
+- cards/widgets can coexist with conversation naturally
+- `/samm` feels like a shared operational workspace, not a stateless chatbot
+
+## M14UI3 - Operational Surface Carryover
+Status:
+- planned
+
+Goal:
+- carry forward the missing operational/admin surfaces from the current UI into the new shell as needed
+
+In scope:
+- `Operations -> Manual`
+- `Operations -> Settings`
+- current config forms as grounding for the expanded config model
+- any trust/audit surfaces still missing in the new UI
+
+Out of scope:
+- silent feature removal
+- broad redesign of operational logic without milestone approval
+
+Acceptance criteria:
+- no critical current operational surface is lost in the new UI adoption
+- old UI is only used as grounding / carryover reference, not as the long-term product direction
 
 ## M14C - CRM P1
 Status:

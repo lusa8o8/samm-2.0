@@ -3,6 +3,11 @@
 ## Purpose
 This document defines the future structure of the `/samm` page so it becomes more than a basic chat screen. It should act as the product's main coordination workspace.
 
+This should now be read together with:
+- `SAMM_UI_ADOPTION_PLAN.md`
+
+Because the new shared-workspace UI exists in packaged prototype form and will be adopted incrementally into the live app.
+
 ## Core Role
 `/samm` should be the place where users:
 - ask for work to be done
@@ -10,6 +15,7 @@ This document defines the future structure of the `/samm` page so it becomes mor
 - understand what is blocked
 - approve or delegate next actions
 - move between conversation and structured operational context
+- interact with structured tool outputs inside the same shared workspace
 
 It is not just a chat box.
 It is the coordination workspace.
@@ -56,6 +62,7 @@ Should support:
 - summaries
 - recommendations
 - structured responses
+- widget/card rendering for tool outputs
 - action suggestions
 - links into operational surfaces such as Inbox, Content, or Metrics
 
@@ -90,6 +97,10 @@ Examples:
 
 These should be small, readable, and link outward.
 
+Future implementation note:
+- these context cards can evolve into native widgets rendered inside the shared workspace shell
+- they should not be treated as decorative dashboard fragments
+
 ### 6. Recent Threads Or Saved Coordination Sessions
 Purpose:
 - make `samm` feel like a workspace, not a stateless chatbot
@@ -123,6 +134,7 @@ Avoid:
 - overly chatbot-like greeting screens
 - gimmicky assistant visuals
 - cluttered dashboard panels fighting with the conversation
+- losing the lowercase `samm` brand treatment in the new shell
 
 ## MVP Version
 The first improved version of `/samm` can be simple:

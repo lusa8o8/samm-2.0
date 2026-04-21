@@ -31,6 +31,7 @@ Before touching code, reread:
 - `SAMM_CODEBASE_MAPPING.md`
 - `SAMM_MEMORY_CONTRACT.md`
 - `STRUCTURED_CONFIG_CONTRACT.md`
+- `SAMM_UI_ADOPTION_PLAN.md`
 - `CONTACT_IDENTITY_AND_MERGE_RULES.md`
 - `VALIDATION_FOUNDATIONS.md`
 
@@ -61,6 +62,20 @@ The runtime blocker is now resolved for the scoped heavy paths:
 - keep ingress thin and deployable
 - keep Railway worker as the active execution plane for the moved heavy paths
 - follow `SAMM_RUNTIME_SPLIT_CONTRACT.md` as the execution contract for future runtime moves
+
+The next planning focus is now explicitly:
+- `M14B` as universal structured config with ICP retained as first-class targeting truth
+- incremental adoption of the packaged `samm 2.0 UI` shared-workspace shell
+- use `M.A.S UI` as grounding for missing operational/admin surfaces rather than replacing the whole frontend at once
+
+`M14B` has now started in backend-first form:
+- the universal config schema foundation is live in Supabase
+- `provision-org` now seeds default rows for:
+  - `campaign_defaults`
+  - `approval_policy`
+  - `outreach_policy`
+- no settings UI changes have landed yet
+- ICP remains explicitly locked in the config model
 
 Current `M14A.1` delivered slice:
 - worker-claim contract added to `pipeline_runs`

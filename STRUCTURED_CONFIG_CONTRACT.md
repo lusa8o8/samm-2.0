@@ -8,11 +8,18 @@ The goal is to remove free-text business truth from prompts and runtime guesswor
 Pipelines, CRM, and Sales should read and apply structured config.
 They should not reinvent:
 - ICP
+- audience segments
 - offers
 - seasonality
 - discounts
 - outreach rules
 - approval defaults
+
+Core interpretation:
+- `samm` is structure-aware, not domain-aware
+- core config must be universal across businesses
+- domain-specific fields stay pluggable
+- ICP remains a first-class targeting concept inside the universal segment model
 
 ## Scope
 This contract corresponds to `M14B`.
@@ -22,6 +29,12 @@ This contract corresponds to `M14B`.
 ### `icp_categories`
 Purpose:
 - reusable audience categories per org
+
+Interpretation:
+- initial implementation seam for universal audience segments with explicit ICP support
+- these are not edtech-only categories
+- a workspace may think of them as ICPs, audience segments, personas, or target groups
+- the deterministic contract remains the same either way
 
 Expected fields:
 - `id`
@@ -37,6 +50,12 @@ Expected fields:
 - `default_offer_ids` array
 - `default_outreach_policy_id` nullable
 - `priority_score`
+- `custom_fields` jsonb nullable
+
+Locked rule:
+- keep ICP explicit in the config model
+- do not collapse targeting truth into free-text campaign prompts
+- if a later rename is needed, treat `audience_segments` as the neutral domain concept and `icp_categories` as the first implementation name
 
 ### `offer_catalog`
 Purpose:
@@ -159,15 +178,37 @@ Structured config and calendar must stay distinct:
 - config = stable business truth
 - calendar = time-bound timing and ownership
 
+## Universal Config Layers
+Every workspace should be able to express these through structured config:
+- organization identity
+- brand and communication rules
+- audience segments / ICP truth
+- offer / product catalog
+- pricing and discount rules
+- seasonality
+- outreach policy
+- approval policy
+
+Domain-specific data should remain pluggable through:
+- custom fields
+- signal metadata
+- segment filters
+- offer applicability fields
+
+Not by hardcoding domain assumptions into the core layer.
+
 ## Behavioral Rules
 1. Config stores merchant-defined truth.
 2. Calendar stores timing-bound intent.
 3. Pipelines reference config and calendar; they do not redefine them.
 4. Discounts must come from `offer_catalog` plus `discount_policies`.
 5. No model may invent seasonality or offer logic outside config.
+6. If something affects targeting, pricing, timing, or messaging, it must come from config or campaign input, not model inference.
+7. ICP / audience truth must remain explicit and queryable, not buried in prose.
 
 ## Acceptance Criteria
 - low/high demand can be configured without prompt rewriting
 - offers are selected from catalog, not hallucinated
 - discounts are policy-backed only
 - future CRM / Sales layers can reference these objects directly
+- the same config contract can support ecommerce, SaaS, edtech, services, and other business models without core-schema rewrites
