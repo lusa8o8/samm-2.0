@@ -60,7 +60,7 @@ function mapPipelineRun(row: Record<string, any>): PipelineRun {
     pipelineName: pipelineInfo.name,
     status,
     startedAt: toIsoOrNow(row.started_at),
-    lastActivity: toIsoOrNow(row.updated_at ?? row.started_at),
+    lastActivity: toIsoOrNow(row.started_at),
     stepCurrent: Number(row.result?.copy_assets_created ?? row.result?.posts_scheduled ?? row.result?.resolved_slots ?? 0),
     stepTotal: Number(row.result?.resolved_slots ?? row.result?.calendar_windows_considered ?? 1) || 1,
     stepName:
@@ -151,7 +151,7 @@ export async function getSammContext(): Promise<WorkspaceContext> {
   const [pipelineRunsResult, inboxResult, calendarResult] = await Promise.all([
     supabase
       .from("pipeline_runs")
-      .select("id,pipeline,status,started_at,updated_at,summary,result")
+      .select("id,pipeline,status,started_at,summary,result")
       .eq("org_id", orgId)
       .order("started_at", { ascending: false })
       .limit(8),
