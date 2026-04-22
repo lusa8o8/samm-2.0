@@ -234,15 +234,19 @@ export default function ContentPage() {
         )}
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
           {filtered.map(draft => (
-            <ContentCard
+            <div
               key={draft.id}
-              draft={draft}
-              onApprove={handleApprove}
-              onReject={handleReject}
-              onRetry={handleRetry}
-              onInspect={handleInspect}
-              approvalState={approvalStates[draft.id]}
-            />
+              className={cn(draft.channel === 'design_brief' && 'xl:col-span-2')}
+            >
+              <ContentCard
+                draft={draft}
+                onApprove={handleApprove}
+                onReject={handleReject}
+                onRetry={handleRetry}
+                onInspect={handleInspect}
+                approvalState={approvalStates[draft.id]}
+              />
+            </div>
           ))}
         </div>
       </div>
