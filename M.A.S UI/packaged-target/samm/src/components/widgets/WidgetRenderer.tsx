@@ -7,6 +7,7 @@ import { FailureGroupWidget } from './FailureGroupWidget';
 import { PatternSummaryWidget } from './PatternSummaryWidget';
 import { MetricsSnapshotWidget } from './MetricsSnapshotWidget';
 import { SequenceStatusWidget } from './SequenceStatusWidget';
+import { CalendarEventInspectorWidget } from './CalendarEventInspectorWidget';
 
 interface WidgetRendererProps {
   widget: WidgetDescriptor;
@@ -20,6 +21,8 @@ export function WidgetRenderer({ widget }: WidgetRendererProps) {
       return <PipelineRunTimelineWidget data={widget.data as never} />;
     case 'content_batch_review':
       return <ContentBatchReviewWidget data={widget.data as never} />;
+    case 'calendar_event_inspector':
+      return <CalendarEventInspectorWidget data={widget.data as never} />;
     case 'lead_card':
       return <LeadCardWidget data={widget.data as never} />;
     case 'failure_group':

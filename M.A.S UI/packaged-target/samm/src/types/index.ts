@@ -93,6 +93,9 @@ export interface CalendarEvent {
   linkedCampaign?: string;
   contentReady?: number;
   contentTotal?: number;
+  supportContentAllowed?: boolean;
+  creativeOverrideAllowed?: boolean;
+  audienceTags?: string[];
 }
 
 export interface MetricKPI {

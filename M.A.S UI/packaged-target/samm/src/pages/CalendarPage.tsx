@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
 import { format } from 'date-fns';
-import { Calendar, ExternalLink } from 'lucide-react';
 import { StatusChip } from '../components/shared/StatusChip';
 import { useInspector } from '../components/shell/WorkspaceShell';
-import { getCalendarEvents } from '../services/mockService';
+import { getCalendarEvents } from '../services/liveCalendarService';
 import type { CalendarEvent } from '../types';
 import { cn } from '@/lib/utils';
 

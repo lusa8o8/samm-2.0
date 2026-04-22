@@ -1020,6 +1020,12 @@ Latest UI adapter checkpoint:
   - signup/reach sparkline data
   - packaged `samm` summary copy
   - lightweight detected pattern cards
+- packaged `CalendarPage` now uses a live adapter service:
+  - `M.A.S UI/packaged-target/samm/src/services/liveCalendarService.ts`
+- packaged calendar now reads the real `academic_calendar` table and renders:
+  - live event/window cards
+  - support-content and creative-deviation notes
+  - a dedicated calendar event inspector widget instead of the generic widget fallback
 
 Latest packaged-runtime checkpoint:
 - `M.A.S UI` now exposes a dedicated packaged-app runtime target:

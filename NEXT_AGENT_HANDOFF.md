@@ -529,6 +529,12 @@ Latest packaged-target checkpoint:
   - reach/signup sparkline data
   - packaged `samm` summary copy
   - lightweight pattern cards
+- packaged `CalendarPage` now uses:
+  - `M.A.S UI/packaged-target/samm/src/services/liveCalendarService.ts`
+- that adapter reads live `academic_calendar` rows and maps them into the packaged event/window model
+- packaged calendar inspector now has:
+  - `M.A.S UI/packaged-target/samm/src/components/widgets/CalendarEventInspectorWidget.tsx`
+- the packaged calendar surface now shows the live support-content and creative-deviation flags through the inspector instead of a generic widget fallback
 
 Latest packaged-runtime checkpoint:
 - `M.A.S UI/vite.packaged.config.ts` now provides a separate runtime entry for the packaged app

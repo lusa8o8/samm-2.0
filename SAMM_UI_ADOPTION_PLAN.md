@@ -258,6 +258,15 @@ Fourth packaged-target adapter slice now in code:
   - `samm` summary text
   - lightweight detected-pattern cards
 
+Fifth packaged-target adapter slice now in code:
+- packaged `CalendarPage` no longer depends on the packaged mock calendar path
+- live calendar service:
+  - `packaged-target/samm/src/services/liveCalendarService.ts`
+- this adapter reads the real `academic_calendar` rows and maps them into the packaged event/window card model
+- packaged calendar inspector now has a dedicated widget:
+  - `packaged-target/samm/src/components/widgets/CalendarEventInspectorWidget.tsx`
+- support-content and creative-deviation flags are now visible inside the packaged inspector instead of falling through to the generic widget placeholder
+
 Packaged runtime target now available:
 - run the current fallback/live app with:
   - `npm run dev`
