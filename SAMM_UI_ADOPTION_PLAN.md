@@ -380,6 +380,33 @@ Marketing migration is considered stable enough to resume CRM / Sales work when:
 - the packaged calendar path is ready for later Studio evolution
 - marketing workflows are stable in the packaged UI under real usage
 
+Latest packaged polish checkpoint:
+- packaged `Content` now reuses the fuller live editor surface from:
+  - `M.A.S UI/src/pages/content.tsx`
+- this restores the missing packaged content controls:
+  - edit
+  - image upload / replace
+  - approve all
+  - design brief edit
+  - design brief share
+- packaged `Calendar` now reuses the fuller live editor surface from:
+  - `M.A.S UI/src/pages/calendar.tsx`
+- this restores the missing packaged calendar controls:
+  - add event
+  - edit
+  - delete
+  - support-content toggle
+  - creative-deviation toggle
+- packaged `Operations -> Settings` now reuses the fuller live editor surface from:
+  - `M.A.S UI/src/pages/agent/settings.tsx`
+- this replaces the earlier packaged read-only summary with real editable inputs
+- packaged runtime now includes a visible sidebar sign-out control
+- compatibility proxy modules now exist inside the packaged target so these live carryover editors can run inside the packaged shell without forking backend behavior:
+  - `packaged-target/samm/src/lib/api.ts`
+  - `packaged-target/samm/src/lib/supabase.ts`
+  - `packaged-target/samm/src/lib/workspace-adapter.ts`
+  - `packaged-target/samm/src/components/layout.tsx`
+
 ## Summary
 The new UI is still not a big-bang replacement.
 But the target is now explicit:

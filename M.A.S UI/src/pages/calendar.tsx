@@ -360,7 +360,7 @@ export default function Calendar() {
               <p>No upcoming events yet.</p>
             </div>
           ) : (
-            events?.map((event) => {
+            events?.map((event: any) => {
               const date = new Date(event.event_date);
               const isToday = new Date().toDateString() === date.toDateString();
               const isPast = date < new Date() && !isToday;

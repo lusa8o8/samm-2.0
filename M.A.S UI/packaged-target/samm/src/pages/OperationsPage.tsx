@@ -18,11 +18,8 @@ import {
   type OperationsOverview,
   type OperationsPipelineHealth,
 } from "../services/liveOperationsService";
-import {
-  getOperationsSettingsSummary,
-  type OperationsSettingsSummary,
-} from "../services/liveSettingsSummaryService";
 import OperationsManual from "../../../../src/pages/agent/manual";
+import CarryoverSettingsEditor from "../../../../src/pages/agent/settings";
 import type { PipelineRun } from "../types";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -164,15 +161,6 @@ function OverviewTab({
   );
 }
 
-function SummaryRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-start justify-between gap-3 border-b border-border/60 py-2.5 last:border-b-0">
-      <span className="text-xs font-medium text-foreground/80">{label}</span>
-      <span className="max-w-[60%] text-right text-xs text-muted-foreground">{value || "Not set"}</span>
-    </div>
-  );
-}
-
 function ManualTab() {
   return (
     <div className="rounded-xl border border-border bg-card">
@@ -181,129 +169,10 @@ function ManualTab() {
   );
 }
 
-function SettingsTab({
-  summary,
-  isLoading,
-}: {
-  summary: OperationsSettingsSummary | null;
-  isLoading: boolean;
-}) {
-  if (isLoading) {
-    return (
-      <div className="space-y-4">
-        <div className="rounded-xl border border-border bg-card p-5">
-          <StatusChip status="processing" label="Loading settings" showDot />
-        </div>
-      </div>
-    );
-  }
-
-  if (!summary) {
-    return (
-      <div className="rounded-xl border border-border bg-card p-5">
-        <p className="text-sm font-semibold text-foreground">Settings summary unavailable</p>
-        <p className="mt-2 text-sm text-muted-foreground">
-          The packaged settings summary could not be loaded. The live editor remains available in the fallback app while this
-          packaged admin surface continues to be rebuilt.
-        </p>
-      </div>
-    );
-  }
-
+function SettingsTab() {
   return (
-    <div className="space-y-4">
-      <div className="rounded-xl border border-border bg-card p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div className="space-y-1">
-            <p className="text-sm font-semibold text-foreground">Live settings summary</p>
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              This packaged tab now reflects the real workspace configuration. Full editing remains in the carryover admin
-              surface until the packaged editor is rebuilt section by section.
-            </p>
-          </div>
-          <StatusChip status="processing" label="Editor carryover" />
-        </div>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <div className="rounded-xl border border-border bg-card p-4">
-          <p className="text-sm font-semibold text-foreground">Organisation</p>
-          <div className="mt-3">
-            <SummaryRow label="Short name" value={summary.organization.orgName} />
-            <SummaryRow label="Full name" value={summary.organization.fullName} />
-            <SummaryRow label="Timezone" value={summary.organization.timezone} />
-            <SummaryRow label="Country" value={summary.organization.country} />
-            <SummaryRow label="Contact" value={summary.organization.contactEmail} />
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-border bg-card p-4">
-          <p className="text-sm font-semibold text-foreground">Brand voice</p>
-          <div className="mt-3">
-            <SummaryRow label="Tone" value={summary.brand.tone} />
-            <SummaryRow label="Audience" value={summary.brand.targetAudience} />
-            <SummaryRow label="Preferred CTA" value={summary.brand.preferredCta} />
-            <SummaryRow label="Approved hashtags" value={summary.brand.hashtags.join(", ")} />
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-border bg-card p-4">
-          <p className="text-sm font-semibold text-foreground">Visual brand</p>
-          <div className="mt-3">
-            <SummaryRow label="Primary color" value={summary.visuals.primaryColor} />
-            <SummaryRow label="Secondary color" value={summary.visuals.secondaryColor} />
-            <SummaryRow label="Accent color" value={summary.visuals.accentColor} />
-            <SummaryRow label="Heading font" value={summary.visuals.headingFont} />
-            <SummaryRow label="Body font" value={summary.visuals.bodyFont} />
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-border bg-card p-4">
-          <p className="text-sm font-semibold text-foreground">Connections</p>
-          <div className="mt-3">
-            <SummaryRow label="Connected channels" value={summary.connections.connectedChannels.join(", ")} />
-            <SummaryRow label="Configured handles" value={summary.connections.availableHandles.join(", ")} />
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-border bg-card p-4">
-          <p className="text-sm font-semibold text-foreground">Audience, offers, seasonality</p>
-          <div className="mt-3">
-            <SummaryRow label="Active audience segments" value={String(summary.strategy.activeIcpCount)} />
-            <SummaryRow label="Active offers" value={String(summary.strategy.activeOfferCount)} />
-            <SummaryRow label="Active seasonality profiles" value={String(summary.strategy.activeSeasonalityCount)} />
-            <SummaryRow label="Configured periods" value={String(summary.strategy.configuredSeasonalityPeriods)} />
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-border bg-card p-4">
-          <p className="text-sm font-semibold text-foreground">Campaign + approval defaults</p>
-          <div className="mt-3">
-            <SummaryRow label="Default duration" value={`${summary.defaults.defaultDurationDays} days`} />
-            <SummaryRow label="Default channels" value={summary.defaults.defaultChannels.join(", ")} />
-            <SummaryRow label="Objective" value={summary.defaults.defaultObjective} />
-            <SummaryRow label="CTA style" value={summary.defaults.defaultCtaStyle} />
-            <SummaryRow
-              label="Approvals"
-              value={[
-                summary.approval.briefApprovalRequired ? "briefs" : null,
-                summary.approval.copyApprovalRequired ? "copy" : null,
-                summary.approval.discountApprovalRequired ? "discounts" : null,
-                summary.approval.outreachApprovalRequired ? "outreach" : null,
-              ]
-                .filter(Boolean)
-                .join(", ")}
-            />
-          </div>
-        </div>
-      </div>
-
-      {summary.approval.notes && (
-        <div className="rounded-xl border border-border bg-card p-4">
-          <p className="text-sm font-semibold text-foreground">Approval policy notes</p>
-          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{summary.approval.notes}</p>
-        </div>
-      )}
+    <div className="-mx-6 -my-4">
+      <CarryoverSettingsEditor />
     </div>
   );
 }
@@ -311,9 +180,7 @@ function SettingsTab({
 export default function OperationsPage() {
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]["id"]>("overview");
   const [overview, setOverview] = useState<OperationsOverview | null>(null);
-  const [settingsSummary, setSettingsSummary] = useState<OperationsSettingsSummary | null>(null);
   const [isOverviewLoading, setIsOverviewLoading] = useState(true);
-  const [isSettingsLoading, setIsSettingsLoading] = useState(true);
   const [triggeringPipeline, setTriggeringPipeline] = useState<string | null>(null);
   const { toast } = useToast();
 
@@ -332,24 +199,8 @@ export default function OperationsPage() {
     }
   };
 
-  const loadSettingsSummary = async () => {
-    setIsSettingsLoading(true);
-    try {
-      setSettingsSummary(await getOperationsSettingsSummary());
-    } catch (error) {
-      toast({
-        title: "Settings summary failed",
-        description: error instanceof Error ? error.message : "Failed to load settings summary.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSettingsLoading(false);
-    }
-  };
-
   useEffect(() => {
     void loadOverview();
-    void loadSettingsSummary();
   }, []);
 
   const runs = useMemo(() => overview?.runs ?? [], [overview]);
@@ -426,7 +277,7 @@ export default function OperationsPage() {
             onTrigger={handleTrigger}
           />
         )}
-        {activeTab === "settings" && <SettingsTab summary={settingsSummary} isLoading={isSettingsLoading} />}
+        {activeTab === "settings" && <SettingsTab />}
         {activeTab === "manual" && <ManualTab />}
       </div>
     </div>

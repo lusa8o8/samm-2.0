@@ -560,6 +560,20 @@ Latest packaged-target checkpoint:
   - live overview
   - live settings summary
   - full operations manual carryover
+- latest packaged polish slice closes the remaining missing-controls gap by running fuller live carryover editors inside the packaged shell:
+  - packaged `Content` now reuses `M.A.S UI/src/pages/content.tsx`
+  - packaged `Calendar` now reuses `M.A.S UI/src/pages/calendar.tsx`
+  - packaged `Operations -> Settings` now reuses `M.A.S UI/src/pages/agent/settings.tsx`
+- packaged runtime now exposes the expected operator affordances again:
+  - settings input fields
+  - calendar add/edit/delete
+  - support-content toggle
+  - creative-deviation toggle
+  - content edit
+  - image upload
+  - approve all
+  - design brief edit/share
+  - sidebar sign-out
 
 Latest packaged-runtime checkpoint:
 - `M.A.S UI/vite.packaged.config.ts` now provides a separate runtime entry for the packaged app
@@ -571,6 +585,11 @@ Latest packaged-runtime checkpoint:
   - `npm run typecheck:packaged`
 - this is the first point where the packaged app is runnable side-by-side without cutting over the default entrypoint
 - packaged runtime now has its own auth gate plus `/login`, so separate-port sessions sign into the live backend instead of falling through to the dummy dev org
+- packaged runtime also now includes compatibility proxy modules so the live carryover editors can run safely inside the packaged shell:
+  - `M.A.S UI/packaged-target/samm/src/lib/api.ts`
+  - `M.A.S UI/packaged-target/samm/src/lib/supabase.ts`
+  - `M.A.S UI/packaged-target/samm/src/lib/workspace-adapter.ts`
+  - `M.A.S UI/packaged-target/samm/src/components/layout.tsx`
 
 ### Confirmation card pattern
 The chat UI renders confirmation cards from `response.confirmation`, not `response.action`.

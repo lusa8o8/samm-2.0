@@ -298,7 +298,7 @@ function ContentCard({
           ) : item.metadata?.original_comment ? (
             <div className="space-y-3">
               <div className="rounded-lg border-l-4 border-border bg-muted/30 px-4 py-3">
-                {item.metadata.author && (
+                {Boolean(item.metadata.author) && (
                   <p className="mb-1 text-[11px] font-medium text-muted-foreground">{String(item.metadata.author)}</p>
                 )}
                 <p className="text-[13px] italic leading-relaxed text-muted-foreground">&ldquo;{String(item.metadata.original_comment)}&rdquo;</p>

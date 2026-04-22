@@ -306,7 +306,7 @@ export default function AgentSettings() {
   }
 
   function handleToggleConnection(platformId: string, currentlyConnected: boolean) {
-    const updated = { ...config.platform_connections };
+    const updated = { ...(config?.platform_connections ?? {}) };
     if (currentlyConnected) {
       delete updated[platformId];
     } else {
@@ -354,7 +354,7 @@ export default function AgentSettings() {
   }
 
   async function persistFacebookConnection(nextFacebook: Record<string, any>, successTitle: string, successDescription: string) {
-    const existing = (config.platform_connections ?? {}) as Record<string, any>;
+    const existing = (config?.platform_connections ?? {}) as Record<string, any>;
     const updated = {
       ...existing,
       facebook: {
@@ -1747,7 +1747,7 @@ export default function AgentSettings() {
                 <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">Active channels</div>
                 <div className="mb-5 space-y-2">
                   {INTEGRATIONS.filter((p) => p.live).map(({ id, name, Icon, color }) => {
-                    const isConnected = !!config.platform_connections[id];
+                    const isConnected = !!platformConnections[id];
                     const isFacebook = id === "facebook";
                     const hasFacebookCredentials = !!facebookCredentials.page_id && !!facebookCredentials.access_token;
                     const connectedFacebookPageName = String((platformConnections.facebook?.page_name ?? "") || "");

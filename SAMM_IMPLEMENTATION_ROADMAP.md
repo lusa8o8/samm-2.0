@@ -1047,6 +1047,20 @@ Latest UI adapter checkpoint:
   - live overview
   - live settings summary
   - full manual carryover
+- latest packaged polish slice closes the remaining missing-controls gap by running fuller live carryover editors inside the packaged shell:
+  - packaged `Content` now reuses `M.A.S UI/src/pages/content.tsx`
+  - packaged `Calendar` now reuses `M.A.S UI/src/pages/calendar.tsx`
+  - packaged `Operations -> Settings` now reuses `M.A.S UI/src/pages/agent/settings.tsx`
+- this restores the packaged-runtime controls that were still missing:
+  - settings input fields
+  - calendar add/edit/delete
+  - support-content toggle
+  - creative-deviation toggle
+  - content edit
+  - image upload
+  - approve all
+  - design brief edit/share
+  - sidebar sign-out
 
 Latest packaged-runtime checkpoint:
 - `M.A.S UI` now exposes a dedicated packaged-app runtime target:
@@ -1063,3 +1077,8 @@ Latest packaged-runtime checkpoint:
   - `npm run build:packaged`
   - `npm run typecheck:packaged`
 - packaged runtime now has its own auth gate and login route, so the packaged app no longer boots directly into live queries with a missing session
+- packaged runtime now also includes compatibility proxy modules so live carryover editors can run inside the packaged shell without duplicating backend contracts:
+  - `M.A.S UI/packaged-target/samm/src/lib/api.ts`
+  - `M.A.S UI/packaged-target/samm/src/lib/supabase.ts`
+  - `M.A.S UI/packaged-target/samm/src/lib/workspace-adapter.ts`
+  - `M.A.S UI/packaged-target/samm/src/components/layout.tsx`

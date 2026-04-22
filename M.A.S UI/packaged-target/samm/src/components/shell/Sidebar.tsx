@@ -1,12 +1,13 @@
 import { useLocation, Link } from 'wouter';
 import {
   Cpu, Inbox, FileText, BarChart2, Calendar, Settings,
-  Users, TrendingUp, Star, Zap
+  Users, TrendingUp, Star, Zap, LogOut
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Module, ModuleId } from '../../types';
 import { useState } from 'react';
+import { signOut } from '../../../../../src/lib/supabase';
 
 const iconMap: Record<string, LucideIcon> = {
   Cpu, Inbox, FileText, BarChart2, Calendar, Settings, Users, TrendingUp, Star,
@@ -80,9 +81,20 @@ function NavIcon({ icon: Icon, label, path, isActive, badge }: NavIconProps) {
 
 export function Sidebar({ enabledModules, currentPath }: SidebarProps) {
   const [workspaceHovered, setWorkspaceHovered] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
 
   const navModules = enabledModules.filter(m => m.id !== 'operations');
   const settingsModule = enabledModules.find(m => m.id === 'operations');
+
+  async function handleSignOut() {
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      await signOut();
+    } finally {
+      setSigningOut(false);
+    }
+  }
 
   return (
     <aside className="flex-shrink-0 flex flex-col items-center h-full w-[60px] py-3 bg-transparent select-none">
@@ -143,6 +155,23 @@ export function Sidebar({ enabledModules, currentPath }: SidebarProps) {
           />
         </>
       )}
+
+      <div className="mb-1" />
+      <button
+        type="button"
+        onClick={handleSignOut}
+        disabled={signingOut}
+        className={cn(
+          "relative flex h-9 w-9 items-center justify-center rounded-xl transition-all duration-150",
+          signingOut
+            ? "cursor-not-allowed bg-muted text-muted-foreground"
+            : "text-foreground/25 hover:bg-red-50 hover:text-red-600"
+        )}
+        title="Sign out"
+        data-testid="nav-sign-out"
+      >
+        <LogOut size={16} />
+      </button>
     </aside>
   );
 }

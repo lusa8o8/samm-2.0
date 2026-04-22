@@ -725,7 +725,7 @@ export function useListInboxItems(params: InboxFilter = {}, options?: QueryHookO
       const { data, error } = await query;
       if (error) throw error;
 
-      return (data ?? []).map((row) => ({
+      return (data ?? []).map((row: any) => ({
         ...row,
         payload: normalizeInboxPayload(row),
       }));
@@ -807,7 +807,7 @@ export function useListContent(params: ContentFilter = {}, options?: QueryHookOp
       const { data, error } = await query;
       if (error) throw error;
 
-      return (data ?? []).map((row) => ({
+      return (data ?? []).map((row: any) => ({
         ...row,
         status: toUiContentStatus(row.status),
       }));
@@ -1062,7 +1062,7 @@ export function useListPipelineRuns(params: PipelineRunsFilter = {}, options?: Q
       if (error) throw error;
       if (pipelineDError) throw pipelineDError;
 
-      const baseRuns = (data ?? []).map((row) => ({
+      const baseRuns = (data ?? []).map((row: any) => ({
         ...row,
         pipeline: toPipelineKey(row.pipeline),
         started_at: row.started_at ?? row.created_at,
@@ -1071,7 +1071,7 @@ export function useListPipelineRuns(params: PipelineRunsFilter = {}, options?: Q
         error_message: row.error_message ?? row.result?.error ?? null,
       }));
 
-      const syntheticPipelineDRuns = (pipelineDRows ?? []).map((row) => ({
+      const syntheticPipelineDRuns = (pipelineDRows ?? []).map((row: any) => ({
         id: `pipeline-d-${row.id}`,
         pipeline: 'pipeline_d',
         status: row.status === 'failed' ? 'failed' : 'success',
@@ -1219,7 +1219,7 @@ export function useListSeasonalityProfiles(options?: QueryHookOptions) {
         .order("name", { ascending: true });
 
       if (error) throw error;
-      return (data ?? []).map((row) => ({
+      return (data ?? []).map((row: any) => ({
         ...row,
         seasonality_periods: (row.seasonality_periods ?? []).sort((a: SeasonalityPeriod, b: SeasonalityPeriod) =>
           a.name.localeCompare(b.name)
@@ -1842,10 +1842,10 @@ export function useGetMetricsSparklines(options?: QueryHookOptions) {
 
       for (const platform of Object.keys(result)) {
         result[platform] = (data ?? [])
-          .filter((row) => row.platform === platform)
+          .filter((row: any) => row.platform === platform)
           .slice(0, 7)
           .reverse()
-          .map((row) => ({ value: row.signups ?? 0 }));
+          .map((row: any) => ({ value: row.signups ?? 0 }));
       }
 
       return result;
