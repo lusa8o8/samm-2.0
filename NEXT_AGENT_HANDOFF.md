@@ -573,6 +573,10 @@ Latest packaged-target checkpoint:
   - approve all
   - design brief edit/share
   - sidebar sign-out
+- latest packaged content interaction polish is also now in code:
+  - preview cards open on card tap / click rather than a separate details button
+  - preview cards stay summary-level only; full content remains in the expanded modal
+  - expanded content surfaces now use platform-tinted backgrounds for quicker channel recognition
 
 Latest packaged-runtime checkpoint:
 - `M.A.S UI/vite.packaged.config.ts` now provides a separate runtime entry for the packaged app

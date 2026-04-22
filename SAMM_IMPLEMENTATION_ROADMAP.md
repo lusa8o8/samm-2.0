@@ -1068,6 +1068,9 @@ Latest UI adapter checkpoint:
     - `campaign_brief`
     - `linked_content_list`
   - design-brief cards now span full grid width to separate them visually from post drafts
+  - preview cards now open on card tap / click rather than a separate details button
+  - preview cards now remain summary-level only; full content stays in the expanded modal
+  - expanded content surfaces now use platform-tinted backgrounds for faster channel recognition
 
 Latest packaged-runtime checkpoint:
 - `M.A.S UI` now exposes a dedicated packaged-app runtime target:

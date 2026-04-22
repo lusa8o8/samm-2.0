@@ -2,7 +2,6 @@ import { useMemo, useRef, useState } from "react";
 import {
   Check,
   Clock,
-  ExternalLink,
   ImagePlus,
   Pencil,
   RefreshCw,
@@ -58,8 +57,53 @@ const PLATFORM_LABELS: Record<string, string> = {
   whatsapp: "WhatsApp",
   youtube: "YouTube",
   email: "Email",
+  linkedin: "LinkedIn",
+  instagram: "Instagram",
+  twitter: "X",
   design_brief: "Design Brief",
 };
+
+const PLATFORM_ACCENTS: Record<string, string> = {
+  facebook: "border-blue-200/80 bg-gradient-to-br from-blue-50 via-blue-50/70 to-white",
+  whatsapp: "border-emerald-200/80 bg-gradient-to-br from-emerald-50 via-emerald-50/70 to-white",
+  youtube: "border-red-200/80 bg-gradient-to-br from-red-50 via-rose-50/70 to-white",
+  email: "border-amber-200/80 bg-gradient-to-br from-amber-50 via-yellow-50/60 to-white",
+  linkedin: "border-blue-200/80 bg-gradient-to-br from-blue-50 via-sky-50/70 to-white",
+  instagram: "border-fuchsia-200/80 bg-gradient-to-br from-fuchsia-50 via-purple-50/70 to-white",
+  twitter: "border-sky-200/80 bg-gradient-to-br from-sky-50 via-cyan-50/70 to-white",
+  design_brief: "border-violet-200/80 bg-gradient-to-br from-violet-50 via-fuchsia-50/60 to-white",
+};
+
+function textValue(value: unknown) {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return null;
+}
+
+function getObjective(item: ContentItem) {
+  return textValue(item.metadata?.objective) || textValue(item.metadata?.purpose) || textValue(item.metadata?.slot_purpose);
+}
+
+function getCta(item: ContentItem) {
+  return textValue(item.metadata?.required_cta_text) || textValue(item.metadata?.call_to_action);
+}
+
+function getTags(item: ContentItem) {
+  const metadata = item.metadata ?? {};
+  const sources = [metadata.pattern_tags, metadata.tags, metadata.hashtags];
+  const values = new Set<string>();
+
+  for (const source of sources) {
+    if (Array.isArray(source)) {
+      for (const entry of source) {
+        const tag = textValue(entry);
+        if (tag) values.add(tag.replace(/^#/, ""));
+      }
+    }
+  }
+
+  return Array.from(values).slice(0, 4);
+}
 
 function formatTimestamp(value?: string | null) {
   if (!value) return "No date";
@@ -288,6 +332,10 @@ function ContentCard({
   const isRejected = item.status === "rejected";
   const isFailed = item.status === "failed";
   const preview = stripMarkdownToPreviewText(item.body);
+  const objective = getObjective(item);
+  const cta = getCta(item);
+  const tags = getTags(item);
+  const accentClass = PLATFORM_ACCENTS[item.platform] ?? "border-border bg-gradient-to-br from-muted/30 via-background to-white";
   const title =
     item.subject_line ||
     (item.campaign_name && isDesignBrief
@@ -300,9 +348,18 @@ function ContentCard({
   return (
     <article
       className={cn(
-        "rounded-2xl border border-border bg-card p-5 shadow-sm transition-colors hover:border-border/80",
+        "rounded-2xl border border-border bg-card p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-border/80 hover:shadow-md",
         isDesignBrief && "md:col-span-2",
       )}
+      role="button"
+      tabIndex={0}
+      onClick={() => onOpen(item)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onOpen(item);
+        }
+      }}
     >
       <input
         ref={fileRef}
@@ -316,40 +373,80 @@ function ContentCard({
         }}
       />
 
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0 space-y-2">
+      <div className={cn("space-y-4 rounded-2xl border p-5", accentClass)}>
+        <div className="min-w-0 space-y-3">
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-2">
               <ChannelIcon channel={(item.platform as any) || "facebook"} size={15} />
-              <span className={cn("text-sm font-semibold", isDesignBrief && "text-violet-700")}>
-                {title}
+              <span className={cn("text-sm font-medium text-foreground", isDesignBrief && "text-violet-700")}>
+                {PLATFORM_LABELS[item.platform] ?? item.platform}
+                {!isDesignBrief ? ` · ${item.subject_line ? "Article" : "Post"}` : ""}
               </span>
             </div>
             <StatusChip status={(statusLabel as any) || "draft"} />
-            {item.campaign_name && !isDesignBrief && (
-              <span className="rounded-full border border-blue-100 bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">
-                campaign
-              </span>
-            )}
           </div>
-          <p className={cn("text-sm leading-relaxed text-muted-foreground", isDesignBrief && "line-clamp-3")}>
-            {preview || "No preview available."}
-          </p>
-          {item.media_url && !isDesignBrief && (
-            <div className="overflow-hidden rounded-xl border border-border bg-muted/20">
-              <img src={item.media_url} alt="Attached media preview" className="h-36 w-full object-cover" />
-            </div>
-          )}
+
+          <div className="space-y-2">
+            <h3 className={cn("text-[1.05rem] font-semibold leading-snug text-foreground", isDesignBrief && "text-violet-900")}>
+              {title}
+            </h3>
+            <p className="line-clamp-3 text-sm leading-relaxed text-foreground/75">
+              {preview || "No preview available."}
+            </p>
+          </div>
         </div>
 
-        <ActionButton
-          type="button"
-          className="shrink-0 border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
-          onClick={() => onOpen(item)}
-        >
-          <ExternalLink className="h-3.5 w-3.5" />
-          Open
-        </ActionButton>
+        <div className="grid gap-2 md:grid-cols-2">
+          {item.campaign_name && (
+            <div className="rounded-xl bg-white/70 px-3 py-2 backdrop-blur">
+              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Campaign</p>
+              <p className="mt-1 text-sm font-medium text-foreground">{item.campaign_name}</p>
+            </div>
+          )}
+          {objective && (
+            <div className="rounded-xl bg-white/70 px-3 py-2 backdrop-blur">
+              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Objective</p>
+              <p className="mt-1 text-sm font-medium text-foreground">{objective}</p>
+            </div>
+          )}
+          {cta && (
+            <div className="rounded-xl bg-white/70 px-3 py-2 backdrop-blur">
+              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">CTA</p>
+              <p className="mt-1 text-sm font-medium text-foreground">{cta}</p>
+            </div>
+          )}
+          <div className="rounded-xl bg-white/70 px-3 py-2 backdrop-blur">
+            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              {item.status === "published" ? "Published" : item.status === "scheduled" ? "Scheduled" : "Created"}
+            </p>
+            <p className="mt-1 text-sm font-medium text-foreground">
+              {item.status === "published"
+                ? formatTimestamp(item.published_at)
+                : item.status === "scheduled"
+                  ? formatTimestamp(item.scheduled_at)
+                  : formatTimestamp(item.created_at)}
+            </p>
+          </div>
+        </div>
+
+        {tags.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {tags.map((tag) => (
+              <span
+                key={tag}
+                className="rounded-full border border-white/70 bg-white/75 px-2.5 py-1 text-[11px] font-medium text-muted-foreground"
+              >
+                #{tag}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {item.media_url && !isDesignBrief && (
+          <div className="overflow-hidden rounded-xl border border-white/60 bg-white/60">
+            <img src={item.media_url} alt="Attached media preview" className="h-36 w-full object-cover" />
+          </div>
+        )}
       </div>
 
       <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
@@ -363,7 +460,7 @@ function ContentCard({
         </span>
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center gap-2">
+      <div className="mt-4 flex flex-wrap items-center gap-2" onClick={(event) => event.stopPropagation()}>
         {(isDraft || isRejected) && (
           <>
             <ActionButton

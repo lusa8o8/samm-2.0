@@ -1,5 +1,5 @@
 import ReactMarkdown from "react-markdown";
-import { CalendarDays, ExternalLink, Image as ImageIcon, Link2, MessageSquareQuote, Target } from "lucide-react";
+import { CalendarDays, Link2, MessageSquareQuote, Target } from "lucide-react";
 import { ChannelIcon } from "../shared/ChannelIcon";
 import { StatusChip } from "../shared/StatusChip";
 
@@ -59,6 +59,33 @@ function stringifyValue(value: unknown) {
   return null;
 }
 
+const platformAccent: Record<string, string> = {
+  facebook: "border-blue-200/80 bg-gradient-to-br from-blue-50 via-blue-50/70 to-white",
+  whatsapp: "border-emerald-200/80 bg-gradient-to-br from-emerald-50 via-emerald-50/70 to-white",
+  youtube: "border-red-200/80 bg-gradient-to-br from-red-50 via-rose-50/70 to-white",
+  email: "border-amber-200/80 bg-gradient-to-br from-amber-50 via-yellow-50/60 to-white",
+  linkedin: "border-blue-200/80 bg-gradient-to-br from-blue-50 via-sky-50/70 to-white",
+  instagram: "border-fuchsia-200/80 bg-gradient-to-br from-fuchsia-50 via-purple-50/70 to-white",
+  twitter: "border-sky-200/80 bg-gradient-to-br from-sky-50 via-cyan-50/70 to-white",
+  design_brief: "border-violet-200/80 bg-gradient-to-br from-violet-50 via-fuchsia-50/60 to-white",
+};
+
+function getTags(metadata: Record<string, unknown>) {
+  const sources = [metadata.pattern_tags, metadata.tags, metadata.hashtags];
+  const values = new Set<string>();
+
+  for (const source of sources) {
+    if (Array.isArray(source)) {
+      for (const entry of source) {
+        const value = stringifyValue(entry);
+        if (value) values.add(value.replace(/^#/, ""));
+      }
+    }
+  }
+
+  return Array.from(values).slice(0, 6);
+}
+
 export function LinkedContentListWidget({ data }: { data: ContentData }) {
   const title = data.subject_line || data.campaign_name || "Content item";
   const metadata = data.metadata ?? {};
@@ -66,10 +93,12 @@ export function LinkedContentListWidget({ data }: { data: ContentData }) {
   const requiredCta = stringifyValue(metadata.required_cta_text) || stringifyValue(metadata.call_to_action);
   const purpose = stringifyValue(metadata.purpose) || stringifyValue(metadata.slot_purpose);
   const channel = coerceChannel(data.platform);
+  const tags = getTags(metadata);
+  const accentClass = platformAccent[channel] ?? "border-border bg-gradient-to-br from-muted/30 via-background to-white";
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-border bg-card p-5">
+      <div className={`rounded-2xl border p-5 ${accentClass}`}>
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-2">
             <div className="flex items-center gap-2">
@@ -78,6 +107,11 @@ export function LinkedContentListWidget({ data }: { data: ContentData }) {
               <StatusChip status={(data.status ?? "draft") as never} />
             </div>
             <h3 className="text-base font-semibold text-foreground">{title}</h3>
+            {Array.isArray(data.platforms) && data.platforms.length > 1 && (
+              <div className="rounded-full border border-white/70 bg-white/75 px-3 py-1 text-[11px] font-medium text-muted-foreground">
+                Shared across {data.platforms.length} channels
+              </div>
+            )}
             <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1.5">
                 <CalendarDays className="h-3.5 w-3.5" />
@@ -91,19 +125,27 @@ export function LinkedContentListWidget({ data }: { data: ContentData }) {
               )}
             </div>
           </div>
-          {Array.isArray(data.platforms) && data.platforms.length > 1 && (
-            <div className="rounded-full border border-border bg-muted/40 px-3 py-1 text-[11px] font-medium text-muted-foreground">
-              Shared across {data.platforms.length} channels
-            </div>
-          )}
         </div>
-      </div>
 
-      {data.media_url && (
-        <div className="overflow-hidden rounded-xl border border-border bg-card">
-          <img src={data.media_url} alt="Attached media" className="max-h-64 w-full object-cover" />
-        </div>
-      )}
+        {tags.length > 0 && (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {tags.map((tag) => (
+              <span
+                key={tag}
+                className="rounded-full border border-white/70 bg-white/75 px-2.5 py-1 text-[11px] font-medium text-muted-foreground"
+              >
+                #{tag}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {data.media_url && (
+          <div className="mt-4 overflow-hidden rounded-xl border border-white/60 bg-white/60">
+            <img src={data.media_url} alt="Attached media" className="max-h-64 w-full object-cover" />
+          </div>
+        )}
+      </div>
 
       <div className="rounded-xl border border-border bg-card p-5">
         <div className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-3 py-1 text-[11px] font-medium text-muted-foreground">
@@ -140,14 +182,6 @@ export function LinkedContentListWidget({ data }: { data: ContentData }) {
           )}
         </div>
       )}
-
-      <div className="rounded-xl border border-border bg-muted/30 px-4 py-3 text-xs text-muted-foreground">
-        <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
-          <ExternalLink className="h-3.5 w-3.5 text-primary" />
-          Inspector note
-        </span>
-        <p className="mt-1">Use the card actions to approve, reject, edit, or replace imagery. This inspector is for focused review, not inline expansion.</p>
-      </div>
     </div>
   );
 }

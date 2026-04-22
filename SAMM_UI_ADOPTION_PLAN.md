@@ -392,6 +392,13 @@ Latest packaged polish checkpoint:
   - design brief share
 - inline card expansion has been removed from the packaged content registry
 - content detail review now goes through the packaged modal / blur path instead
+- packaged preview cards now open on card tap / click instead of a separate details button
+- packaged preview cards now show only truncated preview copy plus compact metadata
+- expanded content panels now carry platform-tinted content backgrounds:
+  - blue for LinkedIn / Facebook
+  - purple for Instagram / design-heavy surfaces
+  - yellow/amber for email-style surfaces
+  - green for WhatsApp
 - packaged inspector widget coverage was extended for live content review:
   - `campaign_brief`
   - `linked_content_list`
