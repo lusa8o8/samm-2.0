@@ -996,6 +996,11 @@ Latest UI adapter checkpoint:
 - packaged `SammPage` no longer depends on the packaged mock service path
 - packaged target now has a standalone in-repo `tsconfig.json`
 - packaged target passes a direct typecheck checkpoint before broader route rewiring continues
+- packaged `InboxPage` and `ApprovalQueueWidget` now use a live adapter service:
+  - `M.A.S UI/packaged-target/samm/src/services/liveInboxService.ts`
+- packaged inbox actions now hit the real approval/read/reject path and preserve resume side effects for:
+  - `pipeline-b-weekly`
+  - `pipeline-c-campaign`
 
 Latest packaged-runtime checkpoint:
 - `M.A.S UI` now exposes a dedicated packaged-app runtime target:

@@ -503,6 +503,12 @@ Latest packaged-target checkpoint:
   - `academic_calendar`
 - packaged target `tsconfig.json` was rewritten to work in-repo and the packaged target now passes:
   - `npx tsc -p packaged-target/samm/tsconfig.json --noEmit`
+- packaged `InboxPage` and `ApprovalQueueWidget` now use:
+  - `M.A.S UI/packaged-target/samm/src/services/liveInboxService.ts`
+- that adapter maps live `human_inbox` items into the packaged inbox card model and preserves:
+  - approve / reject / mark-seen actions
+  - `pipeline-b-weekly` resume side effects for draft approvals
+  - `pipeline-c-campaign` resume side effects for campaign briefs
 
 Latest packaged-runtime checkpoint:
 - `M.A.S UI/vite.packaged.config.ts` now provides a separate runtime entry for the packaged app

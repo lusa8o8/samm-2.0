@@ -229,6 +229,14 @@ First packaged-target adapter slice now in code:
   - `academic_calendar`
 - the packaged target now also has a standalone in-repo `tsconfig.json` and passes its own typecheck checkpoint
 
+Second packaged-target adapter slice now in code:
+- packaged `InboxPage` no longer depends on the packaged mock inbox path
+- packaged `ApprovalQueueWidget` also uses the same live adapter path
+- live inbox service:
+  - `packaged-target/samm/src/services/liveInboxService.ts`
+- this adapter maps live `human_inbox` item types into the packaged approval/suggestion/escalation/fyi UI model
+- approve / reject / mark-seen actions now use the real backend path and keep pipeline resume side effects intact
+
 Packaged runtime target now available:
 - run the current fallback/live app with:
   - `npm run dev`

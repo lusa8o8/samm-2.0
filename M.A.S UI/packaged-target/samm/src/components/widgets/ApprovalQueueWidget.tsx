@@ -1,10 +1,10 @@
-import { CheckCircle, XCircle, AlertTriangle, MessageSquare, Info, CheckSquare, Clock } from 'lucide-react';
-import { format } from 'date-fns';
-import { StatusChip } from '../shared/StatusChip';
-import type { InboxItem } from '../../types';
-import { useState } from 'react';
-import { approveInboxItem, rejectInboxItem } from '../../services/mockService';
-import { cn } from '@/lib/utils';
+import { useState } from "react";
+import { format } from "date-fns";
+import { AlertTriangle, CheckCircle, CheckSquare, Clock, Info, MessageSquare, XCircle } from "lucide-react";
+import { approveInboxItem, readFunctionError, rejectInboxItem } from "../../services/liveInboxService";
+import { StatusChip } from "../shared/StatusChip";
+import type { InboxItem } from "../../types";
+import { cn } from "@/lib/utils";
 
 interface ApprovalQueueWidgetProps {
   data: InboxItem[];
@@ -13,111 +13,121 @@ interface ApprovalQueueWidgetProps {
 const typeConfig: Record<string, { icon: React.ReactNode; label: string; color: string }> = {
   approval: {
     icon: <CheckSquare size={14} />,
-    label: 'Approval',
-    color: 'text-amber-500',
+    label: "Approval",
+    color: "text-amber-500",
   },
   suggestion: {
     icon: <MessageSquare size={14} />,
-    label: 'Suggestion',
-    color: 'text-blue-500',
+    label: "Suggestion",
+    color: "text-blue-500",
   },
   escalation: {
     icon: <AlertTriangle size={14} />,
-    label: 'Escalation',
-    color: 'text-red-500',
+    label: "Escalation",
+    color: "text-red-500",
   },
   fyi: {
     icon: <Info size={14} />,
-    label: 'FYI',
-    color: 'text-muted-foreground',
+    label: "FYI",
+    color: "text-muted-foreground",
   },
 };
 
 function InboxItemDetail({ item }: { item: InboxItem }) {
-  const [actionState, setActionState] = useState<'approved' | 'rejected' | null>(null);
+  const [actionState, setActionState] = useState<"approved" | "rejected" | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const cfg = typeConfig[item.type] ?? typeConfig.fyi;
 
   const handleApprove = async () => {
-    await approveInboxItem(item.id);
-    setActionState('approved');
+    try {
+      await approveInboxItem(item.id);
+      setActionState("approved");
+      setError(null);
+    } catch (err) {
+      setError(await readFunctionError(err));
+    }
   };
 
   const handleReject = async () => {
-    await rejectInboxItem(item.id);
-    setActionState('rejected');
+    try {
+      await rejectInboxItem(item.id);
+      setActionState("rejected");
+      setError(null);
+    } catch (err) {
+      setError(await readFunctionError(err));
+    }
   };
 
   return (
     <div className="space-y-4">
-      {/* Type badge + timestamp */}
       <div className="flex items-center justify-between">
-        <span className={cn('flex items-center gap-1.5 text-xs font-medium', cfg.color)}>
+        <span className={cn("flex items-center gap-1.5 text-xs font-medium", cfg.color)}>
           {cfg.icon}
           {cfg.label}
         </span>
         <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
           <Clock size={10} />
-          {format(new Date(item.createdAt), 'MMM d, HH:mm')}
+          {format(new Date(item.createdAt), "MMM d, HH:mm")}
         </span>
       </div>
 
-      {/* Priority + status chips */}
       <div className="flex items-center gap-2">
         <StatusChip status={item.priority} />
         <StatusChip status={(actionState ?? item.status) as never} />
-        <span className="text-[11px] text-muted-foreground ml-1">{item.source}</span>
+        <span className="ml-1 text-[11px] text-muted-foreground">{item.source}</span>
       </div>
 
-      {/* Summary */}
       <div>
-        <p className="text-sm text-foreground leading-relaxed">{item.summary}</p>
+        <p className="text-sm leading-relaxed text-foreground">{item.summary}</p>
       </div>
 
-      {/* Rationale box */}
-      <div className="rounded-xl bg-muted/50 border border-border/60 px-4 py-3">
-        <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide mb-1">SAMM's reasoning</p>
-        <p className="text-[12px] text-foreground/80 leading-relaxed italic">{item.rationale}</p>
+      <div className="rounded-xl border border-border/60 bg-muted/50 px-4 py-3">
+        <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          SAMM's reasoning
+        </p>
+        <p className="text-[12px] italic leading-relaxed text-foreground/80">{item.rationale}</p>
       </div>
 
-      {/* Action buttons */}
       {!actionState && (
         <div className="flex gap-2 pt-1">
-          {item.type === 'approval' && (
+          {item.type === "approval" && (
             <>
               <button
                 onClick={handleApprove}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 text-sm font-medium hover:bg-emerald-100 transition-colors"
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 py-2 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-400"
               >
                 <CheckCircle size={14} /> Approve
               </button>
               <button
                 onClick={handleReject}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 text-sm font-medium hover:bg-red-100 transition-colors"
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-red-200 bg-red-50 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-100 dark:border-red-800 dark:bg-red-950/30 dark:text-red-400"
               >
                 <XCircle size={14} /> Reject
               </button>
             </>
           )}
-          {item.type === 'suggestion' && (
+
+          {item.type === "suggestion" && (
             <>
               <button
                 onClick={handleApprove}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-primary/10 text-primary border border-primary/30 text-sm font-medium hover:bg-primary/20 transition-colors"
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-primary/30 bg-primary/10 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/20"
               >
                 <CheckCircle size={14} /> Use suggestion
               </button>
               <button
                 onClick={handleReject}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-card text-muted-foreground border border-border text-sm font-medium hover:bg-muted transition-colors"
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-border bg-card py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted"
               >
                 <XCircle size={14} /> Dismiss
               </button>
             </>
           )}
-          {(item.type === 'escalation' || item.type === 'fyi') && (
+
+          {(item.type === "escalation" || item.type === "fyi") && (
             <button
               onClick={handleApprove}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-card text-muted-foreground border border-border text-sm font-medium hover:bg-muted transition-colors"
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-border bg-card py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted"
             >
               Mark as seen
             </button>
@@ -126,11 +136,21 @@ function InboxItemDetail({ item }: { item: InboxItem }) {
       )}
 
       {actionState && (
-        <div className={cn(
-          'rounded-xl px-4 py-3 text-sm font-medium text-center',
-          actionState === 'approved' ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400' : 'bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400'
-        )}>
-          {actionState === 'approved' ? '✓ Actioned' : '✕ Dismissed'}
+        <div
+          className={cn(
+            "rounded-xl px-4 py-3 text-center text-sm font-medium",
+            actionState === "approved"
+              ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400"
+              : "bg-red-50 text-red-600 dark:bg-red-950/20 dark:text-red-400",
+          )}
+        >
+          {actionState === "approved" ? "Approved" : "Rejected"}
+        </div>
+      )}
+
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
         </div>
       )}
     </div>
@@ -148,7 +168,7 @@ export function ApprovalQueueWidget({ data }: ApprovalQueueWidgetProps) {
 
   return (
     <div className="space-y-3">
-      {data.map(item => (
+      {data.map((item) => (
         <InboxItemDetail key={item.id} item={item} />
       ))}
     </div>

@@ -3,7 +3,7 @@ import { CheckCircle, XCircle, ExternalLink, Filter, MessageSquare, AlertTriangl
 import { format } from 'date-fns';
 import { StatusChip } from '../components/shared/StatusChip';
 import { useInspector } from '../components/shell/WorkspaceShell';
-import { getInboxItems, approveInboxItem, rejectInboxItem } from '../services/mockService';
+import { getInboxItems, approveInboxItem, rejectInboxItem, readFunctionError } from '../services/liveInboxService';
 import type { InboxItem } from '../types';
 import { cn } from '@/lib/utils';
 
@@ -132,20 +132,38 @@ export default function InboxPage() {
   const [items, setItems] = useState<InboxItem[]>([]);
   const [activeTab, setActiveTab] = useState('all');
   const [actionStates, setActionStates] = useState<Record<string, 'approved' | 'rejected'>>({});
+  const [error, setError] = useState<string | null>(null);
   const { openInspector } = useInspector();
 
   useEffect(() => {
-    getInboxItems().then(setItems);
+    getInboxItems()
+      .then((nextItems) => {
+        setItems(nextItems);
+        setError(null);
+      })
+      .catch(async (err) => {
+        setError(await readFunctionError(err));
+      });
   }, []);
 
   const handleApprove = async (id: string) => {
-    await approveInboxItem(id);
-    setActionStates(s => ({ ...s, [id]: 'approved' }));
+    try {
+      await approveInboxItem(id);
+      setActionStates(s => ({ ...s, [id]: 'approved' }));
+      setError(null);
+    } catch (err) {
+      setError(await readFunctionError(err));
+    }
   };
 
   const handleReject = async (id: string) => {
-    await rejectInboxItem(id);
-    setActionStates(s => ({ ...s, [id]: 'rejected' }));
+    try {
+      await rejectInboxItem(id);
+      setActionStates(s => ({ ...s, [id]: 'rejected' }));
+      setError(null);
+    } catch (err) {
+      setError(await readFunctionError(err));
+    }
   };
 
   const handleInspect = (item: InboxItem) => {
@@ -209,6 +227,11 @@ export default function InboxPage() {
 
       {/* Items */}
       <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
+        {error && (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
+          </div>
+        )}
         {filtered.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
             <CheckCircle size={32} className="mb-3 opacity-30" />
