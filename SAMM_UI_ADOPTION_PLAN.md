@@ -246,6 +246,18 @@ Third packaged-target adapter slice now in code:
 - approve / reject / retry actions now use the real backend path and keep pipeline resume side effects intact
 - packaged content rendering now supports live marketing channels directly instead of only prototype/demo channels
 
+Fourth packaged-target adapter slice now in code:
+- packaged `MetricsPage` no longer depends on the packaged mock metrics path
+- live metrics service:
+  - `packaged-target/samm/src/services/liveMetricsService.ts`
+- this adapter reads the real `platform_metrics` snapshot table and derives the packaged metrics surface from live data
+- packaged metrics now render live:
+  - KPI cards
+  - channel performance rows
+  - sparkline trend data
+  - `samm` summary text
+  - lightweight detected-pattern cards
+
 Packaged runtime target now available:
 - run the current fallback/live app with:
   - `npm run dev`

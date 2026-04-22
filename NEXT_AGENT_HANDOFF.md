@@ -521,6 +521,14 @@ Latest packaged-target checkpoint:
   - `youtube`
   - `email`
   - `design_brief`
+- packaged `MetricsPage` now uses:
+  - `M.A.S UI/packaged-target/samm/src/services/liveMetricsService.ts`
+- that adapter reads live `platform_metrics` rows and derives the packaged metrics surface:
+  - KPI cards
+  - channel performance rows
+  - reach/signup sparkline data
+  - packaged `samm` summary copy
+  - lightweight pattern cards
 
 Latest packaged-runtime checkpoint:
 - `M.A.S UI/vite.packaged.config.ts` now provides a separate runtime entry for the packaged app

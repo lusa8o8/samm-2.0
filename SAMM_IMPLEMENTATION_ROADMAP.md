@@ -1012,6 +1012,14 @@ Latest UI adapter checkpoint:
   - `youtube`
   - `email`
   - `design_brief`
+- packaged `MetricsPage` now uses a live adapter service:
+  - `M.A.S UI/packaged-target/samm/src/services/liveMetricsService.ts`
+- packaged metrics now read the real `platform_metrics` snapshot table and derive:
+  - KPI cards
+  - channel performance rows
+  - signup/reach sparkline data
+  - packaged `samm` summary copy
+  - lightweight detected pattern cards
 
 Latest packaged-runtime checkpoint:
 - `M.A.S UI` now exposes a dedicated packaged-app runtime target:
