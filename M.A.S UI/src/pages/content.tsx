@@ -27,12 +27,15 @@ import {
   Share2,
   ImagePlus,
   Paintbrush,
+  ExternalLink,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useWorkspaceInspector } from "@/components/layout";
+import { createInspectorPayload } from "@/lib/workspace-adapter";
 import { cn, stripMarkdownToPreviewText } from "@/lib/utils";
 
 const PLATFORM_ICONS: Record<string, React.ElementType> = {
@@ -139,6 +142,7 @@ function ContentCard({
   const [isEditing, setIsEditing] = useState(false);
   const [editBody, setEditBody] = useState(item.body);
   const [editSubjectLine, setEditSubjectLine] = useState(item.subject_line ?? "");
+  const { openInspector } = useWorkspaceInspector();
 
   const isFailed = item.status === "failed";
   const isDraft = item.status === "draft";
@@ -148,6 +152,15 @@ function ContentCard({
   const draftedAt = item.created_at ? new Date(item.created_at) : null;
   const updatedAt = item.updated_at ? new Date(item.updated_at) : null;
   const isFreshDraft = isDraft && draftedAt ? Date.now() - draftedAt.getTime() < 2 * 60 * 60 * 1000 : false;
+  const inspectorPayload = createInspectorPayload(
+    item.subject_line || PLATFORM_LABELS[item.platform] || item.platform,
+    {
+      type: item.platform === "design_brief" ? "campaign_brief" : "linked_content_list",
+      title: item.subject_line || PLATFORM_LABELS[item.platform] || item.platform,
+      data: item,
+    },
+    `${PLATFORM_LABELS[item.platform] || item.platform} content item in ${item.status} state`
+  );
 
   return (
     <div
@@ -216,11 +229,35 @@ function ContentCard({
           ) : (
             <p className="line-clamp-2 text-[13px] leading-relaxed text-muted-foreground">{stripMarkdownToPreviewText(item.body)}</p>
           )}
+          <button
+            type="button"
+            className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            onClick={(e) => {
+              e.stopPropagation();
+              openInspector(inspectorPayload);
+            }}
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+            Inspect item
+          </button>
         </div>
       )}
 
       {isExpanded && (
         <div className="space-y-4 border-t border-dashed px-5 pb-5 pt-4">
+          <div>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              onClick={(e) => {
+                e.stopPropagation();
+                openInspector(inspectorPayload);
+              }}
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              Inspect item
+            </button>
+          </div>
           {isEditing ? (
             <div className="space-y-3">
               {item.subject_line !== null && item.subject_line !== undefined && (
@@ -439,6 +476,7 @@ function DesignBriefCard({
   const [editBody, setEditBody] = useState(item.body);
   const [showShareMenu, setShowShareMenu] = useState(false);
   const [copied, setCopied] = useState(false);
+  const { openInspector } = useWorkspaceInspector();
 
   const isDraft = item.status === "draft";
   const shareText = `Design Brief — ${item.campaign_name ?? "Campaign"}\n\n${item.body}`;
@@ -457,6 +495,15 @@ function DesignBriefCard({
     { label: "Telegram", href: `https://t.me/share/url?url=&text=${encodedText}` },
     { label: "Email", href: `mailto:?subject=${encodedSubject}&body=${encodedText}` },
   ];
+  const inspectorPayload = createInspectorPayload(
+    item.campaign_name ?? "Design Brief",
+    {
+      type: "campaign_brief",
+      title: item.campaign_name ?? "Design Brief",
+      data: item,
+    },
+    `Design brief in ${item.status} state`
+  );
 
   return (
     <div
@@ -488,11 +535,35 @@ function DesignBriefCard({
       {!isExpanded && (
         <div className="-mt-2 px-5 pb-4">
           <p className="line-clamp-2 text-[13px] leading-relaxed text-muted-foreground">{stripMarkdownToPreviewText(item.body)}</p>
+          <button
+            type="button"
+            className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            onClick={(e) => {
+              e.stopPropagation();
+              openInspector(inspectorPayload);
+            }}
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+            Inspect brief
+          </button>
         </div>
       )}
 
       {isExpanded && (
         <div className="space-y-4 border-t border-dashed px-5 pb-5 pt-4">
+          <div>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              onClick={(e) => {
+                e.stopPropagation();
+                openInspector(inspectorPayload);
+              }}
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              Inspect brief
+            </button>
+          </div>
           {isEditing ? (
             <div className="space-y-3">
               <div>

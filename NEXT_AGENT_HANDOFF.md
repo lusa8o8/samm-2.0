@@ -233,6 +233,13 @@ Next marketing-surface migration slice is now in code:
 - pipeline resume behavior remains intact
 - expanded inline detail rendering is still present while the inspector seam is added
 
+Next marketing-surface migration slice is now in code:
+- `M.A.S UI/src/pages/content.tsx` is the third migrated marketing surface inside the new shell
+- content items and design briefs now expose inspector-openable workspace objects
+- live approval / reject / retry / edit behavior remains intact
+- batch-approve and pipeline resume behavior remain intact
+- expanded inline review/edit surfaces are still present while the inspector seam is added
+
 Checkpoint:
 - `npm run build` passed in `M.A.S UI`
 - no runtime/backend contract changes were made in this slice

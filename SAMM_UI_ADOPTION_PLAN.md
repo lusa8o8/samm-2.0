@@ -180,6 +180,12 @@ Follow-on checkpoint now in code:
 - live approval actions and pipeline resume behavior remain unchanged in backend contract
 - expanded inline details are still present, so the new shell does not remove a trust/review path while migration is in progress
 
+Next follow-on checkpoint now in code:
+- `Content Registry` is the third migrated marketing surface inside the new shell
+- content cards and design brief cards now expose inspector-openable workspace objects
+- live approval, retry, edit, batch-approve, and pipeline resume behavior remain unchanged in backend contract
+- expanded inline review/edit surfaces remain present while the inspector seam is added
+
 ## Migration Matrix
 | Surface | Prototype maturity | Migration use | Notes |
 |---|---|---|---|

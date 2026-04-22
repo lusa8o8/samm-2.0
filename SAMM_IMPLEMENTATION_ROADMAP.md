@@ -714,6 +714,11 @@ Current validated slices:
   - existing approve / reject / mark-read behavior
   - existing pipeline resume behavior
   - existing expanded inline detail rendering
+- `Content Registry` is now the third migrated marketing surface inside the new shell
+- content items and design briefs now expose inspector-openable workspace objects while preserving:
+  - existing approve / reject / retry / edit behavior
+  - existing batch-approve and pipeline resume behavior
+  - existing expanded inline review/edit surfaces
 
 ## M14C - CRM P1
 Status:
