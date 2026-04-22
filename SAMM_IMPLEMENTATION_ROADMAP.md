@@ -1026,6 +1026,16 @@ Latest UI adapter checkpoint:
   - live event/window cards
   - support-content and creative-deviation notes
   - a dedicated calendar event inspector widget instead of the generic widget fallback
+- packaged `OperationsPage` now uses a live adapter service:
+  - `M.A.S UI/packaged-target/samm/src/services/liveOperationsService.ts`
+- packaged operations overview now reads the live runtime and renders:
+  - real pipeline health cards
+  - real recent pipeline runs
+  - real trigger actions for pipelines A/B/C
+- packaged settings/manual tabs are now explicitly carryover surfaces:
+  - no fake module toggles
+  - no pretend admin editor state
+  - honest migration status while the real admin contract is rebuilt
 
 Latest packaged-runtime checkpoint:
 - `M.A.S UI` now exposes a dedicated packaged-app runtime target:

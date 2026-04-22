@@ -535,6 +535,16 @@ Latest packaged-target checkpoint:
 - packaged calendar inspector now has:
   - `M.A.S UI/packaged-target/samm/src/components/widgets/CalendarEventInspectorWidget.tsx`
 - the packaged calendar surface now shows the live support-content and creative-deviation flags through the inspector instead of a generic widget fallback
+- packaged `OperationsPage` now uses:
+  - `M.A.S UI/packaged-target/samm/src/services/liveOperationsService.ts`
+- that adapter reads live runtime state from:
+  - `pipeline_runs`
+  - `content_registry` (for synthetic Pipeline D activity)
+- the packaged operations overview now shows:
+  - real pipeline health cards
+  - real recent run rows
+  - real trigger actions for pipelines A/B/C
+- the packaged settings/manual tabs are now explicitly marked as carryover surfaces instead of fake admin controls
 
 Latest packaged-runtime checkpoint:
 - `M.A.S UI/vite.packaged.config.ts` now provides a separate runtime entry for the packaged app

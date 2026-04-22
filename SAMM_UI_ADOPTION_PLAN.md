@@ -267,6 +267,19 @@ Fifth packaged-target adapter slice now in code:
   - `packaged-target/samm/src/components/widgets/CalendarEventInspectorWidget.tsx`
 - support-content and creative-deviation flags are now visible inside the packaged inspector instead of falling through to the generic widget placeholder
 
+Sixth packaged-target adapter slice now in code:
+- packaged `OperationsPage` no longer depends on the packaged mock operations path
+- live operations service:
+  - `packaged-target/samm/src/services/liveOperationsService.ts`
+- this adapter reads the real runtime and derives the packaged operations overview from:
+  - `pipeline_runs`
+  - `content_registry` (for synthetic Pipeline D activity)
+- packaged operations overview now renders live:
+  - pipeline health cards
+  - recent pipeline runs
+  - trigger actions for pipelines A/B/C
+- packaged settings/manual tabs are now explicitly honest carryover surfaces instead of fake toggles/placeholders
+
 Packaged runtime target now available:
 - run the current fallback/live app with:
   - `npm run dev`
