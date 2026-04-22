@@ -246,6 +246,7 @@ Packaged runtime target now available:
   - `npm run build:packaged`
   - `npm run typecheck:packaged`
 - the packaged app still is not the default runtime entry; it is now the sanctioned side-by-side dev/build target for adapter replacement work
+- packaged runtime now includes a lightweight auth gate and `/login` route so separate-port dev sessions can sign into the live backend cleanly
 
 ## Migration Matrix
 | Surface | Packaged-app maturity | Migration use | Notes |

@@ -1016,3 +1016,4 @@ Latest packaged-runtime checkpoint:
   - `npm run build`
   - `npm run build:packaged`
   - `npm run typecheck:packaged`
+- packaged runtime now has its own auth gate and login route, so the packaged app no longer boots directly into live queries with a missing session

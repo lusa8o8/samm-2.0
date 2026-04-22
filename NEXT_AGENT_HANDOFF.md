@@ -519,6 +519,7 @@ Latest packaged-runtime checkpoint:
   - `npm run build:packaged`
   - `npm run typecheck:packaged`
 - this is the first point where the packaged app is runnable side-by-side without cutting over the default entrypoint
+- packaged runtime now has its own auth gate plus `/login`, so separate-port sessions sign into the live backend instead of falling through to the dummy dev org
 
 ### Confirmation card pattern
 The chat UI renders confirmation cards from `response.confirmation`, not `response.action`.
