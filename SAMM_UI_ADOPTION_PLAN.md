@@ -167,6 +167,13 @@ Current checkpoint:
 - marketing page logic has not been migrated yet
 - this keeps the shell and domain-adapter work isolated from page rewrites
 
+Next validated checkpoint:
+- the first real marketing page migration is now underway on `/samm`
+- `/samm` still talks to the live coordinator backend
+- the page now renders coordinator runtime state as inspectable workspace objects instead of plain transcript-only bubbles
+- confirmation behavior remains live-backed and unchanged in contract
+- durable thread persistence is still pending and stays in the `M14UI2` track
+
 ## Migration Matrix
 | Surface | Prototype maturity | Migration use | Notes |
 |---|---|---|---|

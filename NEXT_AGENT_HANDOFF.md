@@ -214,6 +214,18 @@ Do not treat them as current implementation targets.
   - shell + adapter foundation only
   - no marketing page rewrite yet
 
+First `M14UI2`-aligned surface slice is now in code:
+- `M.A.S UI/src/pages/agent/chat.tsx` is the first migrated marketing surface inside the new shell
+- `/samm` remains wired to the live coordinator backend path
+- coordinator responses now expose:
+  - inspectable status objects
+  - shared inspector payloads for coordinator decisions/failures
+  - the same live confirmation controls already used in production
+- this is still a narrow slice:
+  - no mock-service adoption
+  - no backend contract rewrite
+  - no durable thread persistence yet
+
 Checkpoint:
 - `npm run build` passed in `M.A.S UI`
 - no runtime/backend contract changes were made in this slice

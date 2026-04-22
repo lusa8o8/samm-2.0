@@ -649,6 +649,15 @@ Additional locked interpretation:
 - do not bind the new `/samm` page directly to prototype mock-service types
 - inspector payloads must reflect live backend objects
 
+First validated slice now in code:
+- `/samm` is the first real marketing surface migrated inside the new shell
+- it remains wired to the live `coordinator-ingress` backend path
+- coordinator responses now expose inspectable workspace objects in the shell:
+  - status pills for queued/completed/failed runtime actions
+  - shared inspector payloads for coordinator decisions/failures
+  - existing human confirmation controls remain intact
+- thread persistence is still intentionally pending
+
 ## M14UI3 - Operational Surface Carryover
 Status:
 - planned
