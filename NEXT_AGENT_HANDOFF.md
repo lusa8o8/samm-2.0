@@ -554,7 +554,12 @@ Latest packaged-target checkpoint:
   - `campaign_defaults`
   - `approval_policy`
 - the packaged settings tab now shows a live read-only summary of the actual workspace configuration
-- the packaged manual tab remains a smaller carryover surface for now
+- the packaged manual tab now reuses the fuller carryover manual from:
+  - `M.A.S UI/src/pages/agent/manual.tsx`
+- packaged Operations now gives the packaged runtime:
+  - live overview
+  - live settings summary
+  - full operations manual carryover
 
 Latest packaged-runtime checkpoint:
 - `M.A.S UI/vite.packaged.config.ts` now provides a separate runtime entry for the packaged app

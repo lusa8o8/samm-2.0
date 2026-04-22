@@ -9,7 +9,6 @@ import {
   Play,
   Settings,
   BarChart2,
-  ArrowRight,
 } from "lucide-react";
 import { StatusChip } from "../components/shared/StatusChip";
 import { useInspector } from "../components/shell/WorkspaceShell";
@@ -23,6 +22,7 @@ import {
   getOperationsSettingsSummary,
   type OperationsSettingsSummary,
 } from "../services/liveSettingsSummaryService";
+import OperationsManual from "../../../../src/pages/agent/manual";
 import type { PipelineRun } from "../types";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -174,42 +174,9 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
 }
 
 function ManualTab() {
-  const sections = [
-    {
-      title: "How samm operates today",
-      content:
-        "samm coordinates pipeline runs, approvals, calendar windows, and content registry state. The packaged UI now reads live marketing data for samm, Inbox, Content, Metrics, and Calendar.",
-    },
-    {
-      title: "Pipeline authority",
-      content:
-        "Pipeline C owns exclusive campaign windows. Pipeline B fills baseline space when the horizon is open, or support-only slots when support content is explicitly allowed.",
-    },
-    {
-      title: "Operations migration status",
-      content:
-        "Operations overview is now live-backed in the packaged app. Settings and manual surfaces are still being carried over carefully so we do not regress the real admin contract.",
-    },
-  ];
-
   return (
-    <div className="space-y-4">
-      {sections.map((section) => (
-        <div key={section.title} className="rounded-xl border border-border bg-card p-4">
-          <p className="text-sm font-semibold text-foreground">{section.title}</p>
-          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{section.content}</p>
-        </div>
-      ))}
-      <div className="rounded-xl border border-dashed border-border bg-card/60 p-4">
-        <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-          <ArrowRight className="h-4 w-4 text-primary" />
-          Next packaged operations work
-        </div>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Rebuild the settings/manual admin surfaces on top of the real config and manual contracts, instead of borrowing the old
-          editor blindly.
-        </p>
-      </div>
+    <div className="rounded-xl border border-border bg-card">
+      <OperationsManual />
     </div>
   );
 }

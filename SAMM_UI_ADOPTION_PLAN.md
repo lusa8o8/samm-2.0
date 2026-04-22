@@ -291,7 +291,12 @@ Seventh packaged-target adapter slice now in code:
   - `campaign_defaults`
   - `approval_policy`
 - packaged settings now show the real workspace configuration as a read-only summary while the packaged editor remains pending
-- packaged manual remains a smaller carryover surface for now instead of pretending to be the full rebuilt admin manual
+
+Eighth packaged-target carryover slice now in code:
+- packaged operations manual no longer uses the thin placeholder notes
+- packaged Manual now reuses the fuller carryover manual from:
+  - `src/pages/agent/manual.tsx`
+- this gives the packaged runtime the same operations reference content as the current live fallback app while we postpone a full packaged-native manual rewrite
 
 Packaged runtime target now available:
 - run the current fallback/live app with:

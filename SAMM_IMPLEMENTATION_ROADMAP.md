@@ -1041,7 +1041,12 @@ Latest UI adapter checkpoint:
   - connections
   - audience/offers/seasonality counts
   - campaign + approval defaults
-- packaged manual remains a narrower carryover surface for now while the full admin/manual contract is rebuilt
+- packaged manual now reuses the fuller carryover operations manual from the live app:
+  - `M.A.S UI/src/pages/agent/manual.tsx`
+- packaged Operations is now effectively complete enough for day-to-day marketing use:
+  - live overview
+  - live settings summary
+  - full manual carryover
 
 Latest packaged-runtime checkpoint:
 - `M.A.S UI` now exposes a dedicated packaged-app runtime target:
