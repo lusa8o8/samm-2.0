@@ -719,6 +719,11 @@ Current validated slices:
   - existing approve / reject / retry / edit behavior
   - existing batch-approve and pipeline resume behavior
   - existing expanded inline review/edit surfaces
+- `Metrics` is now the fourth migrated marketing surface inside the new shell
+- the old placeholder analytics message has been replaced with live org-scoped metrics cards backed by:
+  - `useListMetrics`
+  - `useGetMetricsSparklines`
+- metrics cards now expose inspector-openable workspace objects while preserving live dashboard truth
 
 ## M14C - CRM P1
 Status:

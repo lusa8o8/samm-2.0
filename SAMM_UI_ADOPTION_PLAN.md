@@ -186,6 +186,12 @@ Next follow-on checkpoint now in code:
 - live approval, retry, edit, batch-approve, and pipeline resume behavior remain unchanged in backend contract
 - expanded inline review/edit surfaces remain present while the inspector seam is added
 
+Next follow-on checkpoint now in code:
+- `Metrics` is the fourth migrated marketing surface inside the new shell
+- the old placeholder analytics surface has been replaced with live org-scoped metrics cards
+- metrics cards now expose inspector-openable workspace objects
+- live metrics query contracts remain unchanged in backend wiring
+
 ## Migration Matrix
 | Surface | Prototype maturity | Migration use | Notes |
 |---|---|---|---|
