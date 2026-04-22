@@ -1070,6 +1070,8 @@ Latest UI adapter checkpoint:
   - design-brief cards now span full grid width to separate them visually from post drafts
   - preview cards now open on card tap / click rather than a separate details button
   - preview cards now remain summary-level only; full content stays in the expanded modal
+  - preview cards are now back to a single neutral surface instead of the nested tinted preview panel
+  - preview metadata is now presented as compact chips rather than large boxed mini-panels
   - expanded content surfaces now use platform-tinted backgrounds for faster channel recognition
 
 Latest packaged-runtime checkpoint:

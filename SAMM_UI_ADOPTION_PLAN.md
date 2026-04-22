@@ -394,6 +394,10 @@ Latest packaged polish checkpoint:
 - content detail review now goes through the packaged modal / blur path instead
 - packaged preview cards now open on card tap / click instead of a separate details button
 - packaged preview cards now show only truncated preview copy plus compact metadata
+- packaged preview cards no longer use the nested tinted preview panel:
+  - preview state is now a single neutral surface
+  - campaign / objective / CTA / tags render as compact chips instead of boxed mini-panels
+  - the duplicate large metadata blocks are removed from preview state
 - expanded content panels now carry platform-tinted content backgrounds:
   - blue for LinkedIn / Facebook
   - purple for Instagram / design-heavy surfaces

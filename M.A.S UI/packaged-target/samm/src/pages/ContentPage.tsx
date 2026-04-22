@@ -63,21 +63,19 @@ const PLATFORM_LABELS: Record<string, string> = {
   design_brief: "Design Brief",
 };
 
-const PLATFORM_ACCENTS: Record<string, string> = {
-  facebook: "border-blue-200/80 bg-gradient-to-br from-blue-50 via-blue-50/70 to-white",
-  whatsapp: "border-emerald-200/80 bg-gradient-to-br from-emerald-50 via-emerald-50/70 to-white",
-  youtube: "border-red-200/80 bg-gradient-to-br from-red-50 via-rose-50/70 to-white",
-  email: "border-amber-200/80 bg-gradient-to-br from-amber-50 via-yellow-50/60 to-white",
-  linkedin: "border-blue-200/80 bg-gradient-to-br from-blue-50 via-sky-50/70 to-white",
-  instagram: "border-fuchsia-200/80 bg-gradient-to-br from-fuchsia-50 via-purple-50/70 to-white",
-  twitter: "border-sky-200/80 bg-gradient-to-br from-sky-50 via-cyan-50/70 to-white",
-  design_brief: "border-violet-200/80 bg-gradient-to-br from-violet-50 via-fuchsia-50/60 to-white",
-};
-
+function truncateText(value: string, max = 56) {
+  if (value.length <= max) return value;
+  return `${value.slice(0, max - 1).trimEnd()}...`;
+}
 function textValue(value: unknown) {
   if (typeof value === "string" && value.trim()) return value.trim();
   if (typeof value === "number" || typeof value === "boolean") return String(value);
   return null;
+}
+
+function clipText(value: string, max = 56) {
+  if (value.length <= max) return value;
+  return `${value.slice(0, max - 3).trimEnd()}...`;
 }
 
 function getObjective(item: ContentItem) {
@@ -103,6 +101,21 @@ function getTags(item: ContentItem) {
   }
 
   return Array.from(values).slice(0, 4);
+}
+
+function getPreviewTitle(item: ContentItem, preview: string) {
+  const metadataTitle = textValue(item.metadata?.title) || textValue(item.metadata?.headline);
+  if (metadataTitle) return metadataTitle;
+  if (item.subject_line) return item.subject_line;
+  if (item.platform === "design_brief") {
+    return item.campaign_name ? `${item.campaign_name} Design Brief` : "Design Brief";
+  }
+  if (preview) {
+    const sentence = preview.split(/[.!?]/)[0]?.trim();
+    if (sentence) return clipText(sentence, 68);
+  }
+  if (item.campaign_name) return item.campaign_name;
+  return PLATFORM_LABELS[item.platform] ?? item.platform;
 }
 
 function formatTimestamp(value?: string | null) {
@@ -155,6 +168,14 @@ function ActionButton({
     >
       {children}
     </button>
+  );
+}
+
+function MetaChip({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="rounded-full border border-border bg-muted/35 px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+      {children}
+    </span>
   );
 }
 
@@ -332,23 +353,22 @@ function ContentCard({
   const isRejected = item.status === "rejected";
   const isFailed = item.status === "failed";
   const preview = stripMarkdownToPreviewText(item.body);
+  const previewTitle = getPreviewTitle(item, preview);
   const objective = getObjective(item);
   const cta = getCta(item);
   const tags = getTags(item);
-  const accentClass = PLATFORM_ACCENTS[item.platform] ?? "border-border bg-gradient-to-br from-muted/30 via-background to-white";
-  const title =
-    item.subject_line ||
-    (item.campaign_name && isDesignBrief
-      ? `${item.campaign_name} Design Brief`
-      : item.campaign_name
-        ? `${item.campaign_name} ${PLATFORM_LABELS[item.platform] ?? item.platform}`
-        : PLATFORM_LABELS[item.platform] ?? item.platform);
   const statusLabel = item.status === "draft" ? "pending" : item.status;
+  const previewChips = [
+    item.campaign_name ? clipText(item.campaign_name, 34) : null,
+    objective ? clipText(objective, 24) : null,
+    cta ? `CTA: ${clipText(cta, 18)}` : null,
+    ...tags.map((tag) => `#${tag}`),
+  ].filter((value): value is string => Boolean(value));
 
   return (
     <article
       className={cn(
-        "rounded-2xl border border-border bg-card p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-border/80 hover:shadow-md",
+        "rounded-2xl border border-border bg-card p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-border/80 hover:shadow-md",
         isDesignBrief && "md:col-span-2",
       )}
       role="button"
@@ -373,78 +393,34 @@ function ContentCard({
         }}
       />
 
-      <div className={cn("space-y-4 rounded-2xl border p-5", accentClass)}>
+      <div className="space-y-3">
         <div className="min-w-0 space-y-3">
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-2">
               <ChannelIcon channel={(item.platform as any) || "facebook"} size={15} />
               <span className={cn("text-sm font-medium text-foreground", isDesignBrief && "text-violet-700")}>
                 {PLATFORM_LABELS[item.platform] ?? item.platform}
-                {!isDesignBrief ? ` · ${item.subject_line ? "Article" : "Post"}` : ""}
+                {!isDesignBrief ? ` - ${item.subject_line ? "Article" : "Post"}` : ""}
               </span>
             </div>
             <StatusChip status={(statusLabel as any) || "draft"} />
           </div>
 
           <div className="space-y-2">
-            <h3 className={cn("text-[1.05rem] font-semibold leading-snug text-foreground", isDesignBrief && "text-violet-900")}>
-              {title}
+            <h3 className={cn("text-[1.02rem] font-semibold leading-snug text-foreground", isDesignBrief && "text-violet-900")}>
+              {previewTitle}
             </h3>
-            <p className="line-clamp-3 text-sm leading-relaxed text-foreground/75">
+            <p className="line-clamp-2 text-sm leading-relaxed text-foreground/75">
               {preview || "No preview available."}
             </p>
           </div>
         </div>
 
-        <div className="grid gap-2 md:grid-cols-2">
-          {item.campaign_name && (
-            <div className="rounded-xl bg-white/70 px-3 py-2 backdrop-blur">
-              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Campaign</p>
-              <p className="mt-1 text-sm font-medium text-foreground">{item.campaign_name}</p>
-            </div>
-          )}
-          {objective && (
-            <div className="rounded-xl bg-white/70 px-3 py-2 backdrop-blur">
-              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Objective</p>
-              <p className="mt-1 text-sm font-medium text-foreground">{objective}</p>
-            </div>
-          )}
-          {cta && (
-            <div className="rounded-xl bg-white/70 px-3 py-2 backdrop-blur">
-              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">CTA</p>
-              <p className="mt-1 text-sm font-medium text-foreground">{cta}</p>
-            </div>
-          )}
-          <div className="rounded-xl bg-white/70 px-3 py-2 backdrop-blur">
-            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-              {item.status === "published" ? "Published" : item.status === "scheduled" ? "Scheduled" : "Created"}
-            </p>
-            <p className="mt-1 text-sm font-medium text-foreground">
-              {item.status === "published"
-                ? formatTimestamp(item.published_at)
-                : item.status === "scheduled"
-                  ? formatTimestamp(item.scheduled_at)
-                  : formatTimestamp(item.created_at)}
-            </p>
-          </div>
-        </div>
-
-        {tags.length > 0 && (
+        {previewChips.length > 0 && (
           <div className="flex flex-wrap gap-2">
-            {tags.map((tag) => (
-              <span
-                key={tag}
-                className="rounded-full border border-white/70 bg-white/75 px-2.5 py-1 text-[11px] font-medium text-muted-foreground"
-              >
-                #{tag}
-              </span>
+            {previewChips.map((chip) => (
+              <MetaChip key={chip}>{chip}</MetaChip>
             ))}
-          </div>
-        )}
-
-        {item.media_url && !isDesignBrief && (
-          <div className="overflow-hidden rounded-xl border border-white/60 bg-white/60">
-            <img src={item.media_url} alt="Attached media preview" className="h-36 w-full object-cover" />
           </div>
         )}
       </div>

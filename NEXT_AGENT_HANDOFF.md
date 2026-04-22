@@ -601,6 +601,8 @@ Latest packaged-runtime checkpoint:
     - `campaign_brief`
     - `linked_content_list`
   - design brief cards now span the full grid width to separate them visually from post drafts
+  - preview cards now stay on a single neutral surface instead of the earlier nested tinted panel
+  - preview metadata now renders as compact chips instead of stacked boxed panels
 
 ### Confirmation card pattern
 The chat UI renders confirmation cards from `response.confirmation`, not `response.action`.
