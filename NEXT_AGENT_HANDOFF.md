@@ -504,6 +504,16 @@ Latest packaged-target checkpoint:
 - packaged target `tsconfig.json` was rewritten to work in-repo and the packaged target now passes:
   - `npx tsc -p packaged-target/samm/tsconfig.json --noEmit`
 
+Latest packaged-runtime checkpoint:
+- `M.A.S UI/vite.packaged.config.ts` now provides a separate runtime entry for the packaged app
+- use:
+  - `npm run dev` for the existing fallback/live app
+  - `npm run dev:packaged` for the packaged target
+- packaged runtime checkpoints now pass:
+  - `npm run build:packaged`
+  - `npm run typecheck:packaged`
+- this is the first point where the packaged app is runnable side-by-side without cutting over the default entrypoint
+
 ### Confirmation card pattern
 The chat UI renders confirmation cards from `response.confirmation`, not `response.action`.
 Destructive actions needing confirmation must use a deterministic `confirmation.action` token and a fast-path handler.

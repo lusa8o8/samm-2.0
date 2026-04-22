@@ -996,3 +996,18 @@ Latest UI adapter checkpoint:
 - packaged `SammPage` no longer depends on the packaged mock service path
 - packaged target now has a standalone in-repo `tsconfig.json`
 - packaged target passes a direct typecheck checkpoint before broader route rewiring continues
+
+Latest packaged-runtime checkpoint:
+- `M.A.S UI` now exposes a dedicated packaged-app runtime target:
+  - `npm run dev:packaged`
+  - `npm run build:packaged`
+  - `npm run serve:packaged`
+  - `npm run typecheck:packaged`
+- `vite.packaged.config.ts` boots the materialized packaged app from:
+  - `M.A.S UI/packaged-target/samm/*`
+- current fallback runtime is unchanged:
+  - `npm run dev` still serves the existing hybrid/live app
+- checkpoints passed:
+  - `npm run build`
+  - `npm run build:packaged`
+  - `npm run typecheck:packaged`

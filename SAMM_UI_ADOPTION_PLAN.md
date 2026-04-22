@@ -229,6 +229,16 @@ First packaged-target adapter slice now in code:
   - `academic_calendar`
 - the packaged target now also has a standalone in-repo `tsconfig.json` and passes its own typecheck checkpoint
 
+Packaged runtime target now available:
+- run the current fallback/live app with:
+  - `npm run dev`
+- run the packaged frontend target with:
+  - `npm run dev:packaged`
+- packaged-target checkpoints now pass:
+  - `npm run build:packaged`
+  - `npm run typecheck:packaged`
+- the packaged app still is not the default runtime entry; it is now the sanctioned side-by-side dev/build target for adapter replacement work
+
 ## Migration Matrix
 | Surface | Packaged-app maturity | Migration use | Notes |
 |---|---|---|---|

@@ -5,9 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
+    "dev:packaged": "vite --config vite.packaged.config.ts --host 0.0.0.0",
     "build": "vite build",
+    "build:packaged": "vite build --config vite.packaged.config.ts",
     "serve": "vite preview --host 0.0.0.0",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "serve:packaged": "vite preview --config vite.packaged.config.ts --host 0.0.0.0",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck:packaged": "tsc -p packaged-target/samm/tsconfig.json --noEmit"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
