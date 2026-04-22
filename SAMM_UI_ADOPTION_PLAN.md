@@ -381,14 +381,20 @@ Marketing migration is considered stable enough to resume CRM / Sales work when:
 - marketing workflows are stable in the packaged UI under real usage
 
 Latest packaged polish checkpoint:
-- packaged `Content` now reuses the fuller live editor surface from:
-  - `M.A.S UI/src/pages/content.tsx`
-- this restores the missing packaged content controls:
+- packaged `Content` no longer depends on the direct carryover re-export
+- `M.A.S UI/packaged-target/samm/src/pages/ContentPage.tsx` is now a packaged-native live page again
+- packaged content now restores the missing controls while staying visually aligned to the packaged shell:
+  - approve / reject styling fixed
   - edit
   - image upload / replace
   - approve all
   - design brief edit
   - design brief share
+- inline card expansion has been removed from the packaged content registry
+- content detail review now goes through the packaged modal / blur path instead
+- packaged inspector widget coverage was extended for live content review:
+  - `campaign_brief`
+  - `linked_content_list`
 - packaged `Calendar` now reuses the fuller live editor surface from:
   - `M.A.S UI/src/pages/calendar.tsx`
 - this restores the missing packaged calendar controls:

@@ -1048,7 +1048,6 @@ Latest UI adapter checkpoint:
   - live settings summary
   - full manual carryover
 - latest packaged polish slice closes the remaining missing-controls gap by running fuller live carryover editors inside the packaged shell:
-  - packaged `Content` now reuses `M.A.S UI/src/pages/content.tsx`
   - packaged `Calendar` now reuses `M.A.S UI/src/pages/calendar.tsx`
   - packaged `Operations -> Settings` now reuses `M.A.S UI/src/pages/agent/settings.tsx`
 - this restores the packaged-runtime controls that were still missing:
@@ -1061,6 +1060,14 @@ Latest UI adapter checkpoint:
   - approve all
   - design brief edit/share
   - sidebar sign-out
+- latest packaged content-polish follow-up is also now in code:
+  - packaged `ContentPage` is packaged-native again instead of a direct carryover re-export
+  - inline content-card expansion is removed from the packaged registry
+  - content/design-brief review now uses the packaged modal + blur path
+  - missing packaged inspector widget coverage for content review is now implemented:
+    - `campaign_brief`
+    - `linked_content_list`
+  - design-brief cards now span full grid width to separate them visually from post drafts
 
 Latest packaged-runtime checkpoint:
 - `M.A.S UI` now exposes a dedicated packaged-app runtime target:

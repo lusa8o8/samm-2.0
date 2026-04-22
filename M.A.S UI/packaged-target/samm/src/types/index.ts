@@ -202,7 +202,9 @@ export interface SammMessage {
 export type WidgetType =
   | 'approval_queue'
   | 'campaign_brief_panel'
+  | 'campaign_brief'
   | 'content_batch_review'
+  | 'linked_content_list'
   | 'calendar_event_inspector'
   | 'pipeline_run_timeline'
   | 'lead_card'

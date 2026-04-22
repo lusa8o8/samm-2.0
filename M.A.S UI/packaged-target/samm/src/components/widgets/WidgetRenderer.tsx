@@ -8,6 +8,8 @@ import { PatternSummaryWidget } from './PatternSummaryWidget';
 import { MetricsSnapshotWidget } from './MetricsSnapshotWidget';
 import { SequenceStatusWidget } from './SequenceStatusWidget';
 import { CalendarEventInspectorWidget } from './CalendarEventInspectorWidget';
+import { CampaignBriefWidget } from './CampaignBriefWidget';
+import { LinkedContentListWidget } from './LinkedContentListWidget';
 
 interface WidgetRendererProps {
   widget: WidgetDescriptor;
@@ -21,6 +23,10 @@ export function WidgetRenderer({ widget }: WidgetRendererProps) {
       return <PipelineRunTimelineWidget data={widget.data as never} />;
     case 'content_batch_review':
       return <ContentBatchReviewWidget data={widget.data as never} />;
+    case 'campaign_brief':
+      return <CampaignBriefWidget data={widget.data as never} />;
+    case 'linked_content_list':
+      return <LinkedContentListWidget data={widget.data as never} />;
     case 'calendar_event_inspector':
       return <CalendarEventInspectorWidget data={widget.data as never} />;
     case 'lead_card':

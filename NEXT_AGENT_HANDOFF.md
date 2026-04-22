@@ -561,7 +561,6 @@ Latest packaged-target checkpoint:
   - live settings summary
   - full operations manual carryover
 - latest packaged polish slice closes the remaining missing-controls gap by running fuller live carryover editors inside the packaged shell:
-  - packaged `Content` now reuses `M.A.S UI/src/pages/content.tsx`
   - packaged `Calendar` now reuses `M.A.S UI/src/pages/calendar.tsx`
   - packaged `Operations -> Settings` now reuses `M.A.S UI/src/pages/agent/settings.tsx`
 - packaged runtime now exposes the expected operator affordances again:
@@ -590,6 +589,14 @@ Latest packaged-runtime checkpoint:
   - `M.A.S UI/packaged-target/samm/src/lib/supabase.ts`
   - `M.A.S UI/packaged-target/samm/src/lib/workspace-adapter.ts`
   - `M.A.S UI/packaged-target/samm/src/components/layout.tsx`
+- follow-up packaged content polish is now also in code:
+  - packaged `ContentPage` is packaged-native again instead of a direct carryover re-export
+  - the packaged registry no longer uses inline card expansion
+  - content review now uses the packaged modal / blur path
+  - missing packaged inspector widget coverage for content review is closed through:
+    - `campaign_brief`
+    - `linked_content_list`
+  - design brief cards now span the full grid width to separate them visually from post drafts
 
 ### Confirmation card pattern
 The chat UI renders confirmation cards from `response.confirmation`, not `response.action`.
