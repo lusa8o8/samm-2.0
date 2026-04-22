@@ -212,6 +212,13 @@ Next required checkpoint:
 - keep the backend live
 - replace mock services/types through adapters instead of continuing old-page wraps
 
+Checkpoint now completed:
+- the packaged `samm` app has been materialized into the live repo at:
+  - `M.A.S UI/packaged-target/samm/*`
+- the target is now source-visible and no longer zip-only
+- the live app still builds unchanged, so this remains a safe reset checkpoint
+- next code slices should modify that packaged target tree directly rather than extending the hybrid carryover path
+
 ## Migration Matrix
 | Surface | Packaged-app maturity | Migration use | Notes |
 |---|---|---|---|

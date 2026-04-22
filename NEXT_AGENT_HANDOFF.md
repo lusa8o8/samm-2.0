@@ -487,6 +487,12 @@ The next UI work must:
 - replace packaged demo types with live marketing-normalized contracts
 - preserve the current hybrid work only as fallback/reference while the packaged app is wired up
 
+Current reset checkpoint:
+- the packaged app has been materialized in-repo at:
+  - `M.A.S UI/packaged-target/samm/*`
+- this tree is now the working frontend target for the next UI slices
+- live runtime is still served from the existing `M.A.S UI/src/*` app until the packaged target is wired up
+
 ### Confirmation card pattern
 The chat UI renders confirmation cards from `response.confirmation`, not `response.action`.
 Destructive actions needing confirmation must use a deterministic `confirmation.action` token and a fast-path handler.

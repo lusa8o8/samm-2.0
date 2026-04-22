@@ -985,3 +985,8 @@ Current UI migration clarification:
 - however, it is no longer the target end-state for the marketing migration
 - the target end-state is the actual packaged `samm` frontend, rebound to the live backend/runtime
 - no more major page-carryover slices should be started until that packaged-app reset is underway
+
+Current UI reset checkpoint:
+- the packaged `samm` app has been materialized in-repo at `M.A.S UI/packaged-target/samm/*`
+- the live app still builds after this extraction
+- the next allowed UI code slices must target that packaged tree and its adapter replacement work

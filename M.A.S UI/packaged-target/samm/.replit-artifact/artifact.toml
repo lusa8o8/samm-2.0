@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "SAMM 2.0 Agentic Workspace"
+version = "1.0.0"
+id = "artifacts/samm"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 20928
+
+[services.development]
+run = "pnpm --filter @workspace/samm run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/samm", "run", "build" ]
+publicDir = "artifacts/samm/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "20928"
+BASE_PATH = "/"
