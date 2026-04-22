@@ -475,6 +475,18 @@ The current calendar migration is only the live-backed event/window layer in the
 Do not treat it as Calendar Studio yet.
 Slot/day planning, campaign tracing, and richer inspector-driven orchestration still belong to later Studio work.
 
+### UI migration correction
+The current hybrid shell/carryover work in `M.A.S UI` is a validated checkpoint, not the final migration target.
+Do not continue major old-page carryover work as if it were the destination.
+The actual frontend target is the packaged app inside:
+- `samm 2.0 UI/artifacts.zip -> artifacts/samm/*`
+
+The next UI work must:
+- bind the live backend into the packaged app structure
+- replace packaged `mockService.ts`
+- replace packaged demo types with live marketing-normalized contracts
+- preserve the current hybrid work only as fallback/reference while the packaged app is wired up
+
 ### Confirmation card pattern
 The chat UI renders confirmation cards from `response.confirmation`, not `response.action`.
 Destructive actions needing confirmation must use a deterministic `confirmation.action` token and a fast-path handler.
@@ -498,6 +510,14 @@ Keep explicit guards whenever a message must create state before triggering a pi
 - `M.A.S UI/src/components/workspace/Sidebar.tsx`
 - `M.A.S UI/src/components/workspace/InspectorPanel.tsx`
 - `M.A.S UI/src/lib/workspace-adapter.ts`
+- `samm 2.0 UI/artifacts.zip`
+- packaged app paths of interest inside the archive:
+  - `artifacts/samm/src/App.tsx`
+  - `artifacts/samm/src/pages/*`
+  - `artifacts/samm/src/components/shell/*`
+  - `artifacts/samm/src/components/widgets/*`
+  - `artifacts/samm/src/services/mockService.ts`
+  - `artifacts/samm/src/types/index.ts`
 
 ### Supabase edge functions
 - `supabase/functions/coordinator-chat/index.ts`

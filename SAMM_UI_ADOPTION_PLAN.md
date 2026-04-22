@@ -105,13 +105,15 @@ Use the packaged `samm 2.0 UI` as the main source for:
 - widget renderer
 - shared cards/components
 - `/samm` experience direction
+- actual route/page compositions from `artifacts/samm`
 
 Treat the packaged prototype as:
 - shell-valid
 - interaction-valid
 - widget-direction-valid
-- not production-data-valid
-- not domain-contract-valid
+- route-composition-valid
+- not production-data-valid until adapted
+- not domain-contract-valid until adapted
 
 Use the current `M.A.S UI` as the main source for:
 - existing route wiring
@@ -142,75 +144,87 @@ Therefore the migration rule is:
 - replace the data layer
 - adapt live backend objects instead of porting prototype mocks directly
 
-## Marketing-First Migration Order
-The next frontend track is marketing-first.
+## Correction: Target UI vs Hybrid Carryover
+The current committed `M.A.S UI` shell/carryover work is useful, but it is not the final migration target.
 
-Port in this order:
-1. shell
-2. `/samm`
-3. inbox
-4. content
-5. metrics
-6. calendar
-7. operations carryover
+What already exists in the live repo:
+- shared shell foundation
+- first workspace adapter seam
+- migrated live-backed marketing surfaces inside that shell
+
+What that work now represents:
+- a rollback-safe checkpoint
+- a live backend reference
+- an adapter seed
+- not the final frontend direction
+
+The actual frontend target is the packaged `samm` app inside:
+- `samm 2.0 UI/artifacts.zip -> artifacts/samm/*`
+
+The corrected migration rule is:
+- keep the current hybrid work as fallback/reference
+- stop extending old-page carryover as the primary migration strategy
+- bind the live backend into the actual packaged `samm` route/page system
+- preserve only the adapter seam and backend-safe logic from the hybrid path where useful
+
+## Packaged App Reality
+The packaged UI is not checked out as a normal source tree.
+It currently exists as zip artifacts:
+- `samm 2.0 UI/artifacts.zip`
+- `samm 2.0 UI/lib.zip`
+
+The real packaged app tree inside `artifacts.zip` is:
+- `artifacts/samm/src/App.tsx`
+- `artifacts/samm/src/pages/*`
+- `artifacts/samm/src/components/shell/*`
+- `artifacts/samm/src/components/widgets/*`
+- `artifacts/samm/src/services/mockService.ts`
+- `artifacts/samm/src/types/index.ts`
+
+That means the next clean migration step is not another old-page carryover.
+It is to treat `artifacts/samm` as the actual frontend target and replace its mock service/types/contracts with live adapters.
+
+## Marketing-First Migration Order
+The next frontend track is still marketing-first, but the strategy is corrected.
+
+Do in this order:
+1. bind the packaged `samm` app structure into the live repo as the frontend target
+2. replace `mockService.ts` assumptions with live adapter/query layers
+3. rewire packaged `/samm`
+4. rewire packaged `Inbox`
+5. rewire packaged `Content`
+6. rewire packaged `Metrics`
+7. rewire packaged `Calendar`
+8. only then decide what `Operations` should borrow from the old UI vs be rebuilt in the packaged model
 
 Do not start with:
 - CRM pages
 - Sales pages
 - full Calendar Studio implementation
 
-Current checkpoint:
-- `M14UI1` first shell slice is now live in the codebase:
-  - the live app layout uses the new shared-workspace shell foundation
-  - the first inspector seam exists
-  - the first adapter contracts exist
-- marketing page logic has not been migrated yet
-- this keeps the shell and domain-adapter work isolated from page rewrites
+Current checkpoint truth:
+- the live repo contains a validated hybrid shell/carryover implementation
+- that hybrid path is now a safety checkpoint, not the final migration target
+- no more major surface carryover work should continue until the packaged app is made the target
 
-Next validated checkpoint:
-- the first real marketing page migration is now underway on `/samm`
-- `/samm` still talks to the live coordinator backend
-- the page now renders coordinator runtime state as inspectable workspace objects instead of plain transcript-only bubbles
-- confirmation behavior remains live-backed and unchanged in contract
-- durable thread persistence is still pending and stays in the `M14UI2` track
-
-Follow-on checkpoint now in code:
-- `Inbox` is the second migrated marketing surface inside the new shell
-- inbox cards now expose inspector-openable workspace objects
-- live approval actions and pipeline resume behavior remain unchanged in backend contract
-- expanded inline details are still present, so the new shell does not remove a trust/review path while migration is in progress
-
-Next follow-on checkpoint now in code:
-- `Content Registry` is the third migrated marketing surface inside the new shell
-- content cards and design brief cards now expose inspector-openable workspace objects
-- live approval, retry, edit, batch-approve, and pipeline resume behavior remain unchanged in backend contract
-- expanded inline review/edit surfaces remain present while the inspector seam is added
-
-Next follow-on checkpoint now in code:
-- `Metrics` is the fourth migrated marketing surface inside the new shell
-- the old placeholder analytics surface has been replaced with live org-scoped metrics cards
-- metrics cards now expose inspector-openable workspace objects
-- live metrics query contracts remain unchanged in backend wiring
-
-Next follow-on checkpoint now in code:
-- `Calendar` is the fifth migrated marketing surface inside the new shell
-- the page still uses the live event CRUD path and current calendar forms
-- calendar events now expose inspector-openable event/window workspace objects
-- support-content and creative-deviation flags are visible from the surface
-- this is still the pre-Studio event/window layer, not full slot/day Calendar Studio
+Next required checkpoint:
+- import or materialize the packaged `artifacts/samm` frontend as the working target inside the live app
+- keep the backend live
+- replace mock services/types through adapters instead of continuing old-page wraps
 
 ## Migration Matrix
-| Surface | Prototype maturity | Migration use | Notes |
+| Surface | Packaged-app maturity | Migration use | Notes |
 |---|---|---|---|
-| `WorkspaceShell` | high | adopt early | strong base for live app |
-| `Sidebar` | high | adopt early | route shell is usable |
-| `InspectorPanel` | high | adopt early with adapter | needs real widget payloads |
-| `/samm` | medium | rebuild on live coordinator API | mock message model must be replaced |
-| `Inbox` | medium | port after shell | maps well to live approval flows |
-| `Content` | medium | port after inbox | needs live registry metadata and actions |
-| `Metrics` | medium | port after content | needs real metrics contracts |
-| `Calendar` | low-medium | port later | current prototype is not yet Calendar Studio |
-| `Operations` | low | keep old longer | current live admin surfaces are stronger |
+| `WorkspaceShell` | high | adopt wholesale | strong base for live app |
+| `Sidebar` | high | adopt wholesale | route shell is usable |
+| `InspectorPanel` | high | adopt wholesale with adapter | needs real widget payloads |
+| `WidgetRenderer` | medium | adopt with expanded live widget coverage | current widget support is incomplete |
+| `/samm` | medium | rewire packaged page | mock message model must be replaced |
+| `Inbox` | medium | rewire packaged page | maps well to live approval flows |
+| `Content` | medium | rewire packaged page | needs live registry metadata and actions |
+| `Metrics` | medium | rewire packaged page | needs real metrics contracts |
+| `Calendar` | low-medium | rewire packaged page later | still pre-Studio even in packaged app |
+| `Operations` | low | decide later | old live admin surfaces may still be stronger |
 | `CRM` | low/mock | pause | not for the current migration track |
 | `Sales` | low/mock | pause | not for the current migration track |
 
@@ -235,11 +249,18 @@ Minimum adapter outputs:
 
 These contracts now exist in the live app as the starting adapter seam.
 
+Additional required packaged-app replacements:
+- replace packaged `types/index.ts` demo channels/event types with live marketing-normalized contracts
+- replace packaged `services/mockService.ts` with live query/mutation adapters
+- replace packaged mock workspace context with real coordinator/runtime context
+- expand packaged widget coverage so live objects do not fall through to placeholder widgets
+
 ## Guardrails
 Do not:
 - swap the whole frontend at once
 - remove working routes before replacements exist
 - rewrite backend contracts just to fit prototype assumptions
+- continue extending the hybrid old-page carryover path as if it were the final target
 - treat the packaged UI as production-ready code without translation
 
 Do:
@@ -248,20 +269,23 @@ Do:
 - lock UI assumptions in docs before complex adoption work
 - test each slice against the live backend
 
-## Acceptance Criteria For The First UI Track
-The first UI adoption track is successful when:
-- `/samm` uses the new shared-workspace shell
-- the UI still talks to the live backend correctly
-- conversation and structured workspace objects can coexist
-- old operational pages remain accessible while the new shell lands
-- no critical review/admin path is lost
+## Acceptance Criteria For The Reset UI Track
+The corrected UI adoption track is successful when:
+- the actual packaged `samm` app structure is the active frontend target
+- the packaged shell/sidebar/inspector are live-backed, not mock-backed
+- packaged marketing pages no longer depend on `mockService.ts`
+- live coordinator/content/calendar/metrics flows render inside packaged page compositions
+- the current hybrid carryover remains available only as a safe reference/rollback boundary during migration
 
 Marketing migration is considered stable enough to resume CRM / Sales work when:
-- migrated marketing pages no longer depend on prototype mock services
-- the shell, inspector, and widget model are live-backed
-- the calendar path is ready for later Studio evolution
-- marketing workflows are stable in the new shell under real usage
+- the packaged marketing pages no longer depend on prototype mock services
+- the packaged shell, inspector, and widget model are live-backed
+- the packaged calendar path is ready for later Studio evolution
+- marketing workflows are stable in the packaged UI under real usage
 
 ## Summary
-The new UI is not a big-bang replacement.
-It is the next frontend direction for `samm`, adopted incrementally, grounded by the current live UI, and kept aligned with the locked backend/runtime contracts through a dedicated frontend adapter layer.
+The new UI is still not a big-bang replacement.
+But the target is now explicit:
+- the actual packaged `samm` frontend becomes the real migration destination
+- the current hybrid shell/carryover work is only a checkpoint and adapter seed
+- the next implementation slices must bind the live backend into the packaged app, not keep wrapping old pages

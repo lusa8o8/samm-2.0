@@ -957,9 +957,11 @@ No code starts for a milestone until:
 - rollback boundary is clear
 
 The next allowed implementation slice is:
-- `M14UI1` shell + adapter foundation only:
-  - adopt the new shared workspace shell in the live app
-  - define the frontend workspace adapter layer
+- UI migration reset only:
+  - treat the packaged `samm 2.0 UI/artifacts.zip -> artifacts/samm` app as the actual frontend target
+  - stop extending the hybrid old-page carryover path as the primary migration strategy
+  - preserve the current hybrid shell/carryover work only as a rollback-safe checkpoint
+  - replace packaged mock services/types through live adapter layers
   - keep live backend contracts stable
   - do not begin CRM / Sales implementation during this slice
 
@@ -977,3 +979,9 @@ Reordered immediate milestone queue:
 - `M15C` `Pattern Learning Layer`
 - `M15E` `Conversation Guardrails`
 - `M16A` `Pipeline Standardization`
+
+Current UI migration clarification:
+- the validated hybrid shell/carryover work remains useful and should not be discarded casually
+- however, it is no longer the target end-state for the marketing migration
+- the target end-state is the actual packaged `samm` frontend, rebound to the live backend/runtime
+- no more major page-carryover slices should be started until that packaged-app reset is underway
