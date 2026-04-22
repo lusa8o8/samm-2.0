@@ -19,6 +19,10 @@ import {
   type OperationsOverview,
   type OperationsPipelineHealth,
 } from "../services/liveOperationsService";
+import {
+  getOperationsSettingsSummary,
+  type OperationsSettingsSummary,
+} from "../services/liveSettingsSummaryService";
 import type { PipelineRun } from "../types";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -28,15 +32,6 @@ const tabs = [
   { id: "settings", label: "Settings", icon: Settings },
   { id: "manual", label: "Manual", icon: BookOpen },
 ] as const;
-
-const settingsSections = [
-  "Organisation Details",
-  "Brand Voice",
-  "Visual Brand",
-  "Connections",
-  "Audience, Offers & Seasonality",
-  "Approval Policy",
-];
 
 function OverviewTab({
   runs,
@@ -169,32 +164,11 @@ function OverviewTab({
   );
 }
 
-function SettingsTab() {
+function SummaryRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="space-y-4">
-      <div className="rounded-xl border border-border bg-card p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div className="space-y-1">
-            <p className="text-sm font-semibold text-foreground">Settings migration is intentionally staged</p>
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              The live settings editor already exists in the fallback app and remains the source of truth while the packaged
-              admin surfaces are rebuilt. This packaged tab is intentionally honest rather than showing fake toggles.
-            </p>
-          </div>
-          <StatusChip status="processing" label="Carryover pending" />
-        </div>
-      </div>
-
-      <div className="grid gap-3 md:grid-cols-2">
-        {settingsSections.map((section) => (
-          <div key={section} className="rounded-xl border border-border bg-card p-4">
-            <p className="text-sm font-semibold text-foreground">{section}</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Live editor exists in the current admin surface. Packaged migration still pending for this section.
-            </p>
-          </div>
-        ))}
-      </div>
+    <div className="flex items-start justify-between gap-3 border-b border-border/60 py-2.5 last:border-b-0">
+      <span className="text-xs font-medium text-foreground/80">{label}</span>
+      <span className="max-w-[60%] text-right text-xs text-muted-foreground">{value || "Not set"}</span>
     </div>
   );
 }
@@ -240,15 +214,144 @@ function ManualTab() {
   );
 }
 
+function SettingsTab({
+  summary,
+  isLoading,
+}: {
+  summary: OperationsSettingsSummary | null;
+  isLoading: boolean;
+}) {
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        <div className="rounded-xl border border-border bg-card p-5">
+          <StatusChip status="processing" label="Loading settings" showDot />
+        </div>
+      </div>
+    );
+  }
+
+  if (!summary) {
+    return (
+      <div className="rounded-xl border border-border bg-card p-5">
+        <p className="text-sm font-semibold text-foreground">Settings summary unavailable</p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          The packaged settings summary could not be loaded. The live editor remains available in the fallback app while this
+          packaged admin surface continues to be rebuilt.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-border bg-card p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-foreground">Live settings summary</p>
+            <p className="text-sm leading-relaxed text-muted-foreground">
+              This packaged tab now reflects the real workspace configuration. Full editing remains in the carryover admin
+              surface until the packaged editor is rebuilt section by section.
+            </p>
+          </div>
+          <StatusChip status="processing" label="Editor carryover" />
+        </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="rounded-xl border border-border bg-card p-4">
+          <p className="text-sm font-semibold text-foreground">Organisation</p>
+          <div className="mt-3">
+            <SummaryRow label="Short name" value={summary.organization.orgName} />
+            <SummaryRow label="Full name" value={summary.organization.fullName} />
+            <SummaryRow label="Timezone" value={summary.organization.timezone} />
+            <SummaryRow label="Country" value={summary.organization.country} />
+            <SummaryRow label="Contact" value={summary.organization.contactEmail} />
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-border bg-card p-4">
+          <p className="text-sm font-semibold text-foreground">Brand voice</p>
+          <div className="mt-3">
+            <SummaryRow label="Tone" value={summary.brand.tone} />
+            <SummaryRow label="Audience" value={summary.brand.targetAudience} />
+            <SummaryRow label="Preferred CTA" value={summary.brand.preferredCta} />
+            <SummaryRow label="Approved hashtags" value={summary.brand.hashtags.join(", ")} />
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-border bg-card p-4">
+          <p className="text-sm font-semibold text-foreground">Visual brand</p>
+          <div className="mt-3">
+            <SummaryRow label="Primary color" value={summary.visuals.primaryColor} />
+            <SummaryRow label="Secondary color" value={summary.visuals.secondaryColor} />
+            <SummaryRow label="Accent color" value={summary.visuals.accentColor} />
+            <SummaryRow label="Heading font" value={summary.visuals.headingFont} />
+            <SummaryRow label="Body font" value={summary.visuals.bodyFont} />
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-border bg-card p-4">
+          <p className="text-sm font-semibold text-foreground">Connections</p>
+          <div className="mt-3">
+            <SummaryRow label="Connected channels" value={summary.connections.connectedChannels.join(", ")} />
+            <SummaryRow label="Configured handles" value={summary.connections.availableHandles.join(", ")} />
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-border bg-card p-4">
+          <p className="text-sm font-semibold text-foreground">Audience, offers, seasonality</p>
+          <div className="mt-3">
+            <SummaryRow label="Active audience segments" value={String(summary.strategy.activeIcpCount)} />
+            <SummaryRow label="Active offers" value={String(summary.strategy.activeOfferCount)} />
+            <SummaryRow label="Active seasonality profiles" value={String(summary.strategy.activeSeasonalityCount)} />
+            <SummaryRow label="Configured periods" value={String(summary.strategy.configuredSeasonalityPeriods)} />
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-border bg-card p-4">
+          <p className="text-sm font-semibold text-foreground">Campaign + approval defaults</p>
+          <div className="mt-3">
+            <SummaryRow label="Default duration" value={`${summary.defaults.defaultDurationDays} days`} />
+            <SummaryRow label="Default channels" value={summary.defaults.defaultChannels.join(", ")} />
+            <SummaryRow label="Objective" value={summary.defaults.defaultObjective} />
+            <SummaryRow label="CTA style" value={summary.defaults.defaultCtaStyle} />
+            <SummaryRow
+              label="Approvals"
+              value={[
+                summary.approval.briefApprovalRequired ? "briefs" : null,
+                summary.approval.copyApprovalRequired ? "copy" : null,
+                summary.approval.discountApprovalRequired ? "discounts" : null,
+                summary.approval.outreachApprovalRequired ? "outreach" : null,
+              ]
+                .filter(Boolean)
+                .join(", ")}
+            />
+          </div>
+        </div>
+      </div>
+
+      {summary.approval.notes && (
+        <div className="rounded-xl border border-border bg-card p-4">
+          <p className="text-sm font-semibold text-foreground">Approval policy notes</p>
+          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{summary.approval.notes}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function OperationsPage() {
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]["id"]>("overview");
   const [overview, setOverview] = useState<OperationsOverview | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [settingsSummary, setSettingsSummary] = useState<OperationsSettingsSummary | null>(null);
+  const [isOverviewLoading, setIsOverviewLoading] = useState(true);
+  const [isSettingsLoading, setIsSettingsLoading] = useState(true);
   const [triggeringPipeline, setTriggeringPipeline] = useState<string | null>(null);
   const { toast } = useToast();
 
   const loadOverview = async () => {
-    setIsLoading(true);
+    setIsOverviewLoading(true);
     try {
       setOverview(await getOperationsOverview());
     } catch (error) {
@@ -258,12 +361,28 @@ export default function OperationsPage() {
         variant: "destructive",
       });
     } finally {
-      setIsLoading(false);
+      setIsOverviewLoading(false);
+    }
+  };
+
+  const loadSettingsSummary = async () => {
+    setIsSettingsLoading(true);
+    try {
+      setSettingsSummary(await getOperationsSettingsSummary());
+    } catch (error) {
+      toast({
+        title: "Settings summary failed",
+        description: error instanceof Error ? error.message : "Failed to load settings summary.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSettingsLoading(false);
     }
   };
 
   useEffect(() => {
     void loadOverview();
+    void loadSettingsSummary();
   }, []);
 
   const runs = useMemo(() => overview?.runs ?? [], [overview]);
@@ -335,12 +454,12 @@ export default function OperationsPage() {
             runs={runs}
             health={health}
             statusCounts={statusCounts}
-            refreshing={isLoading}
+            refreshing={isOverviewLoading}
             triggering={triggeringPipeline}
             onTrigger={handleTrigger}
           />
         )}
-        {activeTab === "settings" && <SettingsTab />}
+        {activeTab === "settings" && <SettingsTab summary={settingsSummary} isLoading={isSettingsLoading} />}
         {activeTab === "manual" && <ManualTab />}
       </div>
     </div>

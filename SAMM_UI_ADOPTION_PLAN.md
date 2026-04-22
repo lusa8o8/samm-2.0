@@ -278,7 +278,20 @@ Sixth packaged-target adapter slice now in code:
   - pipeline health cards
   - recent pipeline runs
   - trigger actions for pipelines A/B/C
-- packaged settings/manual tabs are now explicitly honest carryover surfaces instead of fake toggles/placeholders
+
+Seventh packaged-target adapter slice now in code:
+- packaged operations settings no longer behave as a placeholder tab
+- live settings summary service:
+  - `packaged-target/samm/src/services/liveSettingsSummaryService.ts`
+- this adapter reads the real config state from:
+  - `org_config`
+  - `icp_categories`
+  - `offer_catalog`
+  - `seasonality_profile`
+  - `campaign_defaults`
+  - `approval_policy`
+- packaged settings now show the real workspace configuration as a read-only summary while the packaged editor remains pending
+- packaged manual remains a smaller carryover surface for now instead of pretending to be the full rebuilt admin manual
 
 Packaged runtime target now available:
 - run the current fallback/live app with:

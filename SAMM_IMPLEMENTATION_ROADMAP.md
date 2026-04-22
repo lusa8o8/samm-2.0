@@ -1032,10 +1032,16 @@ Latest UI adapter checkpoint:
   - real pipeline health cards
   - real recent pipeline runs
   - real trigger actions for pipelines A/B/C
-- packaged settings/manual tabs are now explicitly carryover surfaces:
-  - no fake module toggles
-  - no pretend admin editor state
-  - honest migration status while the real admin contract is rebuilt
+- packaged operations settings now use a live summary adapter:
+  - `M.A.S UI/packaged-target/samm/src/services/liveSettingsSummaryService.ts`
+- packaged settings now show the real workspace state for:
+  - organisation details
+  - brand voice
+  - visual brand
+  - connections
+  - audience/offers/seasonality counts
+  - campaign + approval defaults
+- packaged manual remains a narrower carryover surface for now while the full admin/manual contract is rebuilt
 
 Latest packaged-runtime checkpoint:
 - `M.A.S UI` now exposes a dedicated packaged-app runtime target:

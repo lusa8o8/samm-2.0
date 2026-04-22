@@ -544,7 +544,17 @@ Latest packaged-target checkpoint:
   - real pipeline health cards
   - real recent run rows
   - real trigger actions for pipelines A/B/C
-- the packaged settings/manual tabs are now explicitly marked as carryover surfaces instead of fake admin controls
+- packaged operations settings now use:
+  - `M.A.S UI/packaged-target/samm/src/services/liveSettingsSummaryService.ts`
+- that adapter reads real config state from:
+  - `org_config`
+  - `icp_categories`
+  - `offer_catalog`
+  - `seasonality_profile`
+  - `campaign_defaults`
+  - `approval_policy`
+- the packaged settings tab now shows a live read-only summary of the actual workspace configuration
+- the packaged manual tab remains a smaller carryover surface for now
 
 Latest packaged-runtime checkpoint:
 - `M.A.S UI/vite.packaged.config.ts` now provides a separate runtime entry for the packaged app
