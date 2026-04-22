@@ -174,6 +174,12 @@ Next validated checkpoint:
 - confirmation behavior remains live-backed and unchanged in contract
 - durable thread persistence is still pending and stays in the `M14UI2` track
 
+Follow-on checkpoint now in code:
+- `Inbox` is the second migrated marketing surface inside the new shell
+- inbox cards now expose inspector-openable workspace objects
+- live approval actions and pipeline resume behavior remain unchanged in backend contract
+- expanded inline details are still present, so the new shell does not remove a trust/review path while migration is in progress
+
 ## Migration Matrix
 | Surface | Prototype maturity | Migration use | Notes |
 |---|---|---|---|

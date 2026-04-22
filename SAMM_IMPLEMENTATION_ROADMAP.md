@@ -706,6 +706,15 @@ Acceptance criteria:
 - object contracts are adapter-backed and inspectable
 - marketing workflows are stable enough that CRM / Sales can later layer on top cleanly
 
+Current validated slices:
+- `/samm` is migrated into the new shell with inspectable coordinator runtime state
+- `Inbox` is now the second migrated marketing surface inside the new shell
+- `Inbox` remains wired to the live approval backend path
+- inbox items now expose inspector-openable workspace objects while preserving:
+  - existing approve / reject / mark-read behavior
+  - existing pipeline resume behavior
+  - existing expanded inline detail rendering
+
 ## M14C - CRM P1
 Status:
 - planned

@@ -1,13 +1,15 @@
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
-import { useListInboxItems, useActionInboxItem, getGetInboxSummaryQueryKey, getListInboxItemsQueryKey } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
-import { Check, X, ChevronDown } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Check, ChevronDown, ExternalLink, X } from "lucide-react";
+import { useActionInboxItem, useListInboxItems, getGetInboxSummaryQueryKey, getListInboxItemsQueryKey } from "@/lib/api";
+import { useWorkspaceInspector } from "@/components/layout";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import { createInspectorPayload } from "@/lib/workspace-adapter";
 import { cn, stripMarkdownToPreviewText } from "@/lib/utils";
 
 const BADGE_COLORS: Record<string, string> = {
@@ -44,13 +46,16 @@ export default function Inbox() {
   const [filter, setFilter] = useState<"all" | "urgent" | "pending" | "fyi">("all");
 
   const queryParams =
-    filter === "all" ? {} :
-    filter === "urgent" ? { priority: "urgent" as const } :
-    filter === "pending" ? { status: "pending" as const } :
-    { priority: "fyi" as const };
+    filter === "all"
+      ? {}
+      : filter === "urgent"
+        ? { priority: "urgent" as const }
+        : filter === "pending"
+          ? { status: "pending" as const }
+          : { priority: "fyi" as const };
 
   const { data: items, isLoading } = useListInboxItems(queryParams, {
-    query: { queryKey: getListInboxItemsQueryKey(queryParams) }
+    query: { queryKey: getListInboxItemsQueryKey(queryParams) },
   });
 
   return (
@@ -70,7 +75,7 @@ export default function Inbox() {
           ].map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setFilter(tab.id as any)}
+              onClick={() => setFilter(tab.id as typeof filter)}
               className={cn(
                 "whitespace-nowrap border-b-2 py-3 transition-colors",
                 filter === tab.id
@@ -85,7 +90,7 @@ export default function Inbox() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-5 md:px-6 md:py-6">
-        <div className="mx-auto max-w-3xl space-y-3">
+        <div className="mx-auto max-w-3xl space-y-3 pb-4">
           {isLoading ? (
             Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="space-y-3 rounded-xl border border-border bg-card p-4 shadow-sm">
@@ -100,7 +105,7 @@ export default function Inbox() {
           ) : items?.length === 0 ? (
             <div className="py-20 text-center text-muted-foreground">
               <Check className="mx-auto mb-4 h-12 w-12 opacity-20" />
-              <p>You&apos;re all caught up.</p>
+              <p>You're all caught up.</p>
             </div>
           ) : (
             items?.map((item) => <InboxItemCard key={item.id} item={item} />)
@@ -116,6 +121,7 @@ function InboxItemCard({ item }: { item: any }) {
   const [rejectReason, setRejectReason] = useState("");
   const [showRejectInput, setShowRejectInput] = useState(false);
   const queryClient = useQueryClient();
+  const { openInspector } = useWorkspaceInspector();
 
   const actionMutation = useActionInboxItem({
     mutation: {
@@ -138,6 +144,22 @@ function InboxItemCard({ item }: { item: any }) {
   const isUrgent = item.priority === "urgent";
   const isFyi = item.priority === "fyi";
   const hasActions = isPending && !isFyi;
+  const inspectorPayload = createInspectorPayload(
+    item.payload.title || BADGE_LABELS[item.item_type] || item.item_type,
+    {
+      type:
+        item.item_type === "campaign_brief"
+          ? "campaign_brief"
+          : item.item_type === "draft_approval"
+            ? "approval_queue"
+            : item.item_type === "escalation"
+              ? "failure_group"
+              : "custom",
+      title: item.payload.title || BADGE_LABELS[item.item_type] || item.item_type,
+      data: item,
+    },
+    `${BADGE_LABELS[item.item_type] || item.item_type.replace(/_/g, " ")} in ${item.status} state`
+  );
 
   return (
     <div
@@ -192,11 +214,22 @@ function InboxItemCard({ item }: { item: any }) {
           {item.payload.pipeline && (
             <>
               <span>{item.payload.pipeline}</span>
-              <span>�</span>
+              <span>-</span>
             </>
           )}
           <span>{formatDistanceToNow(new Date(item.created_at))} ago</span>
         </div>
+      </div>
+
+      <div className="px-4 pb-3" onClick={(e) => e.stopPropagation()}>
+        <button
+          type="button"
+          className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          onClick={() => openInspector(inspectorPayload)}
+        >
+          <ExternalLink className="h-3.5 w-3.5" />
+          Inspect item
+        </button>
       </div>
 
       {isPending && (
@@ -225,7 +258,13 @@ function InboxItemCard({ item }: { item: any }) {
                   else if (e.key === "Escape") setShowRejectInput(false);
                 }}
               />
-              <Button size="sm" variant="destructive" className="h-8 shrink-0 px-3 text-xs" onClick={() => handleAction("reject", rejectReason)} disabled={!rejectReason || actionMutation.isPending}>
+              <Button
+                size="sm"
+                variant="destructive"
+                className="h-8 shrink-0 px-3 text-xs"
+                onClick={() => handleAction("reject", rejectReason)}
+                disabled={!rejectReason || actionMutation.isPending}
+              >
                 Confirm
               </Button>
               <Button size="sm" variant="ghost" className="h-8 shrink-0 px-2" onClick={() => setShowRejectInput(false)}>
@@ -245,11 +284,10 @@ function InboxItemCard({ item }: { item: any }) {
       {expanded && (
         <div className="space-y-4 border-t bg-muted/10 px-4 pb-4 pt-3 text-[13px]">
           {item.item_type === "campaign_brief" && (() => {
-            const brief = item.payload.campaign_brief ?? {}
-            const research = item.payload.research_summary ?? {}
+            const brief = item.payload.campaign_brief ?? {};
+            const research = item.payload.research_summary ?? {};
             return (
               <div className="space-y-4">
-                {/* Top-level event context */}
                 <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
                   {[
                     ["Event", item.payload.event_label],
@@ -263,42 +301,40 @@ function InboxItemCard({ item }: { item: any }) {
                   ) : null)}
                 </dl>
 
-                {/* Campaign brief fields */}
                 {Object.keys(brief).length > 0 && (
                   <div>
                     <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Campaign Brief</p>
                     <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
-                      {(["name","goal","target_audience","key_message","call_to_action","duration_days","platforms","universities","expected_signups"] as const).map((key) => {
-                        const val = brief[key]
-                        if (val === undefined || val === null) return null
-                        const display = Array.isArray(val) ? val.join(", ") : key === "duration_days" ? `${val} days` : String(val)
+                      {(["name", "goal", "target_audience", "key_message", "call_to_action", "duration_days", "platforms", "universities", "expected_signups"] as const).map((key) => {
+                        const val = brief[key];
+                        if (val === undefined || val === null) return null;
+                        const display = Array.isArray(val) ? val.join(", ") : key === "duration_days" ? `${val} days` : String(val);
                         return (
                           <div key={key} className="contents">
-                            <dt className="whitespace-nowrap font-medium text-muted-foreground capitalize">{key.replace(/_/g, " ")}</dt>
+                            <dt className="whitespace-nowrap font-medium capitalize text-muted-foreground">{key.replace(/_/g, " ")}</dt>
                             <dd className="break-words text-foreground">{display}</dd>
                           </div>
-                        )
+                        );
                       })}
                     </dl>
                   </div>
                 )}
 
-                {/* Research summary */}
                 {Object.keys(research).length > 0 && (
                   <div>
                     <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Research Summary</p>
                     <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
-                      {Object.entries(research).map(([k, v]) => (
-                        <div key={k} className="contents">
-                          <dt className="whitespace-nowrap font-medium text-muted-foreground capitalize">{k.replace(/_/g, " ")}</dt>
-                          <dd className="break-words text-foreground">{typeof v === "object" ? JSON.stringify(v) : String(v)}</dd>
+                      {Object.entries(research).map(([key, value]) => (
+                        <div key={key} className="contents">
+                          <dt className="whitespace-nowrap font-medium capitalize text-muted-foreground">{key.replace(/_/g, " ")}</dt>
+                          <dd className="break-words text-foreground">{typeof value === "object" ? JSON.stringify(value) : String(value)}</dd>
                         </div>
                       ))}
                     </dl>
                   </div>
                 )}
               </div>
-            )
+            );
           })()}
 
           {(item.item_type === "weekly_report" || item.item_type === "campaign_report") && (
@@ -310,7 +346,7 @@ function InboxItemCard({ item }: { item: any }) {
               {item.payload.comment_text ? (
                 <div className="rounded-md border-l-4 border-border bg-muted/30 px-3 py-2">
                   {item.payload.author && (
-                    <p className="mb-1 text-xs font-medium text-muted-foreground">{item.payload.author}{item.payload.platform ? ` · ${item.payload.platform}` : ""}</p>
+                    <p className="mb-1 text-xs font-medium text-muted-foreground">{item.payload.author}{item.payload.platform ? ` - ${item.payload.platform}` : ""}</p>
                   )}
                   <p className="text-sm italic text-foreground">&quot;{item.payload.comment_text}&quot;</p>
                 </div>
@@ -322,7 +358,7 @@ function InboxItemCard({ item }: { item: any }) {
           {item.item_type === "escalation" && (
             <div className="space-y-3">
               <div className="rounded-md border border-red-100 bg-red-50/50 p-3">
-                <p className="mb-1 text-xs font-medium text-red-800">Original Comment ({item.payload.platform}){item.payload.author ? ` — ${item.payload.author}` : ""}</p>
+                <p className="mb-1 text-xs font-medium text-red-800">Original Comment ({item.payload.platform}){item.payload.author ? ` - ${item.payload.author}` : ""}</p>
                 <p className="text-sm italic">&quot;{item.payload.comment_text ?? item.payload.original_comment ?? ""}&quot;</p>
               </div>
               <div>

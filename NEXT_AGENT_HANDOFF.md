@@ -226,6 +226,13 @@ First `M14UI2`-aligned surface slice is now in code:
   - no backend contract rewrite
   - no durable thread persistence yet
 
+Next marketing-surface migration slice is now in code:
+- `M.A.S UI/src/pages/inbox.tsx` is the second migrated marketing surface inside the new shell
+- inbox items now expose inspector-openable workspace objects
+- live approval / reject / mark-read behavior remains intact
+- pipeline resume behavior remains intact
+- expanded inline detail rendering is still present while the inspector seam is added
+
 Checkpoint:
 - `npm run build` passed in `M.A.S UI`
 - no runtime/backend contract changes were made in this slice
