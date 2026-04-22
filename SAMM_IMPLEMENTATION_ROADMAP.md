@@ -724,6 +724,13 @@ Current validated slices:
   - `useListMetrics`
   - `useGetMetricsSparklines`
 - metrics cards now expose inspector-openable workspace objects while preserving live dashboard truth
+- `Calendar` is now the fifth migrated marketing surface inside the new shell
+- the page remains live-backed on the current calendar query/mutation path
+- event cards now expose inspector-openable workspace objects and surface campaign-state badges for:
+  - support content allowed
+  - creative deviation
+  - campaign-window event types
+- full Calendar Studio remains intentionally out of scope for this slice
 
 ## M14C - CRM P1
 Status:

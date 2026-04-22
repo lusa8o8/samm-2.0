@@ -470,6 +470,11 @@ Do not add it back.
 ### Calendar table widening
 If the UI adds a new event type, add a migration widening the physical `academic_calendar.event_type` constraint in the same slice.
 
+### Calendar Studio boundary
+The current calendar migration is only the live-backed event/window layer in the new shell.
+Do not treat it as Calendar Studio yet.
+Slot/day planning, campaign tracing, and richer inspector-driven orchestration still belong to later Studio work.
+
 ### Confirmation card pattern
 The chat UI renders confirmation cards from `response.confirmation`, not `response.action`.
 Destructive actions needing confirmation must use a deterministic `confirmation.action` token and a fast-path handler.
@@ -481,6 +486,7 @@ Keep explicit guards whenever a message must create state before triggering a pi
 ## Key Files
 
 ### Frontend
+- `M.A.S UI/src/pages/calendar.tsx`
 - `M.A.S UI/src/pages/content.tsx`
 - `M.A.S UI/src/pages/inbox.tsx`
 - `M.A.S UI/src/pages/metrics.tsx`
@@ -488,6 +494,10 @@ Keep explicit guards whenever a message must create state before triggering a pi
 - `M.A.S UI/src/pages/agent/settings.tsx`
 - `M.A.S UI/src/lib/api.ts`
 - `M.A.S UI/src/lib/supabase.ts`
+- `M.A.S UI/src/components/workspace/WorkspaceShell.tsx`
+- `M.A.S UI/src/components/workspace/Sidebar.tsx`
+- `M.A.S UI/src/components/workspace/InspectorPanel.tsx`
+- `M.A.S UI/src/lib/workspace-adapter.ts`
 
 ### Supabase edge functions
 - `supabase/functions/coordinator-chat/index.ts`

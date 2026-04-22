@@ -8,7 +8,7 @@ import {
 } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { CalendarDays, CheckCircle2, Clock, Plus, Pencil, Trash2, Sparkles } from "lucide-react";
+import { CalendarDays, CheckCircle2, Clock, ExternalLink, Plus, Pencil, Trash2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -35,6 +35,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { useWorkspaceInspector } from "@/components/layout";
+import { createInspectorPayload } from "@/lib/workspace-adapter";
 import { cn } from "@/lib/utils";
 
 
@@ -215,6 +217,7 @@ export default function Calendar() {
   const { data: events, isLoading } = useListCalendarEvents();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { openInspector } = useWorkspaceInspector();
 
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: getListCalendarEventsQueryKey() });
@@ -361,6 +364,16 @@ export default function Calendar() {
               const date = new Date(event.event_date);
               const isToday = new Date().toDateString() === date.toDateString();
               const isPast = date < new Date() && !isToday;
+              const normalizedType = normalizeEventType(event.event_type);
+              const inspectorPayload = createInspectorPayload(
+                event.label,
+                {
+                  type: "calendar_window",
+                  title: event.label,
+                  data: event,
+                },
+                `${getEventTypeLabel(event.event_type)} event on ${event.event_date}`
+              );
 
               return (
                 <div
@@ -394,6 +407,21 @@ export default function Calendar() {
                       <Badge variant="outline" className="h-5 text-[10px] font-medium capitalize">
                         {getEventTypeLabel(event.event_type)}
                       </Badge>
+                      {event.support_content_allowed ? (
+                        <Badge className="h-5 border-amber-200 bg-amber-50 text-[10px] font-medium text-amber-700 hover:bg-amber-50">
+                          Support allowed
+                        </Badge>
+                      ) : null}
+                      {event.creative_override_allowed ? (
+                        <Badge className="h-5 border-violet-200 bg-violet-50 text-[10px] font-medium text-violet-700 hover:bg-violet-50">
+                          Creative deviation
+                        </Badge>
+                      ) : null}
+                      {normalizedType === "seasonal" || normalizedType === "promotion" ? (
+                        <Badge className="h-5 border-slate-200 bg-slate-50 text-[10px] font-medium text-slate-700 hover:bg-slate-50">
+                          Campaign window
+                        </Badge>
+                      ) : null}
                     </div>
                     <div className="flex flex-wrap gap-1.5">
                       {event.universities.map((uni: string) => (
@@ -423,6 +451,14 @@ export default function Calendar() {
                       )}
                     </div>
                     <div className="flex flex-col gap-1">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                        onClick={() => openInspector(inspectorPayload)}
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </Button>
                       <Button
                         size="icon"
                         variant="ghost"

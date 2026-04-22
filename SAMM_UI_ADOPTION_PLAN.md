@@ -192,6 +192,13 @@ Next follow-on checkpoint now in code:
 - metrics cards now expose inspector-openable workspace objects
 - live metrics query contracts remain unchanged in backend wiring
 
+Next follow-on checkpoint now in code:
+- `Calendar` is the fifth migrated marketing surface inside the new shell
+- the page still uses the live event CRUD path and current calendar forms
+- calendar events now expose inspector-openable event/window workspace objects
+- support-content and creative-deviation flags are visible from the surface
+- this is still the pre-Studio event/window layer, not full slot/day Calendar Studio
+
 ## Migration Matrix
 | Surface | Prototype maturity | Migration use | Notes |
 |---|---|---|---|
