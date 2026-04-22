@@ -76,6 +76,60 @@ These remain true across all future milestones:
 - conversation guardrail layer
 - gradual pipeline standardization
 
+## Strategic Reorder
+Status:
+- locked
+
+Reason:
+- marketing is now the most mature and validated product layer
+- the new packaged `samm 2.0 UI` has a strong shell / inspector / widget direction but is still mock-driven
+- layering CRM and Sales onto the old UI while the frontend direction has already changed would create avoidable migration debt
+
+Decision:
+- pause new CRM / Sales implementation work temporarily
+- migrate and stabilize the marketing system in the new UI first
+- resume `M14C` only after the marketing workspace is stable in the new shell
+
+Meaning:
+- this is not a roadmap abandonment
+- it is a sequencing change
+- backend/runtime contracts remain the source of truth
+- the new UI must be adopted through a frontend adapter layer, not by replacing the live app with the packaged prototype wholesale
+
+Locked migration principle:
+- `M.A.S UI` remains the live operational reference until each marketing surface is ported cleanly
+- `samm 2.0 UI` is the shell / interaction / widget source
+- migration must stay lego-brick modular:
+  - shell
+  - adapter layer
+  - `samm`
+  - inbox
+  - content
+  - metrics
+  - calendar
+  - operations carryover
+
+Reference architecture:
+```text
+Supabase + Functions + Scheduler + Worker
+                |
+                v
+        Frontend workspace adapter layer
+  - widget descriptors
+  - inspector payloads
+  - message parts
+  - calendar windows / slots
+  - decision reasons
+                |
+        +-------+--------+
+        |                |
+        v                v
+  new shared shell   live queries/mutations
+        |
+        v
+  marketing workspace surfaces
+```
+
 ## M13I
 Status:
 - complete
@@ -515,7 +569,7 @@ Rollback boundary:
 
 ## M14UI1 - Shared Workspace Shell
 Status:
-- planned
+- in progress
 
 Goal:
 - adopt the new generative `samm` shared-workspace shell in narrow slices without replacing the live app wholesale
@@ -536,6 +590,32 @@ Acceptance criteria:
 - `/samm` uses the new shared-workspace shell
 - the old UI remains available as the reference source for missing surfaces
 - no existing operational page is lost during adoption
+
+Additional locked interpretation:
+- the packaged UI shell is reusable
+- its page/service layer is not production-ready
+- `M14UI1` must therefore start with shell adoption plus a frontend adapter seam, not a straight page transplant
+
+Delivered in first slice:
+- live app layout now uses the new shared-workspace shell foundation instead of the old bespoke layout wrapper
+- shell foundation includes:
+  - new sidebar component
+  - new inspector-panel seam
+  - new workspace-shell wrapper
+- first frontend adapter contracts now exist in the live app for:
+  - widget descriptors
+  - inspector payloads
+  - message parts
+  - calendar windows / slots
+  - decision reasons
+  - linked content refs
+- this slice intentionally does not migrate any marketing page logic yet
+- all current marketing pages still run against the live backend inside the new shell
+
+Checkpoint result:
+- `npm run build` passed in `M.A.S UI`
+- this slice is layout / adapter foundation only
+- no marketing page logic was ported to prototype mock services
 
 ## M14UI2 - Tool-First Thread And Widgets
 Status:
@@ -564,6 +644,11 @@ Acceptance criteria:
 - cards/widgets can coexist with conversation naturally
 - `/samm` feels like a shared operational workspace, not a stateless chatbot
 
+Additional locked interpretation:
+- the thread must evolve toward typed message parts and widget envelopes
+- do not bind the new `/samm` page directly to prototype mock-service types
+- inspector payloads must reflect live backend objects
+
 ## M14UI3 - Operational Surface Carryover
 Status:
 - planned
@@ -584,6 +669,33 @@ Out of scope:
 Acceptance criteria:
 - no critical current operational surface is lost in the new UI adoption
 - old UI is only used as grounding / carryover reference, not as the long-term product direction
+
+## M14UI4 - Marketing Surface Migration
+Status:
+- planned
+
+Goal:
+- migrate the validated marketing system into the new UI before CRM / Sales implementation resumes
+
+In scope:
+- inbox
+- content registry
+- metrics
+- calendar migration path
+- route-by-route marketing carryover into the new shell
+- backend adapter alignment for marketing objects
+
+Out of scope:
+- CRM implementation
+- Sales implementation
+- full Calendar Studio UI in one slice
+- replacing every old page at once
+
+Acceptance criteria:
+- marketing surfaces run inside the new shell against the live backend
+- no page depends on prototype mock services
+- object contracts are adapter-backed and inspectable
+- marketing workflows are stable enough that CRM / Sales can later layer on top cleanly
 
 ## M14C - CRM P1
 Status:
@@ -614,6 +726,10 @@ Acceptance criteria:
 
 Rollback boundary:
 - CRM P1 state can be reverted without disturbing config or memory foundations
+
+Execution note:
+- `M14C` is paused until the `M14UI*` marketing migration track reaches a stable checkpoint
+- do not start CRM implementation work while marketing still depends on the old shell as the primary surface
 
 ## M15D - Validation Foundations
 Status:
@@ -806,7 +922,23 @@ No code starts for a milestone until:
 - rollback boundary is clear
 
 The next allowed implementation slice is:
-- `M14B` config-fidelity tightening only:
-  - settings summary cleanup
-  - baseline content strategy / distribution contract
-  - Pipeline B / Pipeline C calendar coordination contract
+- `M14UI1` shell + adapter foundation only:
+  - adopt the new shared workspace shell in the live app
+  - define the frontend workspace adapter layer
+  - keep live backend contracts stable
+  - do not begin CRM / Sales implementation during this slice
+
+Reordered immediate milestone queue:
+- `M14UI1` `Shared Workspace Shell`
+- `M14UI2` `Tool-First Thread And Widgets`
+- `M14UI3` `Operational Surface Carryover`
+- `M14UI4` `Marketing Surface Migration`
+- `M14C` `CRM P1`
+- `M15D` `Validation Foundations`
+- `M14D` `CRM P2`
+- `M15A` `Sales S1`
+- `M14E` `CRM P3`
+- `M15B` `Sales S2`
+- `M15C` `Pattern Learning Layer`
+- `M15E` `Conversation Guardrails`
+- `M16A` `Pipeline Standardization`

@@ -58,13 +58,23 @@ Adopt in this order:
 - bring in the new shell/layout patterns for `/samm`
 - preserve the live routes and backend wiring
 
-2. tool-first thread rendering
+2. frontend workspace adapter layer
+- introduce a UI-facing adapter seam before page migration
+- adapter must normalize live backend objects into:
+  - widget descriptors
+  - inspector payloads
+  - message parts
+  - calendar windows / slots
+  - decision explanations
+- do not let packaged prototype page types become the live domain contract
+
+3. tool-first thread rendering
 - support structured cards/widgets in the thread
 - support inspector/companion panels
 - keep coordinator outputs UI-addressable
 - add real conversation persistence in the shared workspace thread
 
-3. operational carryover
+4. operational carryover
 - use the old UI for missing pages and details
 - carry forward:
   - `Operations -> Manual`
@@ -72,7 +82,7 @@ Adopt in this order:
   - current config forms
   - other trust/audit surfaces still missing in the new UI
 
-4. config expansion support
+5. config expansion support
 - once `M14B` lands, update settings/config UI to support the universal config model
 - do not hardcode old TSH-specific assumptions into the new forms
 - first `M14B` settings carryover is now live in `M.A.S UI`:
@@ -96,12 +106,102 @@ Use the packaged `samm 2.0 UI` as the main source for:
 - shared cards/components
 - `/samm` experience direction
 
+Treat the packaged prototype as:
+- shell-valid
+- interaction-valid
+- widget-direction-valid
+- not production-data-valid
+- not domain-contract-valid
+
 Use the current `M.A.S UI` as the main source for:
 - existing route wiring
 - settings/config grounding
 - `Operations` pages
 - manual/admin surfaces
 - any currently working trust/review workflows that are missing from the prototype
+
+## Current Migration Diagnosis
+What the packaged prototype already has:
+- a strong shared shell
+- a usable inspector pattern
+- widget-first rendering direction
+- page/layout composition that fits the product direction
+
+What it does not yet have:
+- real backend wiring
+- real marketing-object types
+- real calendar-window / slot contracts
+- real `samm` thread persistence
+- production-ready API coverage
+
+The bundled API/server is currently only a scaffold.
+The bundled page layer is still mock-service driven.
+
+Therefore the migration rule is:
+- reuse the shell and interaction model
+- replace the data layer
+- adapt live backend objects instead of porting prototype mocks directly
+
+## Marketing-First Migration Order
+The next frontend track is marketing-first.
+
+Port in this order:
+1. shell
+2. `/samm`
+3. inbox
+4. content
+5. metrics
+6. calendar
+7. operations carryover
+
+Do not start with:
+- CRM pages
+- Sales pages
+- full Calendar Studio implementation
+
+Current checkpoint:
+- `M14UI1` first shell slice is now live in the codebase:
+  - the live app layout uses the new shared-workspace shell foundation
+  - the first inspector seam exists
+  - the first adapter contracts exist
+- marketing page logic has not been migrated yet
+- this keeps the shell and domain-adapter work isolated from page rewrites
+
+## Migration Matrix
+| Surface | Prototype maturity | Migration use | Notes |
+|---|---|---|---|
+| `WorkspaceShell` | high | adopt early | strong base for live app |
+| `Sidebar` | high | adopt early | route shell is usable |
+| `InspectorPanel` | high | adopt early with adapter | needs real widget payloads |
+| `/samm` | medium | rebuild on live coordinator API | mock message model must be replaced |
+| `Inbox` | medium | port after shell | maps well to live approval flows |
+| `Content` | medium | port after inbox | needs live registry metadata and actions |
+| `Metrics` | medium | port after content | needs real metrics contracts |
+| `Calendar` | low-medium | port later | current prototype is not yet Calendar Studio |
+| `Operations` | low | keep old longer | current live admin surfaces are stronger |
+| `CRM` | low/mock | pause | not for the current migration track |
+| `Sales` | low/mock | pause | not for the current migration track |
+
+## Adapter Contract
+The migration should converge on this frontend seam:
+
+```text
+Live backend
+  -> workspace adapter layer
+  -> shell + widgets + inspector
+  -> migrated marketing surfaces
+```
+
+Minimum adapter outputs:
+- `widget_descriptor`
+- `inspector_payload`
+- `workspace_message_part`
+- `calendar_window`
+- `resolved_slot`
+- `decision_reason`
+- `linked_content_ref`
+
+These contracts now exist in the live app as the starting adapter seam.
 
 ## Guardrails
 Do not:
@@ -124,6 +224,12 @@ The first UI adoption track is successful when:
 - old operational pages remain accessible while the new shell lands
 - no critical review/admin path is lost
 
+Marketing migration is considered stable enough to resume CRM / Sales work when:
+- migrated marketing pages no longer depend on prototype mock services
+- the shell, inspector, and widget model are live-backed
+- the calendar path is ready for later Studio evolution
+- marketing workflows are stable in the new shell under real usage
+
 ## Summary
 The new UI is not a big-bang replacement.
-It is the next frontend direction for `samm`, adopted incrementally, grounded by the current live UI, and kept aligned with the locked backend/runtime contracts.
+It is the next frontend direction for `samm`, adopted incrementally, grounded by the current live UI, and kept aligned with the locked backend/runtime contracts through a dedicated frontend adapter layer.

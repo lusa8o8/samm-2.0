@@ -163,6 +163,61 @@ The full `M14B` checkpoint sequence that is now implemented and validated is:
 
 The next allowed slice is no longer inside `M14B`.
 
+Strategic reorder now locked:
+- pause new CRM / Sales implementation
+- migrate marketing into the new shell first
+- resume `M14C` only after marketing is stable in the new UI
+
+Why:
+- the packaged `samm 2.0 UI` is a strong shell / widget / inspector base
+- it is not a production-ready data layer
+- marketing is the safest current substrate for migration because it already has the most validated backend/runtime truth
+
+Migration diagnosis:
+- `samm 2.0 UI` contains a real shell app under `artifacts/samm/`
+- that shell is reusable
+- its pages are still mock-service driven
+- its bundled API/server is only a scaffold (`/healthz`)
+- prototype types do not match the live marketing-domain contracts closely enough to port directly
+
+Locked migration rule:
+- do not transplant prototype pages directly into production
+- first build a frontend workspace adapter layer that normalizes live backend objects into:
+  - widget descriptors
+  - inspector payloads
+  - message parts
+  - calendar windows / slots
+  - decision explanations
+
+Marketing-first migration order:
+1. shell
+2. `/samm`
+3. inbox
+4. content
+5. metrics
+6. calendar
+7. operations carryover
+
+CRM / Sales pages in the packaged UI are mock-only for now.
+Do not treat them as current implementation targets.
+
+`M14UI1` first shell slice is now in code:
+- the live app no longer uses the old bespoke layout wrapper as the primary shell
+- new shell foundation exists in:
+  - `M.A.S UI/src/components/workspace/WorkspaceShell.tsx`
+  - `M.A.S UI/src/components/workspace/Sidebar.tsx`
+  - `M.A.S UI/src/components/workspace/InspectorPanel.tsx`
+- first frontend adapter contracts exist in:
+  - `M.A.S UI/src/lib/workspace-adapter.ts`
+- current pages are still live-backend pages; they have not been ported to prototype mock services
+- this was intentional to keep `M14UI1` narrow:
+  - shell + adapter foundation only
+  - no marketing page rewrite yet
+
+Checkpoint:
+- `npm run build` passed in `M.A.S UI`
+- no runtime/backend contract changes were made in this slice
+
 Calendar Studio note:
 - do not implement the UI yet
 - treat it as a backend/domain contract target
@@ -320,7 +375,11 @@ It does not exist for:
 - `M14A` `SAMM Memory Layer` (implemented and live-validated)
 - `M14A.1` `Thin Ingress Runtime Split` (implemented and validated for initial worker targets)
 - `M14B` `Structured Config Expansion`
-- `M14C` `CRM P1`
+- `M14UI1` `Shared Workspace Shell`
+- `M14UI2` `Tool-First Thread And Widgets`
+- `M14UI3` `Operational Surface Carryover`
+- `M14UI4` `Marketing Surface Migration`
+- `M14C` `CRM P1` (paused until marketing migration stabilizes)
 - `M15D` `Validation Foundations`
 - `M14D` `CRM P2`
 - `M15A` `Sales S1`
