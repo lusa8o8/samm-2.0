@@ -7,9 +7,8 @@ import { WidgetRenderer } from '../components/widgets/WidgetRenderer';
 import { useInspector } from '../components/shell/WorkspaceShell';
 import {
   getSammMessages, sendSammMessage, getSammContext,
-} from '../services/mockService';
+} from '../services/liveSammService';
 import type { SammMessage, WorkspaceContext } from '../types';
-import { mockPipelineRuns } from '../data/mockData';
 
 const suggestionChips = [
   'What needs my attention today?',
@@ -233,7 +232,7 @@ export default function SammPage() {
     setMessages(m => [...m, userMsg]);
     setInput('');
     setLoading(true);
-    const response = await sendSammMessage(input);
+    const response = await sendSammMessage(input, [...messages, userMsg]);
     setMessages(m => [...m, response]);
     setLoading(false);
   };

@@ -3,11 +3,12 @@ import {
   Cpu, Inbox, FileText, BarChart2, Calendar, Settings,
   Users, TrendingUp, Star, Zap
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Module, ModuleId } from '../../types';
 import { useState } from 'react';
 
-const iconMap: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
+const iconMap: Record<string, LucideIcon> = {
   Cpu, Inbox, FileText, BarChart2, Calendar, Settings, Users, TrendingUp, Star,
 };
 
@@ -30,7 +31,7 @@ const routeMap: Record<ModuleId, string> = {
 };
 
 interface NavIconProps {
-  icon: React.ComponentType<{ size?: number; className?: string }>;
+  icon: LucideIcon;
   label: string;
   path: string;
   isActive: boolean;

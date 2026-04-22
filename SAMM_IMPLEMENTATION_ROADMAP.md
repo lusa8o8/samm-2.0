@@ -990,3 +990,9 @@ Current UI reset checkpoint:
 - the packaged `samm` app has been materialized in-repo at `M.A.S UI/packaged-target/samm/*`
 - the live app still builds after this extraction
 - the next allowed UI code slices must target that packaged tree and its adapter replacement work
+
+Latest UI adapter checkpoint:
+- the first packaged-target live adapter now exists for `/samm`
+- packaged `SammPage` no longer depends on the packaged mock service path
+- packaged target now has a standalone in-repo `tsconfig.json`
+- packaged target passes a direct typecheck checkpoint before broader route rewiring continues

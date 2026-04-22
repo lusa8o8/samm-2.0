@@ -493,6 +493,17 @@ Current reset checkpoint:
 - this tree is now the working frontend target for the next UI slices
 - live runtime is still served from the existing `M.A.S UI/src/*` app until the packaged target is wired up
 
+Latest packaged-target checkpoint:
+- packaged `SammPage` now uses:
+  - `M.A.S UI/packaged-target/samm/src/services/liveSammService.ts`
+- this is the first live adapter inside the packaged target
+- it invokes `coordinator-ingress` and reads live context from:
+  - `pipeline_runs`
+  - `human_inbox`
+  - `academic_calendar`
+- packaged target `tsconfig.json` was rewritten to work in-repo and the packaged target now passes:
+  - `npx tsc -p packaged-target/samm/tsconfig.json --noEmit`
+
 ### Confirmation card pattern
 The chat UI renders confirmation cards from `response.confirmation`, not `response.action`.
 Destructive actions needing confirmation must use a deterministic `confirmation.action` token and a fast-path handler.

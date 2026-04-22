@@ -219,6 +219,16 @@ Checkpoint now completed:
 - the live app still builds unchanged, so this remains a safe reset checkpoint
 - next code slices should modify that packaged target tree directly rather than extending the hybrid carryover path
 
+First packaged-target adapter slice now in code:
+- packaged `/samm` no longer depends on `src/services/mockService.ts`
+- packaged `SammPage` now uses a live adapter service:
+  - `packaged-target/samm/src/services/liveSammService.ts`
+- that adapter talks to the real coordinator function and reads live workspace context from:
+  - `pipeline_runs`
+  - `human_inbox`
+  - `academic_calendar`
+- the packaged target now also has a standalone in-repo `tsconfig.json` and passes its own typecheck checkpoint
+
 ## Migration Matrix
 | Surface | Packaged-app maturity | Migration use | Notes |
 |---|---|---|---|
