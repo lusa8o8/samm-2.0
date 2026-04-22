@@ -1001,6 +1001,17 @@ Latest UI adapter checkpoint:
 - packaged inbox actions now hit the real approval/read/reject path and preserve resume side effects for:
   - `pipeline-b-weekly`
   - `pipeline-c-campaign`
+- packaged `ContentPage` and `ContentBatchReviewWidget` now use a live adapter service:
+  - `M.A.S UI/packaged-target/samm/src/services/liveContentService.ts`
+- packaged content actions now hit the real content registry path and preserve resume side effects for:
+  - `pipeline-b-weekly`
+  - `pipeline-c-campaign`
+- packaged content rendering now supports live marketing channels directly:
+  - `facebook`
+  - `whatsapp`
+  - `youtube`
+  - `email`
+  - `design_brief`
 
 Latest packaged-runtime checkpoint:
 - `M.A.S UI` now exposes a dedicated packaged-app runtime target:

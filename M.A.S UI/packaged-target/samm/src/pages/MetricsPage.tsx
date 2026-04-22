@@ -18,6 +18,9 @@ const channelLabels: Record<Channel, string> = {
   instagram: 'Instagram',
   email: 'Email',
   facebook: 'Facebook',
+  whatsapp: 'WhatsApp',
+  youtube: 'YouTube',
+  design_brief: 'Design Brief',
 };
 
 function KPICard({ kpi }: { kpi: MetricKPI }) {

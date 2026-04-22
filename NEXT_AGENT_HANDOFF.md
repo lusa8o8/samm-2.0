@@ -509,6 +509,18 @@ Latest packaged-target checkpoint:
   - approve / reject / mark-seen actions
   - `pipeline-b-weekly` resume side effects for draft approvals
   - `pipeline-c-campaign` resume side effects for campaign briefs
+- packaged `ContentPage` and `ContentBatchReviewWidget` now use:
+  - `M.A.S UI/packaged-target/samm/src/services/liveContentService.ts`
+- that adapter maps live `content_registry` rows into the packaged content card/detail model and preserves:
+  - approve / reject / retry actions
+  - `pipeline-b-weekly` resume side effects when draft sets clear
+  - `pipeline-c-campaign` resume side effects for campaign content gating
+- packaged target channel types/icons now cover the live marketing channels needed by current content flows:
+  - `facebook`
+  - `whatsapp`
+  - `youtube`
+  - `email`
+  - `design_brief`
 
 Latest packaged-runtime checkpoint:
 - `M.A.S UI/vite.packaged.config.ts` now provides a separate runtime entry for the packaged app

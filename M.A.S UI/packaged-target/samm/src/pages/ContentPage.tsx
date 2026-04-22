@@ -4,7 +4,7 @@ import { format } from 'date-fns';
 import { StatusChip } from '../components/shared/StatusChip';
 import { ChannelIcon } from '../components/shared/ChannelIcon';
 import { useInspector } from '../components/shell/WorkspaceShell';
-import { getContentRegistry, approveContentItem, rejectContentItem, retryContentItem } from '../services/mockService';
+import { getContentRegistry, approveContentItem, rejectContentItem, retryContentItem } from '../services/liveContentService';
 import type { ContentDraft } from '../types';
 import { cn } from '@/lib/utils';
 
@@ -141,23 +141,31 @@ export default function ContentPage() {
   const [approvalStates, setApprovalStates] = useState<Record<string, string>>({});
   const { openInspector } = useInspector();
 
+  const loadDrafts = async () => {
+    const nextDrafts = await getContentRegistry();
+    setDrafts(nextDrafts);
+  };
+
   useEffect(() => {
-    getContentRegistry().then(setDrafts);
+    loadDrafts();
   }, []);
 
   const handleApprove = async (id: string) => {
     await approveContentItem(id);
     setApprovalStates(s => ({ ...s, [id]: 'approved' }));
+    await loadDrafts();
   };
 
   const handleReject = async (id: string) => {
     await rejectContentItem(id);
     setApprovalStates(s => ({ ...s, [id]: 'rejected' }));
+    await loadDrafts();
   };
 
   const handleRetry = async (id: string) => {
     await retryContentItem(id);
     setApprovalStates(s => ({ ...s, [id]: 'retrying' }));
+    await loadDrafts();
   };
 
   const handleInspect = (draft: ContentDraft) => {
@@ -170,7 +178,7 @@ export default function ContentPage() {
 
   const filtered = activeTab === 'all'
     ? drafts
-    : drafts.filter(d => d.status === activeTab);
+    : drafts.filter(d => activeTab === 'failed' ? d.status === 'failed' || d.status === 'rejected' : d.status === activeTab);
 
   return (
     <div className="flex flex-col h-full">
@@ -189,7 +197,7 @@ export default function ContentPage() {
           {tabs.map(tab => {
             const count = tab.id === 'all'
               ? drafts.length
-              : drafts.filter(d => d.status === tab.id).length;
+              : drafts.filter(d => tab.id === 'failed' ? d.status === 'failed' || d.status === 'rejected' : d.status === tab.id).length;
             return (
               <button
                 key={tab.id}

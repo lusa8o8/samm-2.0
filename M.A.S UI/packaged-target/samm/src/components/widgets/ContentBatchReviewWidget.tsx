@@ -4,7 +4,7 @@ import { ChannelIcon } from '../shared/ChannelIcon';
 import { StatusChip } from '../shared/StatusChip';
 import type { ContentDraft } from '../../types';
 import { useState } from 'react';
-import { approveContentItem, rejectContentItem, retryContentItem } from '../../services/mockService';
+import { approveContentItem, rejectContentItem, retryContentItem } from '../../services/liveContentService';
 import { cn } from '@/lib/utils';
 
 interface Props {
@@ -16,7 +16,10 @@ const channelGradients: Record<string, string> = {
   twitter: 'from-sky-500/20 to-sky-300/5',
   instagram: 'from-purple-500/20 to-pink-400/5',
   facebook: 'from-blue-700/20 to-blue-500/5',
+  whatsapp: 'from-emerald-500/20 to-emerald-300/5',
+  youtube: 'from-red-500/20 to-rose-300/5',
   email: 'from-emerald-500/20 to-emerald-300/5',
+  design_brief: 'from-amber-500/20 to-yellow-300/5',
   blog: 'from-amber-500/20 to-amber-300/5',
 };
 

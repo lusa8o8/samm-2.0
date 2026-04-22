@@ -237,6 +237,15 @@ Second packaged-target adapter slice now in code:
 - this adapter maps live `human_inbox` item types into the packaged approval/suggestion/escalation/fyi UI model
 - approve / reject / mark-seen actions now use the real backend path and keep pipeline resume side effects intact
 
+Third packaged-target adapter slice now in code:
+- packaged `ContentPage` no longer depends on the packaged mock content path
+- packaged `ContentBatchReviewWidget` also uses the same live adapter path
+- live content service:
+  - `packaged-target/samm/src/services/liveContentService.ts`
+- this adapter maps live `content_registry` rows into the packaged content-card model
+- approve / reject / retry actions now use the real backend path and keep pipeline resume side effects intact
+- packaged content rendering now supports live marketing channels directly instead of only prototype/demo channels
+
 Packaged runtime target now available:
 - run the current fallback/live app with:
   - `npm run dev`
