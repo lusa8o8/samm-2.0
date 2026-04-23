@@ -17,7 +17,7 @@ import operatorMonitorImage from "@/assets/login/operator-monitor.jpg";
 import ownerWorkflowImage from "@/assets/login/owner-workflow.jpg";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { getAccessToken, signIn, signUp, supabase } from "@/lib/supabase";
+import { getAccessToken, signIn, signUp, SUPABASE_ANON_KEY, SUPABASE_URL, supabase } from "@/lib/supabase";
 
 const audienceTiles = [
   {
@@ -85,12 +85,12 @@ export default function Login() {
       // Provision org — creates org_config + stamps org_id into app_metadata
       const token = await getAccessToken();
       const provisionRes = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/provision-org`,
+        `${SUPABASE_URL}/functions/v1/provision-org`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${token ?? import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            Authorization: `Bearer ${token ?? SUPABASE_ANON_KEY}`,
           },
           body: JSON.stringify({ userId, email }),
         }

@@ -8,6 +8,7 @@ const packagedRoot = path.resolve(__dirname, "packaged-target/samm");
 export default defineConfig({
   root: packagedRoot,
   envDir: __dirname,
+  publicDir: path.resolve(__dirname, "public"),
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {

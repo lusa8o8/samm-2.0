@@ -1,9 +1,34 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Session } from "@supabase/supabase-js";
 
+const FALLBACK_SUPABASE_URL = "https://jxmdwltfkxstiwnwwiuf.supabase.co";
+const FALLBACK_SUPABASE_ANON_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp4bWR3bHRma3hzdGl3bnd3aXVmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5ODYxMDIsImV4cCI6MjA5MDU2MjEwMn0.KxhpCmssGVUJKkZvbc0KXCE5cP4SGL4ER8BmCXpi8uo";
+
+function normalizeEnvValue(value: string | undefined, fallback: string) {
+  const normalized = value?.trim().replace(/^['"]|['"]$/g, "");
+  return normalized && normalized.length > 0 ? normalized : fallback;
+}
+
+function resolveSupabaseUrl(value: string | undefined) {
+  const candidate = normalizeEnvValue(value, FALLBACK_SUPABASE_URL);
+
+  try {
+    return new URL(candidate).toString().replace(/\/$/, "");
+  } catch {
+    return FALLBACK_SUPABASE_URL;
+  }
+}
+
+export const SUPABASE_URL = resolveSupabaseUrl(import.meta.env.VITE_SUPABASE_URL);
+export const SUPABASE_ANON_KEY = normalizeEnvValue(
+  import.meta.env.VITE_SUPABASE_ANON_KEY,
+  FALLBACK_SUPABASE_ANON_KEY
+);
+
 export const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY
 );
 
 const DEV_ORG_ID = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11";

@@ -27,7 +27,7 @@ const suggestionChipsByMode: Record<SammConversationMode, string[]> = {
   ],
 };
 
-const SAMM_LOGO_SRC = '/samm-app-icon.png';
+const SAMM_LOGO_SRC = '/samm-app-icon.png?v=20260423';
 
 function SammLogo({
   className,
