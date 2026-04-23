@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Send, AlertTriangle, Clock, CheckCircle, Cpu, Calendar, Activity, PlayCircle, Sparkles } from 'lucide-react';
+import { Send, AlertTriangle, Clock, CheckCircle, Calendar, Activity, PlayCircle, Sparkles } from 'lucide-react';
 import { format } from 'date-fns';
 import { useLocation } from 'wouter';
 import { cn } from '@/lib/utils';
@@ -26,6 +26,22 @@ const suggestionChipsByMode: Record<SammConversationMode, string[]> = {
     'Show content ready for review',
   ],
 };
+
+const SAMM_LOGO_SRC = '/samm-app-icon.png';
+
+function SammLogo({
+  className,
+  imageClassName,
+}: {
+  className?: string;
+  imageClassName?: string;
+}) {
+  return (
+    <div className={cn('flex items-center justify-center overflow-hidden', className)}>
+      <img src={SAMM_LOGO_SRC} alt="samm" className={cn('h-full w-full object-contain', imageClassName)} />
+    </div>
+  );
+}
 
 function WatchStrip({ ctx }: { ctx: WorkspaceContext }) {
   const [open, setOpen] = useState(false);
@@ -73,7 +89,7 @@ function WatchStrip({ ctx }: { ctx: WorkspaceContext }) {
         <div className="flex flex-col items-end gap-1.5 mb-1" style={{ animation: 'stackIn 180ms cubic-bezier(0.16,1,0.3,1)' }}>
           {ctx.currentFocus && (
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 backdrop-blur-sm shadow-sm">
-              <Cpu size={11} className="text-primary flex-shrink-0" />
+              <SammLogo className="h-[11px] w-[11px] flex-shrink-0" />
               <span className="text-[11px] font-medium text-primary whitespace-nowrap">{ctx.currentFocus}</span>
             </div>
           )}
@@ -152,7 +168,7 @@ function MessageBubble({
     <div className={cn('flex gap-3', isSamm ? 'flex-row' : 'flex-row-reverse')}>
       {isSamm && (
         <div className="h-7 w-7 rounded-full bg-primary flex items-center justify-center flex-shrink-0 mt-1">
-          <Cpu size={13} className="text-white" />
+          <SammLogo className="h-4 w-4" />
         </div>
       )}
       <div className={cn('max-w-[85%] space-y-2.5', isSamm ? '' : 'items-end flex flex-col')}>
@@ -331,7 +347,7 @@ export default function SammPage() {
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center gap-4 text-muted-foreground">
             <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
-              <Cpu size={22} className="text-primary" />
+              <SammLogo className="h-7 w-7" />
             </div>
             <div>
               <p className="text-sm font-medium text-foreground">SAMM is ready</p>
@@ -349,7 +365,7 @@ export default function SammPage() {
         {loading && (
           <div className="flex gap-3">
             <div className="h-7 w-7 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
-              <Cpu size={13} className="text-white" />
+              <SammLogo className="h-4 w-4" />
             </div>
             <div className="bg-card border border-border rounded-xl rounded-tl-sm px-4 py-3 flex items-center gap-1.5">
               <div className="flex gap-1">
