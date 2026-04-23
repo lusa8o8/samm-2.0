@@ -27,7 +27,20 @@ export const SUPABASE_ANON_KEY = normalizeEnvValue(
 );
 
 function sanitizeHeaderValue(value: string) {
-  return value.trim().replace(/^['"]|['"]$/g, "");
+  return value
+    .replace(/[\u0000-\u001F\u007F]+/g, " ")
+    .trim()
+    .replace(/^['"]|['"]$/g, "");
+}
+
+function trySetHeader(headers: Headers, key: string, value: string) {
+  if (!key) return;
+
+  try {
+    headers.set(key, value);
+  } catch {
+    // Drop malformed optional headers instead of blocking auth/network calls.
+  }
 }
 
 function sanitizeHeaders(initHeaders?: HeadersInit) {
@@ -38,7 +51,7 @@ function sanitizeHeaders(initHeaders?: HeadersInit) {
   if (initHeaders instanceof Headers) {
     initHeaders.forEach((value, key) => {
       const sanitized = sanitizeHeaderValue(value);
-      if (sanitized) headers.set(key, sanitized);
+      if (sanitized) trySetHeader(headers, key, sanitized);
     });
     return headers;
   }
@@ -47,7 +60,7 @@ function sanitizeHeaders(initHeaders?: HeadersInit) {
     initHeaders.forEach(([key, value]) => {
       if (value == null) return;
       const sanitized = sanitizeHeaderValue(String(value));
-      if (sanitized) headers.set(key, sanitized);
+      if (sanitized) trySetHeader(headers, key, sanitized);
     });
     return headers;
   }
@@ -55,7 +68,7 @@ function sanitizeHeaders(initHeaders?: HeadersInit) {
   Object.entries(initHeaders).forEach(([key, value]) => {
     if (value == null) return;
     const sanitized = sanitizeHeaderValue(String(value));
-    if (sanitized) headers.set(key, sanitized);
+    if (sanitized) trySetHeader(headers, key, sanitized);
   });
 
   return headers;
@@ -102,7 +115,10 @@ export function getOrgId(): string {
 }
 
 function isInvalidFetchValueError(error: unknown) {
-  return error instanceof TypeError && /Failed to execute 'fetch' on 'Window': Invalid value/i.test(error.message);
+  return (
+    error instanceof TypeError &&
+    /Failed to execute '(fetch|set)' on '(Window|Headers)': Invalid value/i.test(error.message)
+  );
 }
 
 function extractErrorMessage(payload: unknown, fallback: string) {
