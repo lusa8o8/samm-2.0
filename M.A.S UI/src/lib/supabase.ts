@@ -143,6 +143,7 @@ async function signInViaRest(email: string, password: string) {
     method: "POST",
     headers: {
       apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
       "Content-Type": "application/json",
       "x-client-info": "samm-auth-fallback",
     },
@@ -179,15 +180,7 @@ async function signInViaRest(email: string, password: string) {
 }
 
 export async function signIn(email: string, password: string) {
-  try {
-    return await supabase.auth.signInWithPassword({ email, password });
-  } catch (error) {
-    if (isInvalidFetchValueError(error)) {
-      return signInViaRest(email, password);
-    }
-
-    throw error;
-  }
+  return signInViaRest(email, password);
 }
 
 export async function signUp(email: string, password: string) {
