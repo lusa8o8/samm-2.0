@@ -8,6 +8,7 @@ import {
   type CalendarEventContext,
   type ChatHistoryItem,
   type ChatResponse,
+  type ConversationMode,
   type NormalizedWritePostIntent,
 } from './scheduler.ts'
 import {
@@ -26,11 +27,17 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
-const DEFAULT_SUGGESTIONS = [
+const EXECUTION_SUGGESTIONS = [
   'Summarize this week',
   'What needs my approval?',
   'What is next on the calendar?',
   'Run the engagement pipeline',
+]
+const PLANNING_SUGGESTIONS = [
+  'Help me plan this month',
+  'Add an event or campaign',
+  'Review in Calendar Studio',
+  'What should this month focus on?',
 ]
 const TRANSIENT_MODEL_ERROR_MESSAGE = 'samm is temporarily busy right now. Please try again in a moment.'
 
@@ -94,6 +101,13 @@ function isPipelineDCommand(message: string) {
   return /^(run|start|trigger)\s+pipeline\s*d\b/i.test(message.trim())
 }
 
+function buildPlanningModeMutationBlockedResponse(target: string): ChatResponse {
+  return {
+    message: `You are in Planning mode, so I will not ${target} yet. I can help you shape the plan, explain the tradeoffs, teach the relevant marketing logic, and hand you off to Calendar Studio for review before anything becomes live.`,
+    suggestions: PLANNING_SUGGESTIONS,
+  }
+}
+
 function buildPipelineDGuidanceResponse(): ChatResponse {
   return {
     message: 'Pipeline D writes one-off posts, but it needs a topic. Tell me what to write about, for example: "write a post about discounts" or "draft a Facebook post about our grand opening".',
@@ -107,18 +121,29 @@ function buildPipelineDGuidanceResponse(): ChatResponse {
   }
 }
 
-function buildGreetingResponse(orgName: string, upcomingEvents: Array<{ label?: string; event_date?: string }>, pendingCount: number): ChatResponse {
+function buildGreetingResponse(
+  orgName: string,
+  upcomingEvents: Array<{ label?: string; event_date?: string }>,
+  pendingCount: number,
+  mode: ConversationMode,
+): ChatResponse {
   const nextEvent = upcomingEvents[0]
   const eventNote = nextEvent?.label && nextEvent?.event_date
     ? ` I see you have ${nextEvent.label} coming up on ${nextEvent.event_date}.`
     : ''
+  if (mode === 'planning') {
+    return {
+      message: `Hello! I'm samm, your planning collaborator for ${orgName}. We can map the month, define campaigns, clarify what belongs in baseline versus campaign work, and tighten asset needs before anything becomes live.${eventNote}`,
+      suggestions: PLANNING_SUGGESTIONS,
+    }
+  }
   const approvalNote = pendingCount > 0
     ? ` There ${pendingCount === 1 ? 'is' : 'are'} ${pendingCount} item${pendingCount === 1 ? '' : 's'} waiting for approval.`
     : ' There is nothing waiting for approval right now.'
 
   return {
     message: `Hello! I'm samm, your coordinating intelligence for ${orgName}.${approvalNote}${eventNote}`,
-    suggestions: DEFAULT_SUGGESTIONS,
+    suggestions: EXECUTION_SUGGESTIONS,
   }
 }
 
@@ -203,6 +228,7 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}))
     const message = String(body?.message ?? '').trim()
     const history = Array.isArray(body?.history) ? (body.history as ChatHistoryItem[]) : []
+    const mode: ConversationMode = body?.mode === 'planning' ? 'planning' : 'execution'
     const confirmationAction = body?.confirmationAction ? String(body.confirmationAction) : null
     const orgId = user.app_metadata?.org_id ?? body?.orgId
 
@@ -219,6 +245,9 @@ Deno.serve(async (req) => {
     // confirmationAction = 'calendar_delete:{event_id}'. Execute the delete
     // directly without invoking the LLM — no hallucination possible.
     if (confirmationAction?.startsWith('calendar_delete:')) {
+      if (mode === 'planning') {
+        return jsonResponse(buildPlanningModeMutationBlockedResponse('change the live calendar'))
+      }
       const eventId = confirmationAction.replace('calendar_delete:', '').trim()
       if (!eventId) {
         return jsonResponse({ error: 'Invalid delete confirmation: missing event id' }, 400)
@@ -234,7 +263,7 @@ Deno.serve(async (req) => {
       }
       return jsonResponse({
         message: 'Done. The event has been removed from the calendar.',
-        suggestions: DEFAULT_SUGGESTIONS,
+        suggestions: EXECUTION_SUGGESTIONS,
       })
     }
 
@@ -275,6 +304,7 @@ Deno.serve(async (req) => {
       orgId,
       userId: user.id,
       message,
+      mode,
       confirmationAction,
       runs: activeRuns,
       memoryContext,
@@ -287,15 +317,21 @@ Deno.serve(async (req) => {
 
     const normalizedWritePost = resolveNormalizedWritePostIntent(message)
     if (normalizedWritePost) {
+      if (mode === 'planning') {
+        return jsonResponse(buildPlanningModeMutationBlockedResponse('create drafts directly'))
+      }
       return jsonResponse(buildWritePostResponse(supabase, orgId, normalizedWritePost))
     }
 
     if (isPipelineDCommand(message)) {
+      if (mode === 'planning') {
+        return jsonResponse(buildPlanningModeMutationBlockedResponse('run Pipeline D'))
+      }
       return jsonResponse(buildPipelineDGuidanceResponse())
     }
 
     if (isGreeting(message)) {
-      return jsonResponse(buildGreetingResponse(orgConfig?.org_name ?? 'this workspace', upcomingEvents, pendingCount))
+      return jsonResponse(buildGreetingResponse(orgConfig?.org_name ?? 'this workspace', upcomingEvents, pendingCount, mode))
     }
     const prompt = {
       workspace: {
@@ -309,7 +345,7 @@ Deno.serve(async (req) => {
         latest_metrics: metrics,
       },
       conversation: [...history.slice(-8), { role: 'user', content: message }],
-      instruction: `You are samm, the coordinating intelligence for this workspace. Decide whether to answer directly or prepare an action. Return JSON only with this shape:
+      instruction: `You are samm, the coordinating intelligence for this workspace. The current conversation mode is ${mode.toUpperCase()}. Decide whether to answer directly or prepare an action. Return JSON only with this shape:
 {"message": string, "suggestions": string[], "action": null | ActionObject}
 
 ActionObject is one of:
@@ -320,6 +356,15 @@ ActionObject is one of:
 - {"type":"delete_calendar_event","event_id": string, "label": string, "needs_confirmation": boolean, "title": string, "description": string}
 
 Rules:
+- Planning mode is draft-only. In planning mode, do not propose any action object that mutates live state or triggers execution. Keep action null and explain the recommendation instead.
+- In planning mode, behave like a helpful expert guide:
+  - ask clarifying questions when goals, campaigns, or timing are ambiguous
+  - explain why you recommend a content mix, campaign shape, or calendar move
+  - teach briefly when the user seems unfamiliar with concepts like campaigns, baseline content, or support content
+  - do not offer to run pipelines, create drafts, or write posts unless the user explicitly switches to Execution mode
+- If the user mentions a pipeline in planning mode, explain what that pipeline is for and when it would be appropriate to use it later; do not suggest triggering it now.
+- In planning mode, prefer guidance about month goals, campaign structure, asset readiness, audience fit, and content mix over operational next steps.
+- Execution mode can propose actions when the user is clearly asking for a live change.
 - Only propose run_pipeline when the user is clearly asking to run or trigger a full pipeline with no event creation involved.
 - Use write_post when the user asks to write, draft, or create a single post or message about a topic. This is NOT a campaign — no brief, no CEO gate, no research. Extract the topic from the user message. platforms defaults to null (all platforms). event_ref is optional context. write_post never requires confirmation — it is fast and reversible.
 - Use create_calendar_event when the user asks to schedule, add, or create a calendar event.
@@ -348,11 +393,16 @@ Rules:
 
     const suggestions = Array.isArray(parsed.suggestions) && parsed.suggestions.length > 0
       ? parsed.suggestions.slice(0, 4)
-      : DEFAULT_SUGGESTIONS
+      : mode === 'planning'
+        ? PLANNING_SUGGESTIONS
+        : EXECUTION_SUGGESTIONS
 
     const action = parsed.action && typeof parsed.action === 'object' ? parsed.action : null
 
     if (action?.type === 'create_calendar_event') {
+      if (mode === 'planning') {
+        return jsonResponse(buildPlanningModeMutationBlockedResponse('write to the live calendar'))
+      }
       if (action.needs_confirmation && !confirmationAction) {
         return jsonResponse({
           message: parsed.message || action.description || `Create "${action.label}" on ${action.event_date}?`,
@@ -420,6 +470,9 @@ Rules:
     }
 
     if (action?.type === 'edit_calendar_event') {
+      if (mode === 'planning') {
+        return jsonResponse(buildPlanningModeMutationBlockedResponse('edit the live calendar'))
+      }
       if (!action.event_id) {
         return jsonResponse({ message: "I couldn't identify which event to edit. Please specify the event name and date.", suggestions })
       }
@@ -447,6 +500,9 @@ Rules:
     }
 
     if (action?.type === 'delete_calendar_event') {
+      if (mode === 'planning') {
+        return jsonResponse(buildPlanningModeMutationBlockedResponse('delete from the live calendar'))
+      }
       if (!action.event_id) {
         return jsonResponse({ message: "I couldn't identify which event to delete. Please specify the event name and date.", suggestions })
       }
@@ -466,6 +522,9 @@ Rules:
     }
 
     if (action?.type === 'write_post') {
+      if (mode === 'planning') {
+        return jsonResponse(buildPlanningModeMutationBlockedResponse('create drafts directly'))
+      }
       const topic = String(action.topic ?? '').trim()
       if (!topic) {
         return jsonResponse({ message: "I couldn't work out what to write about. Could you be more specific?", suggestions })
@@ -491,6 +550,7 @@ Rules:
       orgId,
       userId: user.id,
       runs: activeRuns,
+      mode,
       action,
       fallbackMessage: parsed.message || '',
       suggestions,

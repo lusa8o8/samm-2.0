@@ -1074,6 +1074,31 @@ Latest UI adapter checkpoint:
   - preview metadata is now presented as compact chips rather than large boxed mini-panels
   - expanded content surfaces now use platform-tinted backgrounds for faster channel recognition
 
+Latest packaged content-density follow-up now in code:
+- all live content actions and metadata remain exactly as wired
+- no backend or contract changes were made in this slice
+- preview-card density is tightened further against the original packaged mock:
+  - shorter preview rhythm
+  - tighter chip spacing
+  - tighter action/header scale
+- the expanded inspector-backed content surfaces are also tightened through:
+  - `linked_content_list`
+  - `campaign_brief`
+- this checkpoint intentionally treated the oversized feel as a local content-surface density issue first rather than a global shell/token rewrite
+- validated checkpoints:
+  - `npm run build:packaged`
+  - `npm run build`
+
+Locked next packaged-content checkpoint before the wider Inbox / Calendar / Operations sweep:
+- keep the preview-density checkpoint intact
+- focus only on the expanded regular-content inspector surface
+- preserve live actions and metadata while tightening the composition toward the original packaged mock:
+  - summary hero
+  - metadata grid
+  - compact tags
+  - action row placement
+- reuse the existing live content action hooks; no backend or contract changes
+
 Latest packaged-runtime checkpoint:
 - `M.A.S UI` now exposes a dedicated packaged-app runtime target:
   - `npm run dev:packaged`

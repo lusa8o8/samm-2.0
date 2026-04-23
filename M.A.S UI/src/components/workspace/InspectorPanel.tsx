@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { X } from "lucide-react";
+import { WorkspaceWidgetRenderer } from "@/components/workspace/WorkspaceWidgetRenderer";
 import type { WorkspaceInspectorPayload } from "@/lib/workspace-adapter";
 import { cn } from "@/lib/utils";
 
@@ -62,17 +63,7 @@ export function InspectorPanel({ payload, onClose }: InspectorPanelProps) {
 
         <div className="flex-1 overflow-y-auto p-5">
           {payload.widget ? (
-            <div className="space-y-4">
-              <div>
-                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  {payload.widget.type}
-                </p>
-                {payload.widget.title ? (
-                  <p className="mt-1 text-sm font-medium text-foreground">{payload.widget.title}</p>
-                ) : null}
-              </div>
-              <JsonPreview value={payload.widget.data} />
-            </div>
+            <WorkspaceWidgetRenderer widget={payload.widget} />
           ) : (
             <JsonPreview value={null} />
           )}

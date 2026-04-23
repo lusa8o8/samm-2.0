@@ -22,6 +22,7 @@ import { ChannelIcon } from "@/components/shared/ChannelIcon";
 import { StatusChip } from "@/components/shared/StatusChip";
 import { cn, stripMarkdownToPreviewText } from "@/lib/utils";
 import { useInspector } from "@/components/shell/WorkspaceShell";
+import type { ContentDraft } from "../types";
 
 type TabStatus = "draft" | "scheduled" | "published" | "comments" | "failed";
 
@@ -42,6 +43,11 @@ type ContentItem = {
   metadata?: Record<string, unknown> | null;
   created_at?: string | null;
   updated_at?: string | null;
+};
+
+type InspectorContentDraft = ContentDraft & {
+  platform?: string | null;
+  pipelineRunId?: string | null;
 };
 
 const TABS: { id: TabStatus; label: string }[] = [
@@ -76,6 +82,29 @@ function textValue(value: unknown) {
 function clipText(value: string, max = 56) {
   if (value.length <= max) return value;
   return `${value.slice(0, max - 3).trimEnd()}...`;
+}
+
+function stripMarkdownToInspectorText(value: string | null | undefined) {
+  if (!value) return "";
+
+  return value
+    .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/(```[\s\S]*?```)/g, " ")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/^\s{0,3}(#{1,6})\s+/gm, "")
+    .replace(/^\s{0,3}>\s?/gm, "")
+    .replace(/^\s*[-*+]\s+/gm, "")
+    .replace(/^\s*\d+\.\s+/gm, "")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/\*([^*]+)\*/g, "$1")
+    .replace(/__([^_]+)__/g, "$1")
+    .replace(/_([^_]+)_/g, "$1")
+    .replace(/~~([^~]+)~~/g, "$1")
+    .replace(/\r?\n{3,}/g, "\n\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n[ \t]+/g, "\n")
+    .trim();
 }
 
 function getObjective(item: ContentItem) {
@@ -129,6 +158,65 @@ function formatTimestamp(value?: string | null) {
   });
 }
 
+function getInspectorStatus(item: ContentItem): ContentDraft["status"] {
+  switch ((item.status ?? "").toLowerCase()) {
+    case "scheduled":
+      return "scheduled";
+    case "published":
+      return "published";
+    case "failed":
+      return "failed";
+    case "rejected":
+      return "rejected";
+    case "draft":
+    case "pending_approval":
+    default:
+      return "draft";
+  }
+}
+
+function getInspectorApprovalStatus(item: ContentItem): ContentDraft["approvalStatus"] | undefined {
+  const status = (item.status ?? "").toLowerCase();
+  if (status === "draft" || status === "pending_approval") return "pending";
+  if (status === "rejected") return "rejected";
+  if (status === "scheduled" || status === "published") return "approved";
+  return undefined;
+}
+
+function getInspectorContentType(item: ContentItem): ContentDraft["contentType"] {
+  if (item.platform === "email") return "email";
+  if (item.subject_line) return "article";
+  if (item.platform === "youtube") return "reel";
+  return "post";
+}
+
+function toInspectorDraft(item: ContentItem): InspectorContentDraft {
+  const preview = stripMarkdownToInspectorText(item.body);
+
+  return {
+    id: item.id,
+    title: getPreviewTitle(item, preview),
+    preview: preview || "No content preview available.",
+    channel: (item.platform as ContentDraft["channel"]) || "facebook",
+    contentType: getInspectorContentType(item),
+    status: getInspectorStatus(item),
+    createdAt: item.created_at ?? new Date().toISOString(),
+    scheduledFor: item.scheduled_at ?? undefined,
+    publishedAt: item.published_at ?? undefined,
+    failedAt: item.status === "failed" ? item.updated_at ?? item.created_at ?? undefined : undefined,
+    failureReason: item.error_message ?? item.rejection_note ?? undefined,
+    linkedCampaign: item.campaign_name ?? undefined,
+    linkedICP: textValue(item.metadata?.icp_name) || textValue(item.metadata?.audience_segment) || undefined,
+    objective: getObjective(item) ?? undefined,
+    ctaType: getCta(item) ?? undefined,
+    offerAssociation: textValue(item.metadata?.offer_name) || textValue(item.metadata?.offer) || undefined,
+    patternTags: getTags(item),
+    approvalStatus: getInspectorApprovalStatus(item),
+    platform: item.platform,
+    pipelineRunId: item.pipeline_run_id,
+  };
+}
+
 function groupDrafts(items: ContentItem[]) {
   const groups = new Map<string, { pipelineRunId: string; campaignName: string; items: ContentItem[] }>();
   const standalone: ContentItem[] = [];
@@ -162,7 +250,7 @@ function ActionButton({
     <button
       {...props}
       className={cn(
-        "inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-xs font-medium transition-colors",
+        "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors",
         className,
       )}
     >
@@ -173,7 +261,7 @@ function ActionButton({
 
 function MetaChip({ children }: { children: React.ReactNode }) {
   return (
-    <span className="rounded-full border border-border bg-muted/35 px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+    <span className="rounded border border-border/70 bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
       {children}
     </span>
   );
@@ -358,6 +446,13 @@ function ContentCard({
   const cta = getCta(item);
   const tags = getTags(item);
   const statusLabel = item.status === "draft" ? "pending" : item.status;
+  const previewKind = isDesignBrief
+    ? "Design brief"
+    : item.platform === "email"
+      ? "Email"
+      : item.subject_line
+        ? "Article"
+        : "Post";
   const previewChips = [
     item.campaign_name ? clipText(item.campaign_name, 34) : null,
     objective ? clipText(objective, 24) : null,
@@ -368,7 +463,7 @@ function ContentCard({
   return (
     <article
       className={cn(
-        "rounded-2xl border border-border bg-card p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-border/80 hover:shadow-md",
+        "rounded-xl border border-border bg-card p-3.5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-border/80 hover:shadow-md",
         isDesignBrief && "md:col-span-2",
       )}
       role="button"
@@ -393,31 +488,30 @@ function ContentCard({
         }}
       />
 
-      <div className="space-y-3">
-        <div className="min-w-0 space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-2">
-              <ChannelIcon channel={(item.platform as any) || "facebook"} size={15} />
-              <span className={cn("text-sm font-medium text-foreground", isDesignBrief && "text-violet-700")}>
-                {PLATFORM_LABELS[item.platform] ?? item.platform}
-                {!isDesignBrief ? ` - ${item.subject_line ? "Article" : "Post"}` : ""}
-              </span>
+      <div className="space-y-2.5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-start gap-2.5">
+            <ChannelIcon channel={(item.platform as any) || "facebook"} size={14} className="mt-0.5 flex-shrink-0" />
+            <div className="min-w-0">
+              <p className={cn("truncate text-sm font-semibold leading-snug text-foreground", isDesignBrief && "text-violet-900")}>
+                {previewTitle}
+              </p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                {isDesignBrief ? previewKind : `${previewKind} - ${PLATFORM_LABELS[item.platform] ?? item.platform}`}
+              </p>
             </div>
-            <StatusChip status={(statusLabel as any) || "draft"} />
           </div>
-
-          <div className="space-y-2">
-            <h3 className={cn("text-[1.02rem] font-semibold leading-snug text-foreground", isDesignBrief && "text-violet-900")}>
-              {previewTitle}
-            </h3>
-            <p className="line-clamp-2 text-sm leading-relaxed text-foreground/75">
-              {preview || "No preview available."}
-            </p>
+          <div className="flex flex-shrink-0 items-center gap-1.5">
+            <StatusChip status={(statusLabel as any) || "draft"} />
           </div>
         </div>
 
+        <p className="line-clamp-2 text-[13px] leading-relaxed text-muted-foreground">
+          {preview || "No preview available."}
+        </p>
+
         {previewChips.length > 0 && (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1.5">
             {previewChips.map((chip) => (
               <MetaChip key={chip}>{chip}</MetaChip>
             ))}
@@ -425,8 +519,8 @@ function ContentCard({
         )}
       </div>
 
-      <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
-        <Clock className="h-3.5 w-3.5" />
+      <div className="mt-3 flex items-center gap-1.5 text-[10px] text-muted-foreground">
+        <Clock className="h-3 w-3" />
         <span>
           {item.status === "published"
             ? `Published ${formatTimestamp(item.published_at)}`
@@ -436,7 +530,7 @@ function ContentCard({
         </span>
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center gap-2" onClick={(event) => event.stopPropagation()}>
+      <div className="mt-3 flex flex-wrap items-center gap-2 pt-1" onClick={(event) => event.stopPropagation()}>
         {(isDraft || isRejected) && (
           <>
             <ActionButton
@@ -557,9 +651,9 @@ export default function ContentPage() {
 
   const openContentInspector = (item: ContentItem) => {
     openInspector(item.subject_line || item.campaign_name || PLATFORM_LABELS[item.platform] || "Content", {
-      type: item.platform === "design_brief" ? "campaign_brief" : "linked_content_list",
+      type: item.platform === "design_brief" ? "campaign_brief" : "content_batch_review",
       title: item.subject_line || item.campaign_name || PLATFORM_LABELS[item.platform] || "Content",
-      data: item,
+      data: item.platform === "design_brief" ? item : [toInspectorDraft(item)],
     });
   };
 
@@ -615,7 +709,7 @@ export default function ContentPage() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="border-b border-border px-6 pb-4 pt-6">
+      <div className="border-b border-border px-5 pb-3 pt-5">
         <div className="flex items-end justify-between gap-4">
           <div>
             <h1 className="text-xl font-semibold text-foreground">Content Registry</h1>
@@ -623,22 +717,22 @@ export default function ContentPage() {
               Drafts, scheduled posts, and published assets flowing through the workspace.
             </p>
           </div>
-          <button className="inline-flex h-10 items-center rounded-xl bg-primary px-4 text-sm font-medium text-white transition-opacity hover:opacity-90">
+          <button className="inline-flex h-9 items-center rounded-lg bg-primary px-3.5 text-xs font-medium text-white transition-opacity hover:opacity-90">
             New Post
           </button>
         </div>
 
-        <div className="mt-5 flex flex-wrap gap-5 text-sm font-medium">
+        <div className="mt-4 flex flex-wrap gap-1">
           {TABS.map((tab) => (
             <button
               key={tab.id}
               type="button"
               onClick={() => setStatus(tab.id)}
               className={cn(
-                "border-b-2 pb-2 transition-colors",
+                "rounded-lg px-3 py-1.5 text-sm transition-colors",
                 status === tab.id
-                  ? "border-primary text-foreground"
-                  : "border-transparent text-muted-foreground hover:text-foreground",
+                  ? "bg-primary/10 font-medium text-primary"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
             >
               {tab.label}
@@ -647,23 +741,23 @@ export default function ContentPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-6 py-6">
+      <div className="flex-1 overflow-y-auto px-5 py-4">
         {isLoading ? (
-          <div className="rounded-2xl border border-border bg-card px-5 py-8 text-sm text-muted-foreground">
+          <div className="rounded-xl border border-border bg-card px-4 py-6 text-sm text-muted-foreground">
             Loading content...
           </div>
         ) : displayItems.length === 0 ? (
-          <div className="rounded-2xl border border-border bg-card px-5 py-12 text-center text-sm text-muted-foreground">
+          <div className="rounded-xl border border-border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
             No {status} content found.
           </div>
         ) : status === "draft" ? (
-          <div className="space-y-8">
+          <div className="space-y-6">
             {groups.map((group) => (
-              <section key={group.pipelineRunId} className="space-y-4">
+              <section key={group.pipelineRunId} className="space-y-3">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Campaign</p>
-                    <h2 className="text-lg font-semibold text-foreground">{group.campaignName}</h2>
+                    <h2 className="text-base font-semibold text-foreground">{group.campaignName}</h2>
                   </div>
                   <ActionButton
                     type="button"
@@ -674,7 +768,7 @@ export default function ContentPage() {
                     Approve all ({group.items.filter((item) => item.platform !== "design_brief" && item.status === "draft").length})
                   </ActionButton>
                 </div>
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-3 md:grid-cols-2">
                   {group.items.map((item) => (
                     <ContentCard
                       key={item.id}
@@ -693,11 +787,11 @@ export default function ContentPage() {
             ))}
 
             {standalone.length > 0 && (
-              <section className="space-y-4">
+              <section className="space-y-3">
                 <div>
                   <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Other drafts</p>
                 </div>
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-3 md:grid-cols-2">
                   {standalone.map((item) => (
                     <ContentCard
                       key={item.id}
@@ -716,7 +810,7 @@ export default function ContentPage() {
             )}
           </div>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-3 md:grid-cols-2">
             {displayItems.map((item) => (
               <ContentCard
                 key={item.id}

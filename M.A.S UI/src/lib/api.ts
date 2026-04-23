@@ -1864,6 +1864,7 @@ export function useGetMetricsSparklines(options?: QueryHookOptions) {
 type CoordinatorChatRequest = {
   message: string;
   history?: Array<{ role: "user" | "coordinator"; content: string }>;
+  mode?: "planning" | "execution";
   confirmationAction?: string | null;
 };
 
@@ -1886,7 +1887,7 @@ const COORDINATOR_FUNCTION = "coordinator-ingress";
 
 export function useCoordinatorChat(options?: MutationHookOptions) {
   return useMutation({
-    mutationFn: async ({ message, history = [], confirmationAction = null }: CoordinatorChatRequest) => {
+    mutationFn: async ({ message, history = [], mode = "execution", confirmationAction = null }: CoordinatorChatRequest) => {
       try {
         const accessToken = await getAccessToken();
 
@@ -1898,6 +1899,7 @@ export function useCoordinatorChat(options?: MutationHookOptions) {
           body: {
             message,
             history,
+            mode,
             confirmationAction,
             orgId: getOrgId(),
           },

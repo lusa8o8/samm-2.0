@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { WidgetRenderer } from '../widgets/WidgetRenderer';
 import type { WidgetDescriptor } from '../../types';
@@ -11,66 +11,73 @@ interface InspectorPanelProps {
 }
 
 export function InspectorPanel({ isOpen, title, widget, onClose }: InspectorPanelProps) {
+  const [isMounted, setIsMounted] = useState(isOpen);
+  const [renderedTitle, setRenderedTitle] = useState(title);
+  const [renderedWidget, setRenderedWidget] = useState(widget);
+
   useEffect(() => {
     if (!isOpen) return;
+
+    setIsMounted(true);
+    setRenderedTitle(title);
+    setRenderedWidget(widget);
+
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, title, widget]);
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    if (isOpen) return;
+
+    const timeout = window.setTimeout(() => {
+      setIsMounted(false);
+      setRenderedTitle(undefined);
+      setRenderedWidget(undefined);
+    }, 300);
+
+    return () => window.clearTimeout(timeout);
+  }, [isOpen]);
+
+  if (!isMounted) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ animation: 'fadeIn 150ms ease' }}
-    >
-      {/* Backdrop */}
+    <div className="fixed inset-0 z-50 pointer-events-none">
       <div
-        className="absolute inset-0 bg-black/30 backdrop-blur-[2px]"
+        className={`absolute inset-0 transition-opacity duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+          isOpen ? 'pointer-events-auto bg-black/10 opacity-100' : 'opacity-0'
+        }`}
         onClick={onClose}
       />
 
-      {/* Card */}
       <div
-        className="relative z-10 bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden"
-        style={{
-          width: 'min(640px, calc(100vw - 48px))',
-          maxHeight: 'calc(100vh - 96px)',
-          animation: 'modalIn 180ms cubic-bezier(0.16, 1, 0.3, 1)',
-        }}
-        onClick={e => e.stopPropagation()}
+        className="absolute inset-y-3 right-3 flex max-w-full items-stretch justify-end"
+        aria-hidden={!isOpen}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border flex-shrink-0">
-          <h3 className="text-sm font-semibold text-foreground">{title ?? 'Detail'}</h3>
-          <button
-            onClick={onClose}
-            className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-            data-testid="inspector-close"
-          >
-            <X size={14} />
-          </button>
-        </div>
+        <div
+          className={`pointer-events-auto flex h-full w-[min(560px,calc(100vw-24px))] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+            isOpen ? 'translate-x-0' : 'translate-x-[calc(100%+1rem)]'
+          }`}
+          onClick={e => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between border-b border-border px-5 py-4 flex-shrink-0">
+            <h3 className="text-sm font-semibold text-foreground">{renderedTitle ?? 'Detail'}</h3>
+            <button
+              onClick={onClose}
+              className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              data-testid="inspector-close"
+            >
+              <X size={14} />
+            </button>
+          </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-5">
-          {widget && <WidgetRenderer widget={widget} />}
+          <div className="flex-1 overflow-y-auto p-5">
+            {renderedWidget && <WidgetRenderer widget={renderedWidget} />}
+          </div>
         </div>
       </div>
-
-      <style>{`
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        @keyframes modalIn {
-          from { opacity: 0; transform: scale(0.95) translateY(8px); }
-          to { opacity: 1; transform: scale(1) translateY(0); }
-        }
-      `}</style>
     </div>
   );
 }

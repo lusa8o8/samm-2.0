@@ -10,6 +10,11 @@ import { SequenceStatusWidget } from './SequenceStatusWidget';
 import { CalendarEventInspectorWidget } from './CalendarEventInspectorWidget';
 import { CampaignBriefWidget } from './CampaignBriefWidget';
 import { LinkedContentListWidget } from './LinkedContentListWidget';
+import { AssetReadinessPanel } from '@/components/workspace/calendar-studio/AssetReadinessPanel';
+import { CalendarDayPanel } from '@/components/workspace/calendar-studio/CalendarDayPanel';
+import { CalendarMonthGrid } from '@/components/workspace/calendar-studio/CalendarMonthGrid';
+import { CampaignPanel } from '@/components/workspace/calendar-studio/CampaignPanel';
+import { MonthlyPlanningSessionWidget } from '@/components/workspace/calendar-studio/MonthlyPlanningSessionWidget';
 
 interface WidgetRendererProps {
   widget: WidgetDescriptor;
@@ -29,6 +34,16 @@ export function WidgetRenderer({ widget }: WidgetRendererProps) {
       return <LinkedContentListWidget data={widget.data as never} />;
     case 'calendar_event_inspector':
       return <CalendarEventInspectorWidget data={widget.data as never} />;
+    case 'monthly_planning_session':
+      return <MonthlyPlanningSessionWidget data={widget.data as never} />;
+    case 'calendar_month_grid':
+      return <CalendarMonthGrid data={widget.data as never} />;
+    case 'calendar_day_panel':
+      return <CalendarDayPanel data={widget.data as never} />;
+    case 'campaign_panel':
+      return <CampaignPanel data={widget.data as never} />;
+    case 'asset_readiness_panel':
+      return <AssetReadinessPanel data={widget.data as never} />;
     case 'lead_card':
       return <LeadCardWidget data={widget.data as never} />;
     case 'failure_group':

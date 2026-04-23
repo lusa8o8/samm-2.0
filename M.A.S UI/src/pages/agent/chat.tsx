@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, CheckCircle2, Clock3, PlayCircle, Send, Sparkles, XCircle } from "lucide-react";
+import { useLocation } from "wouter";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { WorkspaceWidgetRenderer } from "@/components/workspace/WorkspaceWidgetRenderer";
 import { Input } from "@/components/ui/input";
 import { useWorkspaceInspector } from "@/components/layout";
 import { useCoordinatorChat } from "@/lib/api";
@@ -13,6 +15,7 @@ import {
 import { cn } from "@/lib/utils";
 
 type ChatStatus = "running" | "waiting_human" | "failed" | "success" | "scheduled" | "queued";
+type ConversationMode = "planning" | "execution";
 
 type ChatMessage = {
   id: string;
@@ -33,22 +36,30 @@ const INITIAL_MESSAGES: ChatMessage[] = [
     id: "welcome",
     role: "coordinator",
     content:
-      "I'm watching runs, approvals, calendar triggers, and recent performance. Ask for a summary, the next priority, or tell me to prepare or run a pipeline.",
+      "I can help you shape the month, explain the tradeoffs, and turn that into a clear plan before anything goes live.",
     parts: [
       {
         type: "text",
-        text: "I'm watching runs, approvals, calendar triggers, and recent performance. Ask for a summary, the next priority, or tell me to prepare or run a pipeline.",
+        text: "I can help you shape the month, explain the tradeoffs, and turn that into a clear plan before anything goes live.",
       },
     ],
   },
 ];
 
-const DEFAULT_SUGGESTIONS = [
-  "Summarize this week",
-  "What needs my approval?",
-  "What is next on the calendar?",
-  "Run the engagement pipeline",
-];
+const MODE_SUGGESTIONS: Record<ConversationMode, string[]> = {
+  planning: [
+    "Help me plan this month",
+    "Add an event or campaign",
+    "Mark asset status",
+    "Review in Calendar Studio",
+  ],
+  execution: [
+    "Summarize this week",
+    "What needs my approval?",
+    "What is next on the calendar?",
+    "Show content ready for review",
+  ],
+};
 
 function getStatusTone(status: ChatStatus) {
   switch (status) {
@@ -86,17 +97,37 @@ function getStatusIcon(status: ChatStatus) {
 
 export default function AgentChat() {
   const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_MESSAGES);
-  const [suggestions, setSuggestions] = useState(DEFAULT_SUGGESTIONS);
+  const [mode, setMode] = useState<ConversationMode>("planning");
+  const [suggestions, setSuggestions] = useState(MODE_SUGGESTIONS.planning);
   const [inputValue, setInputValue] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const coordinatorChat = useCoordinatorChat();
   const { openInspector } = useWorkspaceInspector();
+  const [location] = useLocation();
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, coordinatorChat.isPending]);
+
+  useEffect(() => {
+    setSuggestions(MODE_SUGGESTIONS[mode]);
+  }, [mode]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const nextMode = params.get("mode");
+    const prompt = params.get("prompt");
+
+    if (nextMode === "planning" || nextMode === "execution") {
+      setMode(nextMode);
+    }
+    if (prompt) {
+      setInputValue(prompt);
+    }
+  }, [location]);
 
   const submitMessage = async (text: string, confirmationAction?: string | null) => {
     const trimmed = text.trim();
@@ -116,6 +147,7 @@ export default function AgentChat() {
     try {
       const response = await coordinatorChat.mutateAsync({
         message: trimmed,
+        mode,
         confirmationAction: confirmationAction ?? null,
         history: nextMessages.map(({ role, content }) => ({ role, content })),
       });
@@ -123,7 +155,7 @@ export default function AgentChat() {
       const nextSuggestions =
         Array.isArray(response.suggestions) && response.suggestions.length > 0
           ? response.suggestions.slice(0, 4)
-          : DEFAULT_SUGGESTIONS;
+          : MODE_SUGGESTIONS[mode];
       setSuggestions(nextSuggestions);
 
       const nextContent =
@@ -135,7 +167,7 @@ export default function AgentChat() {
         nextParts.push({
           type: "status",
           label: `${response.invoked_action.pipeline.toUpperCase()} ${response.invoked_action.status}`,
-          status: response.invoked_action.status,
+          status: response.invoked_action.status === "completed" ? "success" : response.invoked_action.status,
         });
       }
 
@@ -220,10 +252,36 @@ export default function AgentChat() {
             <Sparkles className="h-4 w-4 text-primary" />
             <span className="lowercase text-foreground">samm</span>
           </div>
-          <h1 className="mt-2 text-xl font-semibold tracking-tight text-foreground">Coordinate the work</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Ask samm for summaries, next steps, pipeline actions, and campaign coordination.
-          </p>
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h1 className="text-xl font-semibold tracking-tight text-foreground">
+                {mode === "planning" ? "Plan with samm" : "Coordinate execution"}
+              </h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {mode === "planning"
+                  ? "Use guided planning to shape the month before anything becomes live."
+                  : "Use explicit actions against committed truth, approvals, and runtime state."}
+              </p>
+            </div>
+            <div className="inline-flex rounded-full border border-border bg-muted/40 p-1">
+              {(["planning", "execution"] as ConversationMode[]).map((nextMode) => (
+                <button
+                  key={nextMode}
+                  type="button"
+                  onClick={() => setMode(nextMode)}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
+                    mode === nextMode
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {nextMode === "planning" ? <Sparkles className="h-3.5 w-3.5" /> : <PlayCircle className="h-3.5 w-3.5" />}
+                  {nextMode === "planning" ? "Planning" : "Execution"}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </header>
 
@@ -258,6 +316,16 @@ export default function AgentChat() {
                   >
                     {msg.content}
                   </div>
+
+                  {msg.role === "coordinator"
+                    ? msg.parts
+                        .filter((part): part is Extract<WorkspaceMessagePart, { type: "widget" }> => part.type === "widget")
+                        .map((part, index) => (
+                          <div key={`${msg.id}-widget-${index}`} className="mt-3 w-full">
+                            <WorkspaceWidgetRenderer widget={part.widget} />
+                          </div>
+                        ))
+                    : null}
 
                   {msg.role === "coordinator" ? (
                     <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -339,7 +407,7 @@ export default function AgentChat() {
                 <div className="flex flex-col gap-1">
                   <span className="ml-1 text-[11px] font-medium lowercase text-muted-foreground">samm</span>
                   <div className="rounded-2xl rounded-tl-sm border bg-muted/50 px-4 py-3 text-[14px] text-muted-foreground shadow-sm">
-                    Reviewing the latest workspace state...
+                    {mode === "planning" ? "Thinking through the plan..." : "Reviewing the latest workspace state..."}
                   </div>
                 </div>
               </div>
@@ -372,7 +440,11 @@ export default function AgentChat() {
                   submitMessage(inputValue);
                 }
               }}
-              placeholder="Ask samm anything..."
+              placeholder={
+                mode === "planning"
+                  ? "Ask samm to help plan the month, define a campaign, or explain the why..."
+                  : "Ask samm to summarize, review, or carry out an explicit next step..."
+              }
               className="flex-1 border-0 bg-transparent px-1 py-5 text-sm placeholder:text-muted-foreground focus-visible:ring-0 focus-visible:ring-offset-0"
             />
             <Button

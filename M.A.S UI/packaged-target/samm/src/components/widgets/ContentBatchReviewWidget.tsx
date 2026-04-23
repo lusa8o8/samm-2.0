@@ -1,14 +1,20 @@
+import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { CheckCircle, XCircle, RefreshCw, Calendar, Tag, Target, Link2 } from 'lucide-react';
 import { format } from 'date-fns';
+import { getListContentQueryKey, useActionContent, useRetryContent } from '@/lib/api';
+import { cn } from '@/lib/utils';
 import { ChannelIcon } from '../shared/ChannelIcon';
 import { StatusChip } from '../shared/StatusChip';
 import type { ContentDraft } from '../../types';
-import { useState } from 'react';
-import { approveContentItem, rejectContentItem, retryContentItem } from '../../services/liveContentService';
-import { cn } from '@/lib/utils';
+
+type InspectorContentDraft = ContentDraft & {
+  platform?: string | null;
+  pipelineRunId?: string | null;
+};
 
 interface Props {
-  data: ContentDraft[];
+  data: InspectorContentDraft[];
 }
 
 const channelGradients: Record<string, string> = {
@@ -23,33 +29,66 @@ const channelGradients: Record<string, string> = {
   blog: 'from-amber-500/20 to-amber-300/5',
 };
 
-function ContentDraftDetail({ draft }: { draft: ContentDraft }) {
+function ContentDraftDetail({ draft }: { draft: InspectorContentDraft }) {
+  const queryClient = useQueryClient();
   const [actionState, setActionState] = useState<string | null>(null);
   const gradient = channelGradients[draft.channel] ?? 'from-muted/40 to-muted/10';
 
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: getListContentQueryKey() });
+    queryClient.invalidateQueries({ queryKey: ['inbox-items'] });
+    queryClient.invalidateQueries({ queryKey: ['inbox-summary'] });
+    queryClient.invalidateQueries({ queryKey: ['pipeline-status'] });
+    queryClient.invalidateQueries({ queryKey: ['pipeline-runs'] });
+  };
+
+  const actionMutation = useActionContent({
+    mutation: {
+      onSuccess: invalidate,
+    },
+  });
+  const retryMutation = useRetryContent({
+    mutation: {
+      onSuccess: invalidate,
+    },
+  });
+
   const handleApprove = async () => {
-    await approveContentItem(draft.id);
+    await actionMutation.mutateAsync({
+      id: draft.id,
+      pipelineRunId: draft.pipelineRunId,
+      platform: draft.platform,
+      data: { action: 'approve' },
+    });
     setActionState('approved');
   };
 
   const handleReject = async () => {
-    await rejectContentItem(draft.id);
+    await actionMutation.mutateAsync({
+      id: draft.id,
+      pipelineRunId: draft.pipelineRunId,
+      platform: draft.platform,
+      data: { action: 'reject', note: 'Rejected from packaged content inspector' },
+    });
     setActionState('rejected');
   };
 
   const handleRetry = async () => {
-    await retryContentItem(draft.id);
+    await retryMutation.mutateAsync({ id: draft.id });
     setActionState('retrying');
   };
 
   return (
     <div className="space-y-4">
-      {/* Visual preview banner */}
-      <div className={cn('rounded-xl bg-gradient-to-br p-5 border border-border/50 flex flex-col gap-3', gradient)}>
+      <div className={cn('flex flex-col gap-3 rounded-xl border border-border/50 bg-gradient-to-br p-5', gradient)}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <ChannelIcon channel={draft.channel} size={16} />
-            <span className="text-xs font-medium text-foreground capitalize">{draft.channel} · {draft.contentType}</span>
+            <span className="text-xs font-medium text-foreground capitalize">
+              {draft.channel}
+              {" \u00b7 "}
+              {draft.contentType}
+            </span>
           </div>
           <div className="flex items-center gap-1.5">
             <StatusChip status={draft.status} />
@@ -59,47 +98,45 @@ function ContentDraftDetail({ draft }: { draft: ContentDraft }) {
           </div>
         </div>
 
-        {/* Full content text */}
         <div>
-          <p className="text-sm font-semibold text-foreground mb-2">{draft.title}</p>
-          <p className="text-[13px] text-foreground/80 leading-relaxed whitespace-pre-wrap">{draft.preview}</p>
+          <p className="mb-2 text-sm font-semibold text-foreground">{draft.title}</p>
+          <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-foreground/80">{draft.preview}</p>
         </div>
       </div>
 
-      {/* Metadata grid */}
       <div className="grid grid-cols-2 gap-2">
         {draft.linkedCampaign && (
           <div className="flex items-start gap-2 rounded-lg bg-muted/40 px-3 py-2">
-            <Link2 size={12} className="text-primary mt-0.5 flex-shrink-0" />
+            <Link2 size={12} className="mt-0.5 flex-shrink-0 text-primary" />
             <div>
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Campaign</p>
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Campaign</p>
               <p className="text-[12px] font-medium text-foreground">{draft.linkedCampaign}</p>
             </div>
           </div>
         )}
         {draft.objective && (
           <div className="flex items-start gap-2 rounded-lg bg-muted/40 px-3 py-2">
-            <Target size={12} className="text-purple-500 mt-0.5 flex-shrink-0" />
+            <Target size={12} className="mt-0.5 flex-shrink-0 text-purple-500" />
             <div>
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Objective</p>
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Objective</p>
               <p className="text-[12px] font-medium text-foreground">{draft.objective}</p>
             </div>
           </div>
         )}
         {draft.ctaType && (
           <div className="flex items-start gap-2 rounded-lg bg-muted/40 px-3 py-2">
-            <Target size={12} className="text-amber-500 mt-0.5 flex-shrink-0" />
+            <Target size={12} className="mt-0.5 flex-shrink-0 text-amber-500" />
             <div>
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">CTA</p>
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">CTA</p>
               <p className="text-[12px] font-medium text-foreground">{draft.ctaType}</p>
             </div>
           </div>
         )}
         {(draft.scheduledFor || draft.publishedAt || draft.createdAt) && (
           <div className="flex items-start gap-2 rounded-lg bg-muted/40 px-3 py-2">
-            <Calendar size={12} className="text-muted-foreground mt-0.5 flex-shrink-0" />
+            <Calendar size={12} className="mt-0.5 flex-shrink-0 text-muted-foreground" />
             <div>
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
                 {draft.status === 'scheduled' ? 'Scheduled' : draft.status === 'published' ? 'Published' : 'Created'}
               </p>
               <p className="text-[12px] font-medium text-foreground">
@@ -110,40 +147,39 @@ function ContentDraftDetail({ draft }: { draft: ContentDraft }) {
         )}
       </div>
 
-      {/* Tags */}
       {draft.patternTags && draft.patternTags.length > 0 && (
-        <div className="flex items-center gap-1.5 flex-wrap">
+        <div className="flex flex-wrap items-center gap-1.5">
           <Tag size={11} className="text-muted-foreground" />
-          {draft.patternTags.map(tag => (
-            <span key={tag} className="text-[11px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border/50">
+          {draft.patternTags.map((tag) => (
+            <span key={tag} className="rounded-full border border-border/50 bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
               #{tag}
             </span>
           ))}
         </div>
       )}
 
-      {/* Failure reason */}
       {draft.status === 'failed' && draft.failureReason && (
-        <div className="rounded-xl bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/50 px-4 py-3">
-          <p className="text-[11px] font-medium text-red-700 dark:text-red-400 mb-0.5">Failure reason</p>
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 dark:border-red-900/50 dark:bg-red-950/20">
+          <p className="mb-0.5 text-[11px] font-medium text-red-700 dark:text-red-400">Failure reason</p>
           <p className="text-[12px] text-red-700/80 dark:text-red-400/80">{draft.failureReason}</p>
         </div>
       )}
 
-      {/* Actions */}
       {!actionState && (
         <div className="flex gap-2 pt-1">
           {draft.status === 'draft' && draft.approvalStatus === 'pending' && (
             <>
               <button
-                onClick={handleApprove}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 text-sm font-medium hover:bg-emerald-100 transition-colors"
+                onClick={() => void handleApprove()}
+                disabled={actionMutation.isPending}
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 py-2 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-100 disabled:opacity-60 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-400"
               >
                 <CheckCircle size={14} /> Approve
               </button>
               <button
-                onClick={handleReject}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 text-sm font-medium hover:bg-red-100 transition-colors"
+                onClick={() => void handleReject()}
+                disabled={actionMutation.isPending}
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-red-200 bg-red-50 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-100 disabled:opacity-60 dark:border-red-800 dark:bg-red-950/30 dark:text-red-400"
               >
                 <XCircle size={14} /> Reject
               </button>
@@ -151,8 +187,9 @@ function ContentDraftDetail({ draft }: { draft: ContentDraft }) {
           )}
           {draft.status === 'failed' && (
             <button
-              onClick={handleRetry}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-primary/10 text-primary border border-primary/30 text-sm font-medium hover:bg-primary/20 transition-colors"
+              onClick={() => void handleRetry()}
+              disabled={retryMutation.isPending}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-primary/30 bg-primary/10 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/20 disabled:opacity-60"
             >
               <RefreshCw size={14} /> Retry
             </button>
@@ -161,13 +198,17 @@ function ContentDraftDetail({ draft }: { draft: ContentDraft }) {
       )}
 
       {actionState && (
-        <div className={cn(
-          'rounded-xl px-4 py-3 text-sm font-medium text-center',
-          actionState === 'approved' ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400'
-          : actionState === 'rejected' ? 'bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400'
-          : 'bg-primary/10 text-primary'
-        )}>
-          {actionState === 'approved' ? '✓ Approved' : actionState === 'rejected' ? '✕ Rejected' : '↻ Queued for retry'}
+        <div
+          className={cn(
+            'rounded-xl px-4 py-3 text-center text-sm font-medium',
+            actionState === 'approved'
+              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400'
+              : actionState === 'rejected'
+                ? 'bg-red-50 text-red-600 dark:bg-red-950/20 dark:text-red-400'
+                : 'bg-primary/10 text-primary',
+          )}
+        >
+          {actionState === 'approved' ? 'Approved' : actionState === 'rejected' ? 'Rejected' : 'Queued for retry'}
         </div>
       )}
     </div>
@@ -183,14 +224,14 @@ export function ContentBatchReviewWidget({ data }: Props) {
 
   return (
     <div className="space-y-2">
-      {data.map(draft => (
-        <div key={draft.id} className="rounded-lg border border-border bg-card p-3 space-y-1.5">
+      {data.map((draft) => (
+        <div key={draft.id} className="space-y-1.5 rounded-lg border border-border bg-card p-3">
           <div className="flex items-start gap-2">
             <ChannelIcon channel={draft.channel} size={13} className="mt-0.5 flex-shrink-0" />
-            <p className="text-xs font-medium text-foreground leading-snug flex-1">{draft.title}</p>
+            <p className="flex-1 text-xs font-medium leading-snug text-foreground">{draft.title}</p>
           </div>
-          <p className="text-[11px] text-muted-foreground leading-snug">{draft.preview}</p>
-          <div className="flex items-center gap-1.5 flex-wrap">
+          <p className="text-[11px] leading-snug text-muted-foreground">{draft.preview}</p>
+          <div className="flex flex-wrap items-center gap-1.5">
             <StatusChip status={draft.status} />
             {draft.approvalStatus && <StatusChip status={draft.approvalStatus} />}
           </div>

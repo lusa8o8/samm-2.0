@@ -1,1 +1,1 @@
-export { default } from "../../../../src/pages/calendar";
+export { default } from "../../../../src/pages/calendar-studio";

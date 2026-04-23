@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { Send, AlertTriangle, Clock, CheckCircle, Cpu, Calendar, Activity } from 'lucide-react';
+import { Send, AlertTriangle, Clock, CheckCircle, Cpu, Calendar, Activity, PlayCircle, Sparkles } from 'lucide-react';
 import { format } from 'date-fns';
+import { useLocation } from 'wouter';
 import { cn } from '@/lib/utils';
 import { StatusChip } from '../components/shared/StatusChip';
 import { WidgetRenderer } from '../components/widgets/WidgetRenderer';
@@ -8,16 +9,23 @@ import { useInspector } from '../components/shell/WorkspaceShell';
 import {
   getSammMessages, sendSammMessage, getSammContext,
 } from '../services/liveSammService';
-import type { SammMessage, WorkspaceContext } from '../types';
+import type { SammConversationMode } from '../services/liveSammService';
+import type { ActionDescriptor, SammMessage, WorkspaceContext } from '../types';
 
-const suggestionChips = [
-  'What needs my attention today?',
-  'Show me the inbox',
-  'What failed recently?',
-  'Show content ready for review',
-  'Any CRM updates?',
-  'Show content patterns',
-];
+const suggestionChipsByMode: Record<SammConversationMode, string[]> = {
+  planning: [
+    'Help me plan this month',
+    'Add an event or campaign',
+    'Mark asset status',
+    'Review in Calendar Studio',
+  ],
+  execution: [
+    'What needs my attention today?',
+    'Show me the inbox',
+    'What failed recently?',
+    'Show content ready for review',
+  ],
+};
 
 function WatchStrip({ ctx }: { ctx: WorkspaceContext }) {
   const [open, setOpen] = useState(false);
@@ -116,7 +124,15 @@ function WatchStrip({ ctx }: { ctx: WorkspaceContext }) {
   );
 }
 
-function MessageBubble({ message, onWidgetClick }: { message: SammMessage; onWidgetClick: (title: string, widget: never) => void }) {
+function MessageBubble({
+  message,
+  onWidgetClick,
+  onActionClick,
+}: {
+  message: SammMessage;
+  onWidgetClick: (title: string, widget: never) => void;
+  onActionClick: (action: ActionDescriptor) => void;
+}) {
   const isSamm = message.role === 'samm';
 
   const renderMarkdown = (text: string) => {
@@ -180,6 +196,8 @@ function MessageBubble({ message, onWidgetClick }: { message: SammMessage; onWid
             {message.actions.map((action, i) => (
               <button
                 key={i}
+                type="button"
+                onClick={() => onActionClick(action)}
                 className={cn(
                   'px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border',
                   action.variant === 'default'
@@ -207,10 +225,12 @@ function MessageBubble({ message, onWidgetClick }: { message: SammMessage; onWid
 export default function SammPage() {
   const [messages, setMessages] = useState<SammMessage[]>([]);
   const [ctx, setCtx] = useState<WorkspaceContext | null>(null);
+  const [mode, setMode] = useState<SammConversationMode>('planning');
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
   const { openInspector } = useInspector();
+  const [location] = useLocation();
 
   useEffect(() => {
     getSammMessages().then(setMessages);
@@ -221,18 +241,33 @@ export default function SammPage() {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const handleSend = async () => {
-    if (!input.trim() || loading) return;
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const nextMode = params.get('mode');
+    const prompt = params.get('prompt');
+
+    if (nextMode === 'planning' || nextMode === 'execution') {
+      setMode(nextMode);
+    }
+    if (prompt) {
+      setInput(prompt);
+    }
+  }, [location]);
+
+  const handleSend = async (contentOverride?: string, confirmationAction?: string | null) => {
+    const content = (contentOverride ?? input).trim();
+    if (!content || loading) return;
     const userMsg: SammMessage = {
       id: `msg-${Date.now()}`,
       role: 'user',
-      content: input,
+      content,
       timestamp: new Date().toISOString(),
     };
     setMessages(m => [...m, userMsg]);
     setInput('');
     setLoading(true);
-    const response = await sendSammMessage(input, [...messages, userMsg]);
+    const response = await sendSammMessage(content, [...messages, userMsg], mode, confirmationAction ?? null);
     setMessages(m => [...m, response]);
     setLoading(false);
   };
@@ -245,9 +280,51 @@ export default function SammPage() {
     openInspector(title, widget);
   };
 
+  const handleActionClick = (action: ActionDescriptor) => {
+    const confirmationAction =
+      typeof action.payload === 'object' && action.payload !== null && 'confirmationAction' in action.payload
+        ? String((action.payload as { confirmationAction?: unknown }).confirmationAction ?? action.action)
+        : action.action;
+
+    void handleSend(action.label, confirmationAction);
+  };
+
   return (
     <div className="flex flex-col h-full">
       {ctx && <WatchStrip ctx={ctx} />}
+
+      <div className="border-b border-border/70 px-4 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">SAMM</p>
+            <h1 className="mt-1 text-lg font-semibold text-foreground">
+              {mode === 'planning' ? 'Plan with samm' : 'Coordinate execution'}
+            </h1>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {mode === 'planning'
+                ? 'Use guided planning to shape the month before anything becomes live.'
+                : 'Use explicit actions against committed truth, approvals, and runtime state.'}
+            </p>
+          </div>
+
+          <div className="inline-flex rounded-full border border-border bg-muted/40 p-1">
+            {(['planning', 'execution'] as SammConversationMode[]).map(nextMode => (
+              <button
+                key={nextMode}
+                type="button"
+                onClick={() => setMode(nextMode)}
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors',
+                  mode === nextMode ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                {nextMode === 'planning' ? <Sparkles size={12} /> : <PlayCircle size={12} />}
+                {nextMode === 'planning' ? 'Planning' : 'Execution'}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-6 space-y-6">
@@ -258,12 +335,16 @@ export default function SammPage() {
             </div>
             <div>
               <p className="text-sm font-medium text-foreground">SAMM is ready</p>
-              <p className="text-xs mt-1">Ask SAMM about active runs, approvals, content, or CRM.</p>
+              <p className="text-xs mt-1">
+                {mode === 'planning'
+                  ? 'Use planning mode to shape the month, define campaigns, and mark asset needs.'
+                  : 'Use execution mode for approvals, live status, and explicit next-step actions.'}
+              </p>
             </div>
           </div>
         )}
         {messages.map(msg => (
-          <MessageBubble key={msg.id} message={msg} onWidgetClick={handleWidgetClick} />
+          <MessageBubble key={msg.id} message={msg} onWidgetClick={handleWidgetClick} onActionClick={handleActionClick} />
         ))}
         {loading && (
           <div className="flex gap-3">
@@ -286,7 +367,7 @@ export default function SammPage() {
       {messages.length <= 1 && (
         <div className="px-4 pb-2">
           <div className="flex flex-wrap gap-1.5">
-            {suggestionChips.map(chip => (
+            {suggestionChipsByMode[mode].map(chip => (
               <button
                 key={chip}
                 onClick={() => handleChip(chip)}
@@ -305,14 +386,20 @@ export default function SammPage() {
         <div className="flex items-center gap-3 bg-card/80 backdrop-blur-md border border-border/60 rounded-2xl px-4 py-3 shadow-lg shadow-black/5 focus-within:border-primary/40 focus-within:shadow-primary/10 transition-all duration-200">
           <input
             className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none"
-            placeholder="Ask SAMM about runs, approvals, content, CRM..."
+            placeholder={
+              mode === 'planning'
+                ? 'Ask samm to help plan the month, define a campaign, or explain the why...'
+                : 'Ask samm to summarize, review, or carry out an explicit next step...'
+            }
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
             data-testid="samm-input"
           />
           <button
-            onClick={handleSend}
+            onClick={() => {
+              void handleSend();
+            }}
             disabled={!input.trim() || loading}
             className="h-8 w-8 rounded-full bg-primary flex items-center justify-center disabled:opacity-30 hover:bg-primary/90 active:scale-95 transition-all duration-150 flex-shrink-0 shadow-sm shadow-primary/30"
             data-testid="samm-send"

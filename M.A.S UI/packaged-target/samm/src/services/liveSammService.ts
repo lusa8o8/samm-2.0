@@ -1,6 +1,8 @@
 import { getAccessToken, getOrgId, supabase } from "../../../../src/lib/supabase";
 import type { ActionDescriptor, CalendarEvent, PipelineRun, RunStatus, SammMessage, WorkspaceContext } from "../types";
 
+export type SammConversationMode = "planning" | "execution";
+
 type CoordinatorChatResponse = {
   message?: string;
   suggestions?: string[];
@@ -139,7 +141,7 @@ export async function getSammMessages(): Promise<SammMessage[]> {
       id: "welcome-live",
       role: "samm",
       content:
-        "I'm watching runs, approvals, calendar triggers, and recent performance. Ask for a summary, the next priority, or tell me to prepare or run a pipeline.",
+        "I can help you shape the month, explain the tradeoffs, and turn that into a clear plan before anything goes live.",
       timestamp: new Date().toISOString(),
     },
   ];
@@ -151,7 +153,7 @@ export async function getSammContext(): Promise<WorkspaceContext> {
   const [pipelineRunsResult, inboxResult, calendarResult] = await Promise.all([
     supabase
       .from("pipeline_runs")
-      .select("id,pipeline,status,started_at,summary,result")
+      .select("id,pipeline,status,started_at,result")
       .eq("org_id", orgId)
       .order("started_at", { ascending: false })
       .limit(8),
@@ -188,7 +190,12 @@ export async function getSammContext(): Promise<WorkspaceContext> {
   };
 }
 
-export async function sendSammMessage(content: string, history: SammMessage[] = []): Promise<SammMessage> {
+export async function sendSammMessage(
+  content: string,
+  history: SammMessage[] = [],
+  mode: SammConversationMode = "execution",
+  confirmationAction: string | null = null,
+): Promise<SammMessage> {
   const accessToken = await getAccessToken();
 
   if (!accessToken) {
@@ -200,7 +207,8 @@ export async function sendSammMessage(content: string, history: SammMessage[] = 
       body: {
         message: content,
         history: history.map((message) => ({ role: message.role === "samm" ? "coordinator" : "user", content: message.content })),
-        confirmationAction: null,
+        mode,
+        confirmationAction,
         orgId: getOrgId(),
       },
       headers: {

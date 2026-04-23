@@ -4,7 +4,7 @@ import { Switch, Route, Redirect, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { WorkspaceShell } from "@/components/shell/WorkspaceShell";
+import { Layout } from "@/components/layout";
 import SammPage from "@/pages/SammPage";
 import InboxPage from "@/pages/InboxPage";
 import ContentPage from "@/pages/ContentPage";
@@ -32,9 +32,10 @@ function PublicRouter() {
 
 function PrivateRouter() {
   return (
-    <WorkspaceShell>
+    <Layout>
       <Switch>
         <Route path="/" component={SammPage} />
+        <Route path="/samm" component={SammPage} />
         <Route path="/inbox" component={InboxPage} />
         <Route path="/content" component={ContentPage} />
         <Route path="/metrics" component={MetricsPage} />
@@ -47,7 +48,7 @@ function PrivateRouter() {
         </Route>
         <Route component={NotFoundPage} />
       </Switch>
-    </WorkspaceShell>
+    </Layout>
   );
 }
 

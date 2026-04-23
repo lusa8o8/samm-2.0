@@ -4,6 +4,7 @@ import {
   resolveExplicitSchedulerRequest,
   type ChatHistoryItem,
   type ChatResponse,
+  type ConversationMode,
 } from '../coordinator-chat/scheduler.ts'
 import { ensureDashboardMemoryContext } from '../_shared/samm-memory.ts'
 
@@ -29,6 +30,7 @@ async function proxyToLegacyCoordinatorChat(
     accessToken: string
     message: string
     history: ChatHistoryItem[]
+    mode: ConversationMode
     confirmationAction?: string | null
     orgId: string
   },
@@ -37,6 +39,7 @@ async function proxyToLegacyCoordinatorChat(
     body: {
       message: params.message,
       history: params.history,
+      mode: params.mode,
       confirmationAction: params.confirmationAction ?? null,
       orgId: params.orgId,
     },
@@ -93,6 +96,7 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}))
     const message = String(body?.message ?? '').trim()
     const history = Array.isArray(body?.history) ? (body.history as ChatHistoryItem[]) : []
+    const mode: ConversationMode = body?.mode === 'planning' ? 'planning' : 'execution'
     const confirmationAction = body?.confirmationAction ? String(body.confirmationAction) : null
     const orgId = user.app_metadata?.org_id ?? body?.orgId
 
@@ -127,6 +131,7 @@ Deno.serve(async (req) => {
       orgId,
       userId: user.id,
       message,
+      mode,
       confirmationAction,
       runs: activeRuns,
       memoryContext,
@@ -140,6 +145,7 @@ Deno.serve(async (req) => {
       accessToken,
       message,
       history,
+      mode,
       confirmationAction,
       orgId,
     })

@@ -144,7 +144,7 @@ function InboxItemDetail({ item }: { item: InboxItem }) {
               : "bg-red-50 text-red-600 dark:bg-red-950/20 dark:text-red-400",
           )}
         >
-          {actionState === "approved" ? "Approved" : "Rejected"}
+          {actionState === "approved" ? "✓ Actioned" : "✕ Dismissed"}
         </div>
       )}
 

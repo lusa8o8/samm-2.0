@@ -924,24 +924,24 @@ export default function AgentSettings() {
   };
 
   return (
-    <div className="flex h-full flex-col bg-[linear-gradient(180deg,rgba(244,241,235,0.45)_0%,rgba(244,241,235,0)_30%)]">
-      <header className="shrink-0 border-b border-border/80 bg-background/95 px-4 py-4 backdrop-blur md:px-6">
+    <div className="flex h-full flex-col">
+      <header className="shrink-0 border-b border-border px-6 pb-4 pt-6">
         <div>
           <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
             <span>Operations</span>
             <span>/</span>
             <span className="text-foreground">Settings</span>
           </div>
-          <h1 className="mt-2 text-xl font-semibold tracking-tight text-foreground">Operational settings</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Manage workspace configuration, brand voice, publishing connections, and automation rules.</p>
+          <h1 className="mt-2 text-xl font-semibold text-foreground">Operational settings</h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">Manage workspace configuration, brand voice, publishing connections, and automation rules.</p>
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-4 py-5 md:px-6 md:py-6">
+      <div className="flex-1 overflow-y-auto px-6 py-4">
         <div className="mx-auto max-w-4xl">
-          <Accordion type="single" collapsible defaultValue="item-1" className="w-full space-y-4">
-            <AccordionItem value="item-1" className="overflow-hidden rounded-lg border bg-card px-2 shadow-sm">
-              <AccordionTrigger className="px-4 py-5 hover:no-underline">
+          <Accordion type="single" collapsible defaultValue="item-1" className="w-full space-y-3">
+            <AccordionItem value="item-1" className="overflow-hidden rounded-xl border border-border bg-card px-0 shadow-none">
+              <AccordionTrigger className="px-5 py-4 hover:no-underline">
                 <div className="flex items-center gap-3">
                   <div className="rounded-md bg-muted p-2 text-foreground/70"><Building className="h-4 w-4" /></div>
                   <div className="text-left">
@@ -981,8 +981,8 @@ export default function AgentSettings() {
               </AccordionContent>
             </AccordionItem>
 
-            <AccordionItem value="item-1b" className="overflow-hidden rounded-lg border bg-card px-2 shadow-sm">
-              <AccordionTrigger className="px-4 py-5 hover:no-underline">
+            <AccordionItem value="item-1b" className="overflow-hidden rounded-xl border border-border bg-card px-0 shadow-none">
+              <AccordionTrigger className="px-5 py-4 hover:no-underline">
                 <div className="flex items-center gap-3">
                   <div className="rounded-md bg-muted p-2 text-foreground/70"><Users className="h-4 w-4" /></div>
                   <div className="text-left">
@@ -991,7 +991,7 @@ export default function AgentSettings() {
                   </div>
                 </div>
               </AccordionTrigger>
-              <AccordionContent className="px-4 pb-6 pt-2">
+              <AccordionContent className="px-5 pb-5 pt-1">
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                   <div className="rounded-lg border bg-background p-4">
                     <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -1111,8 +1111,8 @@ export default function AgentSettings() {
               </AccordionContent>
             </AccordionItem>
 
-            <AccordionItem value="item-1c" className="overflow-hidden rounded-lg border bg-card px-2 shadow-sm">
-              <AccordionTrigger className="px-4 py-5 hover:no-underline">
+            <AccordionItem value="item-1c" className="overflow-hidden rounded-xl border border-border bg-card px-0 shadow-none">
+              <AccordionTrigger className="px-5 py-4 hover:no-underline">
                 <div className="flex items-center gap-3">
                   <div className="rounded-md bg-muted p-2 text-foreground/70"><PencilLine className="h-4 w-4" /></div>
                   <div className="text-left">
@@ -1505,8 +1505,8 @@ export default function AgentSettings() {
               </AccordionContent>
             </AccordionItem>
 
-            <AccordionItem value="item-2" className="overflow-hidden rounded-lg border bg-card px-2 shadow-sm">
-              <AccordionTrigger className="px-4 py-5 hover:no-underline">
+            <AccordionItem value="item-2" className="overflow-hidden rounded-xl border border-border bg-card px-0 shadow-none">
+              <AccordionTrigger className="px-5 py-4 hover:no-underline">
                 <div className="flex items-center gap-3">
                   <div className="rounded-md bg-muted p-2 text-foreground/70"><MessageSquare className="h-4 w-4" /></div>
                   <div className="text-left">
@@ -1515,7 +1515,7 @@ export default function AgentSettings() {
                   </div>
                 </div>
               </AccordionTrigger>
-              <AccordionContent className="px-4 pb-6 pt-2">
+              <AccordionContent className="px-5 pb-5 pt-1">
                 <div className="space-y-5">
                   <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                     <div className="space-y-2">
@@ -1584,8 +1584,8 @@ export default function AgentSettings() {
               </AccordionContent>
             </AccordionItem>
 
-            <AccordionItem value="item-2b" className="overflow-hidden rounded-lg border bg-card px-2 shadow-sm">
-              <AccordionTrigger className="px-4 py-5 hover:no-underline">
+            <AccordionItem value="item-2b" className="overflow-hidden rounded-xl border border-border bg-card px-0 shadow-none">
+              <AccordionTrigger className="px-5 py-4 hover:no-underline">
                 <div className="flex items-center gap-3">
                   <div className="rounded-md bg-muted p-2 text-foreground/70"><Palette className="h-4 w-4" /></div>
                   <div className="text-left">
@@ -1594,7 +1594,7 @@ export default function AgentSettings() {
                   </div>
                 </div>
               </AccordionTrigger>
-              <AccordionContent className="px-4 pb-6 pt-2">
+              <AccordionContent className="px-5 pb-5 pt-1">
                 <div className="space-y-5">
                   <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
                     {[
@@ -1729,8 +1729,8 @@ export default function AgentSettings() {
               </AccordionContent>
             </AccordionItem>
 
-            <AccordionItem value="item-3" className="overflow-hidden rounded-lg border bg-card px-2 shadow-sm">
-              <AccordionTrigger className="px-4 py-5 hover:no-underline">
+            <AccordionItem value="item-3" className="overflow-hidden rounded-xl border border-border bg-card px-0 shadow-none">
+              <AccordionTrigger className="px-5 py-4 hover:no-underline">
                 <div className="flex items-center gap-3">
                   <div className="rounded-md bg-muted p-2 text-foreground/70"><Share2 className="h-4 w-4" /></div>
                   <div className="text-left">
@@ -1739,7 +1739,7 @@ export default function AgentSettings() {
                   </div>
                 </div>
               </AccordionTrigger>
-              <AccordionContent className="px-4 pb-6 pt-2">
+              <AccordionContent className="px-5 pb-5 pt-1">
                 <div className="mb-4 rounded-md border border-dashed bg-muted/30 p-3 text-xs text-muted-foreground">
                   Facebook publishing credentials for `M13A` can be stored here. Other live providers remain toggle-only until their milestone slices.
                 </div>
@@ -1908,8 +1908,8 @@ export default function AgentSettings() {
               </AccordionContent>
             </AccordionItem>
 
-            <AccordionItem value="item-4" className="overflow-hidden rounded-lg border bg-card px-2 shadow-sm">
-              <AccordionTrigger className="px-4 py-5 hover:no-underline">
+            <AccordionItem value="item-4" className="overflow-hidden rounded-xl border border-border bg-card px-0 shadow-none">
+              <AccordionTrigger className="px-5 py-4 hover:no-underline">
                 <div className="flex items-center gap-3">
                   <div className="rounded-md bg-muted p-2 text-foreground/70"><GitBranch className="h-4 w-4" /></div>
                   <div className="text-left">
@@ -1918,7 +1918,7 @@ export default function AgentSettings() {
                   </div>
                 </div>
               </AccordionTrigger>
-              <AccordionContent className="px-4 pb-6 pt-2">
+              <AccordionContent className="px-5 pb-5 pt-1">
                 <div className="space-y-6">
                   <div className="space-y-4 rounded-lg border bg-background p-4">
                     <div className="flex items-center justify-between">
@@ -1993,8 +1993,8 @@ export default function AgentSettings() {
               </AccordionContent>
             </AccordionItem>
 
-            <AccordionItem value="item-5" className="overflow-hidden rounded-lg border bg-card px-2 shadow-sm">
-              <AccordionTrigger className="px-4 py-5 hover:no-underline">
+            <AccordionItem value="item-5" className="overflow-hidden rounded-xl border border-border bg-card px-0 shadow-none">
+              <AccordionTrigger className="px-5 py-4 hover:no-underline">
                 <div className="flex items-center gap-3">
                   <div className="rounded-md bg-muted p-2 text-foreground/70"><Target className="h-4 w-4" /></div>
                   <div className="text-left">
@@ -2003,7 +2003,7 @@ export default function AgentSettings() {
                   </div>
                 </div>
               </AccordionTrigger>
-              <AccordionContent className="px-4 pb-6 pt-2">
+              <AccordionContent className="px-5 pb-5 pt-1">
                 <div className="grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2">
                   {[
                     { key: "weekly_signups", label: "Weekly Signups" },
@@ -2027,8 +2027,8 @@ export default function AgentSettings() {
               </AccordionContent>
             </AccordionItem>
 
-            <AccordionItem value="item-5b" className="overflow-hidden rounded-lg border bg-card px-2 shadow-sm">
-              <AccordionTrigger className="px-4 py-5 hover:no-underline">
+            <AccordionItem value="item-5b" className="overflow-hidden rounded-xl border border-border bg-card px-0 shadow-none">
+              <AccordionTrigger className="px-5 py-4 hover:no-underline">
                 <div className="flex items-center gap-3">
                   <div className="rounded-md bg-muted p-2 text-foreground/70"><ShieldCheck className="h-4 w-4" /></div>
                   <div className="text-left">
@@ -2037,7 +2037,7 @@ export default function AgentSettings() {
                   </div>
                 </div>
               </AccordionTrigger>
-              <AccordionContent className="px-4 pb-6 pt-2">
+              <AccordionContent className="px-5 pb-5 pt-1">
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                   <div className="rounded-lg border bg-background p-4">
                     <div className="mb-4 text-sm font-medium">Campaign defaults</div>

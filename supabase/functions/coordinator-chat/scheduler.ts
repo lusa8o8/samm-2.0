@@ -33,6 +33,14 @@ const STALE_RUN_MINUTES = 10
 
 type ChatRole = 'user' | 'coordinator'
 
+export type ConversationMode = 'planning' | 'execution'
+
+const PLANNING_MODE_SUGGESTIONS = [
+  'Help me plan this month',
+  'Add an event or campaign',
+  'What should this month focus on?',
+]
+
 export type ChatHistoryItem = {
   role: ChatRole
   content: string
@@ -82,6 +90,7 @@ type ExplicitSchedulerParams = {
   orgId: string
   userId: string
   message: string
+  mode?: ConversationMode
   confirmationAction?: string | null
   runs: any[]
   memoryContext: DashboardMemoryContext
@@ -101,6 +110,7 @@ type ModelSchedulerParams = {
   orgId: string
   userId: string
   runs: any[]
+  mode?: ConversationMode
   action: SchedulerAction
   fallbackMessage: string
   suggestions: string[]
@@ -138,6 +148,13 @@ function extractWritePostTopic(message: string) {
   }
 
   return ''
+}
+
+function buildPlanningModeExecutionBlockedResponse(target: string): ChatResponse {
+  return {
+    message: `You are in Planning mode, so I will not trigger ${target} yet. I can help you decide whether it belongs in the plan first, explain the tradeoffs, and switch to Execution mode only when you are ready to act.`,
+    suggestions: PLANNING_MODE_SUGGESTIONS,
+  }
 }
 
 function extractRequestedPlatforms(message: string) {
@@ -633,7 +650,7 @@ async function resumePipelineRun(supabase: any, pipeline: PipelineTarget, orgId:
 }
 
 export async function resolveExplicitSchedulerRequest(params: ExplicitSchedulerParams): Promise<ChatResponse | null> {
-  const { supabase, orgId, userId, message, confirmationAction, runs, memoryContext } = params
+  const { supabase, orgId, userId, message, mode = 'execution', confirmationAction, runs, memoryContext } = params
 
   const directPipeline = confirmationAction ? inferPipelineTarget(confirmationAction) : null
   const requestedPipeline = inferPipelineTarget(message)
@@ -654,10 +671,16 @@ export async function resolveExplicitSchedulerRequest(params: ExplicitSchedulerP
   }
 
   if (isResumeRequest && requestedPipeline) {
+    if (mode === 'planning') {
+      return buildPlanningModeExecutionBlockedResponse(`${requestedPipeline.title} resume`)
+    }
     return await resumePipelineRun(supabase, requestedPipeline, orgId, runs)
   }
 
   if (isRunRequest && requestedPipeline && !isExplicitConfirm) {
+    if (mode === 'planning') {
+      return buildPlanningModeExecutionBlockedResponse(requestedPipeline.title)
+    }
     return await schedulePipelineRun(supabase, requestedPipeline, orgId, runs, {
       memoryContext,
       userId,
@@ -674,6 +697,9 @@ export async function resolveExplicitSchedulerRequest(params: ExplicitSchedulerP
   }
 
   if (isExplicitConfirm && directPipeline) {
+    if (mode === 'planning') {
+      return buildPlanningModeExecutionBlockedResponse(directPipeline.title)
+    }
     return await schedulePipelineRun(supabase, directPipeline, orgId, runs, {
       memoryContext,
       userId,
@@ -686,10 +712,14 @@ export async function resolveExplicitSchedulerRequest(params: ExplicitSchedulerP
 }
 
 export async function resolveModelPipelineAction(params: ModelSchedulerParams): Promise<ChatResponse | null> {
-  const { supabase, orgId, userId, runs, action, fallbackMessage, suggestions, eventContext, memoryContext, message } = params
+  const { supabase, orgId, userId, runs, mode = 'execution', action, fallbackMessage, suggestions, eventContext, memoryContext, message } = params
 
   if (!action || action.type !== 'run_pipeline' || !action.pipeline) {
     return null
+  }
+
+  if (mode === 'planning') {
+    return buildPlanningModeExecutionBlockedResponse(action.title ?? action.pipeline)
   }
 
   if (action.needs_confirmation === false) {

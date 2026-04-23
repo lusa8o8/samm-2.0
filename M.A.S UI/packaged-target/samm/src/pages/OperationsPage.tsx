@@ -55,7 +55,7 @@ function OverviewTab({
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         {statusCards.map((card) => (
           <div key={card.label} className={cn("rounded-xl border border-border p-4 flex items-center gap-3", card.bg)}>
@@ -73,7 +73,7 @@ function OverviewTab({
           const isTriggering = triggering === item.id;
           const isBlocked = item.status === "running" || item.status === "waiting_human";
           return (
-            <div key={item.id} className="rounded-xl border border-border bg-card p-4 shadow-sm">
+            <div key={item.id} className="rounded-xl border border-border bg-card p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-foreground">{item.name}</p>
@@ -162,11 +162,7 @@ function OverviewTab({
 }
 
 function ManualTab() {
-  return (
-    <div className="rounded-xl border border-border bg-card">
-      <OperationsManual />
-    </div>
-  );
+  return <OperationsManual />;
 }
 
 function SettingsTab() {

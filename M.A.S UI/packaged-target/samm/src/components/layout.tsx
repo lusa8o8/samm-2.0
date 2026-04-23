@@ -1,30 +1,36 @@
+import { WorkspaceShell, useInspector } from "@/components/shell/WorkspaceShell";
 import type { WorkspaceInspectorPayload } from "@/lib/workspace-adapter";
-import { WorkspaceShell, useInspector } from "./shell/WorkspaceShell";
-import type { WidgetDescriptor } from "../types";
-
-export { WorkspaceShell as Layout };
-
-function fallbackWidget(payload: WorkspaceInspectorPayload): WidgetDescriptor {
-  return {
-    type: "failure_group",
-    title: payload.title,
-    data: payload,
-  };
-}
+import type { WidgetDescriptor } from "@/types";
+import {
+  CalendarStudioWorkflowProvider,
+  useCalendarStudioWorkflow,
+  useRegisterCalendarStudioWorkflow,
+} from "../../../../src/lib/calendar-studio-workflow";
 
 export function useWorkspaceInspector() {
   const { inspector, openInspector, closeInspector } = useInspector();
 
   return {
-    payload: inspector.title
+    payload: inspector.isOpen
       ? {
-          title: inspector.title,
+          title: inspector.title ?? "",
           widget: inspector.widget,
         }
       : null,
     openInspector: (payload: WorkspaceInspectorPayload) => {
-      openInspector(payload.title, (payload.widget as WidgetDescriptor | undefined) ?? fallbackWidget(payload));
+      if (!payload.widget) return;
+      openInspector(payload.title, payload.widget as WidgetDescriptor);
     },
     closeInspector,
   };
 }
+
+export function Layout({ children }: { children: React.ReactNode }) {
+  return (
+    <CalendarStudioWorkflowProvider>
+      <WorkspaceShell>{children}</WorkspaceShell>
+    </CalendarStudioWorkflowProvider>
+  );
+}
+
+export { useCalendarStudioWorkflow, useRegisterCalendarStudioWorkflow };
