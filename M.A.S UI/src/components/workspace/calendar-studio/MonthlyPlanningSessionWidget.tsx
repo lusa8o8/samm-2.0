@@ -86,7 +86,7 @@ export function MonthlyPlanningSessionWidget({ data }: Props) {
               Monthly Planning Session
             </div>
             <h3 className="text-lg font-semibold leading-tight text-foreground">Plan {monthLabel}</h3>
-            <p className="mt-1 text-[12px] text-muted-foreground">Capture intent. SAMM will turn this into calendar truth.</p>
+            <p className="mt-1 text-[12px] text-muted-foreground">Capture intent. samm will turn this into calendar truth.</p>
           </div>
           <span
             className={cn(

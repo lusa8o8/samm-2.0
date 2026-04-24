@@ -1,9 +1,11 @@
 import { useState, createContext, useContext, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
 import { Sidebar } from './Sidebar';
 import { InspectorPanel } from './InspectorPanel';
 import { useModules } from '../../store/moduleStore';
 import type { WidgetDescriptor } from '../../types';
+import { getInboxItems } from '../../services/liveInboxService';
 
 interface WorkspaceShellProps {
   children: React.ReactNode;
@@ -33,8 +35,18 @@ export function useInspector() {
 
 export function WorkspaceShell({ children }: WorkspaceShellProps) {
   const [location] = useLocation();
-  const { enabledModules, modules } = useModules();
+  const { modules } = useModules();
   const [inspector, setInspector] = useState<InspectorState>({ isOpen: false });
+  const { data: inboxItems = [] } = useQuery({
+    queryKey: ['inbox-items'],
+    queryFn: getInboxItems,
+    staleTime: 30_000,
+  });
+
+  const modulesWithBadges = modules.map((module) =>
+    module.id === 'inbox' ? { ...module, badge: inboxItems.length } : module
+  );
+  const enabledModules = modulesWithBadges.filter((module) => module.enabled);
 
   const openInspector = useCallback((title: string, widget: WidgetDescriptor) => {
     setInspector({ isOpen: true, title, widget });
@@ -49,7 +61,7 @@ export function WorkspaceShell({ children }: WorkspaceShellProps) {
       <div className="flex h-screen w-full overflow-hidden bg-background">
         <Sidebar
           enabledModules={enabledModules}
-          allModules={modules}
+          allModules={modulesWithBadges}
           currentPath={location}
         />
         <main className="flex-1 overflow-hidden min-w-0">

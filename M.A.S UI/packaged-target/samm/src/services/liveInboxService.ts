@@ -113,7 +113,7 @@ function getSummary(row: LiveInboxRow, payload: Record<string, any>, type: Inbox
     return "Draft approval is required before content can proceed.";
   }
 
-  if (type === "escalation") return "SAMM flagged this item for human review.";
+  if (type === "escalation") return "samm flagged this item for human review.";
   if (type === "suggestion") return "A suggestion is ready for review.";
   return "Information is available for review.";
 }
@@ -136,7 +136,7 @@ function getRationale(row: LiveInboxRow, payload: Record<string, any>, type: Inb
   }
 
   if (type === "suggestion") {
-    return "SAMM generated a suggested next step based on the current workspace context.";
+    return "samm generated a suggested next step based on the current workspace context.";
   }
 
   return "This item is available for awareness or light follow-up.";

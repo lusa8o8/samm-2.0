@@ -1759,12 +1759,19 @@ export function useUpdateCalendarEvent(options?: MutationHookOptions) {
 export function useDeleteCalendarEvent(options?: MutationHookOptions) {
   return useMutation({
     mutationFn: async ({ id }: { id: string }) => {
-      const { error } = await supabase
+      const { data: deletedRows, error, count } = await supabase
         .from("academic_calendar")
-        .delete()
+        .delete({ count: "exact" })
         .eq("id", id)
-        .eq("org_id", getOrgId());
+        .eq("org_id", getOrgId())
+        .select("id");
       if (error) throw error;
+      if ((count ?? deletedRows?.length ?? 0) < 1) {
+        throw new Error(
+          "No calendar window was deleted. Delete access may be blocked, or the selected window may already be gone.",
+        );
+      }
+      return deletedRows[0];
     },
     ...options?.mutation,
   });

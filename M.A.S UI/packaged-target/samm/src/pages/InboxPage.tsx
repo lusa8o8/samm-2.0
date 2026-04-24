@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { CheckCircle, XCircle, ExternalLink, Filter, MessageSquare, AlertTriangle, Info, CheckSquare } from 'lucide-react';
 import { format } from 'date-fns';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { StatusChip } from '../components/shared/StatusChip';
 import { useInspector } from '../components/shell/WorkspaceShell';
 import { getInboxItems, approveInboxItem, rejectInboxItem, readFunctionError } from '../services/liveInboxService';
@@ -129,28 +130,29 @@ function InboxCard({
 }
 
 export default function InboxPage() {
-  const [items, setItems] = useState<InboxItem[]>([]);
   const [activeTab, setActiveTab] = useState('all');
   const [actionStates, setActionStates] = useState<Record<string, 'approved' | 'rejected'>>({});
   const [error, setError] = useState<string | null>(null);
   const { openInspector } = useInspector();
+  const queryClient = useQueryClient();
+  const {
+    data: items = [],
+    error: inboxQueryError,
+  } = useQuery({
+    queryKey: ['inbox-items'],
+    queryFn: getInboxItems,
+  });
 
-  useEffect(() => {
-    getInboxItems()
-      .then((nextItems) => {
-        setItems(nextItems);
-        setError(null);
-      })
-      .catch(async (err) => {
-        setError(await readFunctionError(err));
-      });
-  }, []);
+  const resolvedQueryError =
+    inboxQueryError instanceof Error ? inboxQueryError.message : inboxQueryError ? 'The request failed.' : null;
 
   const handleApprove = async (id: string) => {
     try {
       await approveInboxItem(id);
       setActionStates(s => ({ ...s, [id]: 'approved' }));
       setError(null);
+      void queryClient.invalidateQueries({ queryKey: ['inbox-items'] });
+      void queryClient.invalidateQueries({ queryKey: ['inbox-summary'] });
     } catch (err) {
       setError(await readFunctionError(err));
     }
@@ -161,6 +163,8 @@ export default function InboxPage() {
       await rejectInboxItem(id);
       setActionStates(s => ({ ...s, [id]: 'rejected' }));
       setError(null);
+      void queryClient.invalidateQueries({ queryKey: ['inbox-items'] });
+      void queryClient.invalidateQueries({ queryKey: ['inbox-summary'] });
     } catch (err) {
       setError(await readFunctionError(err));
     }
@@ -176,6 +180,13 @@ export default function InboxPage() {
 
   const filtered = items.filter(i => activeTab === 'all' || i.type === activeTab);
   const pendingCount = items.filter(i => (i.status === 'pending' || i.status === 'new') && !actionStates[i.id]).length;
+  const totalCount = items.length;
+  const subtitle =
+    totalCount === 0
+      ? 'No inbox items right now'
+      : pendingCount === totalCount
+        ? `${totalCount} item${totalCount !== 1 ? 's' : ''} in inbox`
+        : `${totalCount} item${totalCount !== 1 ? 's' : ''} in inbox · ${pendingCount} need your attention`;
 
   return (
     <div className="flex flex-col h-full">
@@ -184,9 +195,7 @@ export default function InboxPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-semibold text-foreground">Inbox</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              {pendingCount} item{pendingCount !== 1 ? 's' : ''} need your attention
-            </p>
+            <p className="text-sm text-muted-foreground mt-0.5">{subtitle}</p>
           </div>
           <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:bg-muted transition-colors">
             <Filter size={12} /> Filter
@@ -227,9 +236,9 @@ export default function InboxPage() {
 
       {/* Items */}
       <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
-        {error && (
+        {(error || resolvedQueryError) && (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {error}
+            {error ?? resolvedQueryError}
           </div>
         )}
         {filtered.length === 0 && (

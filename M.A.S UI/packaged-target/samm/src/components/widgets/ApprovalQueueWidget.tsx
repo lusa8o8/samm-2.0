@@ -83,7 +83,7 @@ function InboxItemDetail({ item }: { item: InboxItem }) {
 
       <div className="rounded-xl border border-border/60 bg-muted/50 px-4 py-3">
         <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-          SAMM's reasoning
+          samm's reasoning
         </p>
         <p className="text-[12px] italic leading-relaxed text-foreground/80">{item.rationale}</p>
       </div>

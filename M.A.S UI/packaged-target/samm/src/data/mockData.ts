@@ -83,7 +83,7 @@ export const mockInboxItems: InboxItem[] = [
     id: 'inbox-001',
     type: 'approval',
     title: 'Campaign Brief: Spring Sale 2026',
-    summary: 'SAMM has drafted a campaign brief for the Spring Sale starting April 28. 8 content pieces planned across LinkedIn and Instagram.',
+    summary: 'samm has drafted a campaign brief for the Spring Sale starting April 28. 8 content pieces planned across LinkedIn and Instagram.',
     rationale: 'Campaign trigger from calendar event "Spring Sale Launch". Brief was auto-generated from seasonal template + ICP profile.',
     source: 'Pipeline C',
     sourcePipeline: 'C',

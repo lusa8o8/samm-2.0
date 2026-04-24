@@ -104,7 +104,7 @@ export default function MetricsPage() {
             <BarChart2 size={14} className="text-primary" />
           </div>
           <div>
-            <p className="text-sm font-semibold text-foreground">SAMM summary</p>
+            <p className="text-sm font-semibold text-foreground">samm summary</p>
             <p className="text-[13px] text-muted-foreground mt-1 leading-relaxed">
               {summary}
             </p>

@@ -312,7 +312,7 @@ export default function SammPage() {
       <div className="border-b border-border/70 px-4 py-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">SAMM</p>
+            <p className="text-[11px] font-semibold tracking-[0.2em] text-muted-foreground">samm</p>
             <h1 className="mt-1 text-lg font-semibold text-foreground">
               {mode === 'planning' ? 'Plan with samm' : 'Coordinate execution'}
             </h1>
@@ -350,7 +350,7 @@ export default function SammPage() {
               <SammLogo className="h-7 w-7" />
             </div>
             <div>
-              <p className="text-sm font-medium text-foreground">SAMM is ready</p>
+              <p className="text-sm font-medium text-foreground">samm is ready</p>
               <p className="text-xs mt-1">
                 {mode === 'planning'
                   ? 'Use planning mode to shape the month, define campaigns, and mark asset needs.'

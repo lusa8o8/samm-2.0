@@ -682,7 +682,7 @@ export default function CalendarStudioPage() {
                 </button>
               </div>
               <p className="mt-1 text-[12px] text-muted-foreground">
-                Plan the month. Commit it. SAMM turns the rest into deterministic calendar truth.
+                Plan the month. Commit it. samm turns the rest into deterministic calendar truth.
               </p>
             </div>
 
