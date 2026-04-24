@@ -13,6 +13,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -20,6 +30,7 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import {
   useCreateCalendarEvent,
+  useDeleteCalendarEvent,
   useUpdateCalendarEvent,
 } from "@/lib/api";
 import {
@@ -51,6 +62,13 @@ type EventFormData = {
   universities: string[];
   creative_override_allowed: boolean;
   support_content_allowed: boolean;
+};
+
+type DeleteWindowTarget = {
+  id: string;
+  label: string;
+  startDate: string;
+  endDate: string;
 };
 
 const EVENT_TYPE_OPTIONS = [
@@ -286,6 +304,7 @@ export default function CalendarStudioPage() {
   const [createForm, setCreateForm] = useState<EventFormData>(BLANK_FORM);
   const [editWindowId, setEditWindowId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<EventFormData>(BLANK_FORM);
+  const [deleteWindowTarget, setDeleteWindowTarget] = useState<DeleteWindowTarget | null>(null);
   const monthIso = format(monthDate, "yyyy-MM");
   const { data: source, isLoading, isError, error } = useCalendarStudioSourceBundle();
   const { openInspector, closeInspector } = useWorkspaceInspector();
@@ -349,6 +368,29 @@ export default function CalendarStudioPage() {
     },
   });
 
+  const deleteMutation = useDeleteCalendarEvent({
+    mutation: {
+      onSuccess: () => {
+        const deletedLabel = deleteWindowTarget?.label ?? "Campaign window";
+        invalidateStudio();
+        closeInspector();
+        setDeleteWindowTarget(null);
+        setEditWindowId(null);
+        toast({
+          title: "Campaign window deleted",
+          description: `${deletedLabel} has been removed from Calendar Studio.`,
+        });
+      },
+      onError: (nextError: unknown) => {
+        toast({
+          title: "Could not delete the campaign window",
+          description: nextError instanceof Error ? nextError.message : "Unknown error",
+          variant: "destructive",
+        });
+      },
+    },
+  });
+
   const openCreateDialog = useCallback((initial?: Partial<EventFormData>) => {
     setCreateForm({
       ...BLANK_FORM,
@@ -383,6 +425,26 @@ export default function CalendarStudioPage() {
       support_content_allowed: Boolean(window.row.support_content_allowed),
     });
     setEditWindowId(window.eventId);
+  }, [source, toast]);
+
+  const requestDeleteWindow = useCallback((windowId: string) => {
+    if (!source) return;
+    const window = source.windows.find((item) => item.eventId === windowId || item.id === windowId);
+    if (!window) {
+      toast({
+        title: "Campaign window not found",
+        description: "The selected campaign could not be matched to a live calendar rule.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setDeleteWindowTarget({
+      id: window.eventId,
+      label: window.label,
+      startDate: window.startDate,
+      endDate: window.endDate,
+    });
   }, [source, toast]);
 
   const handoffToSamm = useCallback((
@@ -475,6 +537,27 @@ export default function CalendarStudioPage() {
                 description: "This day has no campaign rules yet, so start by creating a key date or campaign window.",
               });
             },
+            deleteWindowForDay: (data: CalendarDayPanelViewData) => {
+              if (!data.campaignContext?.id) {
+                toast({
+                  title: "Nothing to delete here",
+                  description: "This day does not currently belong to a committed calendar window.",
+                  variant: "destructive",
+                });
+                return;
+              }
+
+              if (data.date !== data.campaignContext.eventDate) {
+                toast({
+                  title: "Delete from the actual campaign day",
+                  description: `This window can only be deleted from ${format(new Date(data.campaignContext.eventDate), "MMMM d, yyyy")}, not from a lead-window day.`,
+                  variant: "destructive",
+                });
+                return;
+              }
+
+              requestDeleteWindow(data.campaignContext.id);
+            },
             createDraftsForCampaign: (data: CampaignPanelViewData) => {
               const prompt = `Create drafts for the ${data.name} campaign window from ${format(new Date(data.startDate), "MMMM d")} to ${format(new Date(data.endDate), "MMMM d, yyyy")} using the committed campaign rules.`;
               handoffToSamm(
@@ -504,7 +587,7 @@ export default function CalendarStudioPage() {
             },
           }
         : null,
-    [source, planningSession, closeInspector, toast, openCreateDialog, handoffToSamm, openEditDialog],
+    [source, planningSession, closeInspector, toast, openCreateDialog, handoffToSamm, openEditDialog, requestDeleteWindow],
   );
 
   useRegisterCalendarStudioWorkflow(workflowActions);
@@ -681,6 +764,37 @@ export default function CalendarStudioPage() {
           />
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={Boolean(deleteWindowTarget)}
+        onOpenChange={(open) => {
+          if (!open) setDeleteWindowTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this campaign window?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteWindowTarget
+                ? `${deleteWindowTarget.label} will be removed from ${format(new Date(deleteWindowTarget.startDate), "MMMM d, yyyy")} to ${format(new Date(deleteWindowTarget.endDate), "MMMM d, yyyy")}. Days in that range will become open again, and future draft creation will stop using this window.`
+                : "This removes the committed calendar window and reopens the affected days."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteMutation.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deleteMutation.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (!deleteWindowTarget) return;
+                deleteMutation.mutate({ id: deleteWindowTarget.id });
+              }}
+            >
+              {deleteMutation.isPending ? "Deleting..." : "Delete window"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

@@ -67,6 +67,7 @@ export interface CalendarDayPanelViewData extends CalendarDayCellViewData {
     id: string;
     name: string;
     objective: string;
+    eventDate: string;
     exclusivity: "exclusive" | "allows_support";
   };
   supportContentAllowed: boolean;

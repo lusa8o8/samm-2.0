@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { format } from "date-fns";
-import { AlertTriangle, CalendarDays, Lock, Plus, Sliders, Unlock, Wand2 } from "lucide-react";
+import { AlertTriangle, CalendarDays, Lock, Plus, Sliders, Trash2, Unlock, Wand2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { CalendarDayPanelViewData } from "@/components/workspace/calendar-studio/types";
 import { ContentCapacityBar } from "@/components/workspace/shared/ContentCapacityBar";
@@ -44,6 +44,7 @@ export function CalendarDayPanel({ data }: Props) {
   const colorClasses = data.campaignColor ? campaignColorClasses[data.campaignColor] : null;
   const dateObj = new Date(data.date);
   const workflow = useCalendarStudioWorkflow();
+  const canDeleteWindow = Boolean(context && data.date === context.eventDate);
 
   return (
     <div className="space-y-5">
@@ -207,6 +208,15 @@ export function CalendarDayPanel({ data }: Props) {
         >
           <Sliders size={12} /> Edit rules
         </button>
+        {canDeleteWindow ? (
+          <button
+            type="button"
+            onClick={() => workflow.deleteWindowForDay?.(data)}
+            className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-[11px] font-medium leading-none text-red-600 transition-colors hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/30"
+          >
+            <Trash2 size={12} /> Delete window
+          </button>
+        ) : null}
       </div>
     </div>
   );

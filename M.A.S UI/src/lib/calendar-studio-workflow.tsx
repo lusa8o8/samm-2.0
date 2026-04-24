@@ -13,6 +13,7 @@ export interface CalendarStudioWorkflowActions {
   createDraftsForDay?: (data: CalendarDayPanelViewData) => void;
   addManualForDay?: (data: CalendarDayPanelViewData) => void;
   editRulesForDay?: (data: CalendarDayPanelViewData) => void;
+  deleteWindowForDay?: (data: CalendarDayPanelViewData) => void;
   createDraftsForCampaign?: (data: CampaignPanelViewData) => void;
   editCampaignRules?: (data: CampaignPanelViewData) => void;
   updateAssetStatus?: (data: AssetReadinessRecordViewData, intent?: "mark_ready" | "request_assets" | "update_notes") => void;
@@ -45,6 +46,7 @@ export function CalendarStudioWorkflowProvider({ children }: { children: ReactNo
       createDraftsForDay: (data) => actionsRef.current.createDraftsForDay?.(data),
       addManualForDay: (data) => actionsRef.current.addManualForDay?.(data),
       editRulesForDay: (data) => actionsRef.current.editRulesForDay?.(data),
+      deleteWindowForDay: (data) => actionsRef.current.deleteWindowForDay?.(data),
       createDraftsForCampaign: (data) => actionsRef.current.createDraftsForCampaign?.(data),
       editCampaignRules: (data) => actionsRef.current.editCampaignRules?.(data),
       updateAssetStatus: (data, intent) => actionsRef.current.updateAssetStatus?.(data, intent),

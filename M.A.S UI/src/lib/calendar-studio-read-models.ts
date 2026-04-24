@@ -690,6 +690,7 @@ export function buildCalendarStudioDayDetail(source: CalendarStudioSourceBundle,
           id: primaryWindow.eventId,
           name: primaryWindow.label,
           objective: primaryWindow.objective,
+          eventDate: primaryWindow.startDate,
           exclusivity: primaryWindow.exclusivity,
         }
       : undefined,
