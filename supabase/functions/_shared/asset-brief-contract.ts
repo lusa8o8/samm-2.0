@@ -102,6 +102,7 @@ export interface CanonicalAssetSpec {
   intent: PlanningIntent
   asset_need: AssetNeed
   brief_type: AssetBriefType | null
+  post_title?: string | null
   objective: string
   audience: string
   message: string
@@ -120,6 +121,7 @@ export interface CanonicalAssetSpec {
 export interface DraftAssetRequest {
   intent: PlanningIntent
   topic: string
+  post_title?: string | null
   scheduled_for?: string | null
   platforms?: string[] | null
   event_ref?: string | null

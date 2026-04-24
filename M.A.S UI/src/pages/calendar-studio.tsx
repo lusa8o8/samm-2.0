@@ -68,6 +68,7 @@ type EventFormData = {
 
 type OneTimePostFormData = {
   scheduled_for: string;
+  title: string;
   topic: string;
   platform: "all" | "facebook" | "whatsapp" | "youtube" | "email";
   asset_need: "none" | "static" | "carousel" | "video";
@@ -105,6 +106,7 @@ const BLANK_FORM: EventFormData = {
 
 const BLANK_ONE_TIME_POST_FORM: OneTimePostFormData = {
   scheduled_for: new Date().toISOString().split("T")[0],
+  title: "",
   topic: "",
   platform: "all",
   asset_need: "none",
@@ -255,7 +257,7 @@ function EventForm({
       </div>
 
       <div className="space-y-2">
-        <Label>Label / Description</Label>
+        <Label>Theme / title</Label>
         <Input
           value={value.label}
           onChange={(event) => onChange({ ...value, label: event.target.value })}
@@ -343,6 +345,20 @@ function OneTimePostForm({
           onChange={(event) => onChange({ ...value, scheduled_for: event.target.value })}
           required
         />
+      </div>
+
+      <div className="space-y-2">
+        <Label>
+          Theme / title <span className="text-muted-foreground">(optional)</span>
+        </Label>
+        <Input
+          value={value.title}
+          onChange={(event) => onChange({ ...value, title: event.target.value })}
+          placeholder="e.g. Graduation reminder"
+        />
+        <p className="text-[11px] text-muted-foreground">
+          This gives the draft a clean internal name. If you leave it blank, samm will derive one from the final headline.
+        </p>
       </div>
 
       <div className="space-y-2">
@@ -575,6 +591,7 @@ export default function CalendarStudioPage() {
     setManualOneTimeForm({
       ...BLANK_ONE_TIME_POST_FORM,
       scheduled_for: day.date,
+      title: "",
       event_ref: day.campaignContext?.id ?? null,
       campaign_name: day.campaignContext?.name ?? null,
     });
@@ -944,6 +961,7 @@ export default function CalendarStudioPage() {
                 event.preventDefault();
                 createOneTimePostMutation.mutate({
                   topic: manualOneTimeForm.topic.trim(),
+                  postTitle: manualOneTimeForm.title.trim() || null,
                   scheduledFor: manualOneTimeForm.scheduled_for,
                   platforms: manualOneTimeForm.platform === "all" ? null : [manualOneTimeForm.platform],
                   eventRef: manualOneTimeForm.event_ref,

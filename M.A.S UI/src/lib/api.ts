@@ -1877,6 +1877,7 @@ type CreateOneTimePostAction = {
   platforms: string[] | null;
   event_ref: string | null;
   asset_need: OneTimePostAssetNeed;
+  post_title?: string | null;
   title?: string;
   description?: string;
 };
@@ -1972,12 +1973,14 @@ export function useCreateOneTimePost(options?: MutationHookOptions) {
   return useMutation({
     mutationFn: async ({
       topic,
+      postTitle = null,
       scheduledFor,
       platforms = null,
       eventRef = null,
       assetNeed = "none",
     }: {
       topic: string;
+      postTitle?: string | null;
       scheduledFor: string;
       platforms?: string[] | null;
       eventRef?: string | null;
@@ -1995,7 +1998,8 @@ export function useCreateOneTimePost(options?: MutationHookOptions) {
             platforms,
             event_ref: eventRef,
             asset_need: assetNeed,
-            title: "Create one-time post",
+            post_title: postTitle,
+            title: postTitle ?? "Create one-time post",
             description: topic,
           },
         });

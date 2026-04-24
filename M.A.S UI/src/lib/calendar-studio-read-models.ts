@@ -372,9 +372,11 @@ function getBucketDate(row: CalendarStudioContentRow) {
 }
 
 function getContentTitle(row: CalendarStudioContentRow) {
+  const metadata = asRecord(row.metadata);
   return (
     safeString(row.subject_line) ??
     safeString(row.campaign_name) ??
+    safeString(metadata.title) ??
     safeString(row.platform)?.replace(/_/g, " ") ??
     "Content item"
   );

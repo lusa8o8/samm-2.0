@@ -184,6 +184,7 @@ function buildOneTimeAssetSpec(
     intent: request.intent,
     asset_need: request.asset_need,
     brief_type: briefType,
+    post_title: request.post_title ?? canonical.headline,
     objective: request.topic,
     audience: String(brandVoice.target_audience ?? 'the audience defined in brand voice'),
     message: canonical.core_body,
@@ -207,6 +208,7 @@ function buildOneTimeAssetSpec(
 function renderAssetBrief(spec: CanonicalAssetSpec): string {
   const lines = [
     `One-time asset brief (${spec.asset_need})`,
+    spec.post_title ? `Title: ${spec.post_title}` : null,
     `Objective: ${spec.objective}`,
     `Audience: ${spec.audience}`,
     `Message: ${spec.message}`,
@@ -348,6 +350,7 @@ Deno.serve(async (req) => {
       ? payload.platforms
       : DEFAULT_PLATFORMS
     const eventRef: string | null = payload?.event_ref ? String(payload.event_ref) : null
+    const postTitle = payload?.post_title ? String(payload.post_title).trim() : null
     const scheduledForInput = payload?.scheduled_for ?? payload?.scheduledFor ?? null
     const scheduledFor = normalizeScheduledFor(scheduledForInput)
     const providedAssetNeed = payload?.asset_need ?? payload?.assetNeed ?? null
@@ -374,6 +377,7 @@ Deno.serve(async (req) => {
     const request: DraftAssetRequest = {
       intent: PLANNING_INTENT.ONE_TIME,
       topic,
+      post_title: postTitle,
       scheduled_for: scheduledFor,
       platforms,
       event_ref: eventRef,
@@ -385,6 +389,7 @@ Deno.serve(async (req) => {
 
     const canonical = await runCanonicalCopy(anthropic, topic, scheduledFor, eventRef, brandVoice)
     console.log(`Canonical headline locked: "${canonical.headline}"`)
+    const workingTitle = postTitle || canonical.headline
 
     const assets = await runPlatformAdapters(anthropic, topic, canonical, platforms, scheduledFor, brandVoice)
     console.log(`${assets.length} platform drafts produced`)
@@ -406,6 +411,7 @@ Deno.serve(async (req) => {
             owner_pipeline: 'pipeline-d-post',
             purpose: 'one_time',
             content_type: 'one_time_post',
+            title: workingTitle,
             scheduled_for: scheduledFor,
             event_ref: eventRef,
             asset_need: assetNeed,
@@ -435,6 +441,7 @@ Deno.serve(async (req) => {
             owner_pipeline: 'pipeline-d-post',
             purpose: 'one_time',
             content_type: 'design_brief',
+            title: workingTitle,
             scheduled_for: scheduledFor,
             event_ref: eventRef,
             asset_need: assetNeed,

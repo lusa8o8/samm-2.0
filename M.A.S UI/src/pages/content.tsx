@@ -98,6 +98,11 @@ function getContentType(item: { platform: string; subject_line?: string | null }
   return { label: "Text post", icon: FileText };
 }
 
+function getWorkingTitle(item: { subject_line?: string | null; metadata?: Record<string, unknown> | null; platform: string }) {
+  const metadataTitle = typeof item.metadata?.title === "string" ? item.metadata.title.trim() : "";
+  return item.subject_line || metadataTitle || PLATFORM_LABELS[item.platform] || item.platform;
+}
+
 interface ContentCardProps {
   item: ContentItem;
   isExpanded: boolean;
@@ -152,11 +157,12 @@ function ContentCard({
   const draftedAt = item.created_at ? new Date(item.created_at) : null;
   const updatedAt = item.updated_at ? new Date(item.updated_at) : null;
   const isFreshDraft = isDraft && draftedAt ? Date.now() - draftedAt.getTime() < 2 * 60 * 60 * 1000 : false;
+  const workingTitle = getWorkingTitle(item);
   const inspectorPayload = createInspectorPayload(
-    item.subject_line || PLATFORM_LABELS[item.platform] || item.platform,
+    workingTitle,
     {
       type: item.platform === "design_brief" ? "campaign_brief" : "linked_content_list",
-      title: item.subject_line || PLATFORM_LABELS[item.platform] || item.platform,
+      title: workingTitle,
       data: item,
     },
     `${PLATFORM_LABELS[item.platform] || item.platform} content item in ${item.status} state`
@@ -191,7 +197,7 @@ function ContentCard({
                 </span>
               )}
             </div>
-            {item.subject_line && <p className="mt-0.5 truncate text-sm font-medium">{item.subject_line}</p>}
+            {workingTitle && <p className="mt-0.5 truncate text-sm font-medium">{workingTitle}</p>}
           </div>
         </div>
 

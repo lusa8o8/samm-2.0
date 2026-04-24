@@ -90,15 +90,19 @@ function toApprovalStatus(row: LiveContentRow): ContentDraft["approvalStatus"] |
 
 function getPreview(row: LiveContentRow) {
   const preview = stripMarkdown(row.body);
+  const title = typeof row.metadata?.title === "string" ? row.metadata.title.trim() : "";
   if (preview) return preview;
   if (row.subject_line) return row.subject_line;
+  if (title) return title;
   if (row.campaign_name) return row.campaign_name;
   return "No content preview available.";
 }
 
 function getTitle(row: LiveContentRow) {
   const platform = row.platform ?? "content";
+  const title = typeof row.metadata?.title === "string" ? row.metadata.title.trim() : "";
   if (row.subject_line) return row.subject_line;
+  if (title) return title;
   if (row.campaign_name && platform === "design_brief") return `${row.campaign_name} Design Brief`;
   if (row.campaign_name) return `${row.campaign_name} ${platform}`;
   return `${platform.replace(/_/g, " ")} draft`;

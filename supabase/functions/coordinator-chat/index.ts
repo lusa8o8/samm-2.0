@@ -48,6 +48,7 @@ const TRANSIENT_MODEL_ERROR_MESSAGE = 'samm is temporarily busy right now. Pleas
 
 type PipelineDRequestIntent = {
   topic: string
+  post_title?: string | null
   platforms: string[] | null
   event_ref: string | null
   scheduled_for?: string | null
@@ -169,6 +170,9 @@ function buildWritePostResponse(
   const postBody: Record<string, unknown> = {
     intent: PLANNING_INTENT.ONE_TIME,
     topic: intent.topic,
+  }
+  if (intent.post_title) {
+    postBody.post_title = intent.post_title
   }
   if (Array.isArray(intent.platforms) && intent.platforms.length > 0) {
     postBody.platforms = intent.platforms
@@ -313,12 +317,14 @@ Deno.serve(async (req) => {
       }
 
       const assetNeed = normalizeAssetNeed(explicitAction.asset_need)
+      const postTitle = explicitAction.post_title ? String(explicitAction.post_title).trim() : null
       return jsonResponse(
         buildWritePostResponse(
           supabase,
           orgId,
           {
             topic,
+            post_title: postTitle,
             platforms: Array.isArray(explicitAction.platforms)
               ? explicitAction.platforms.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
               : null,
@@ -415,7 +421,7 @@ Deno.serve(async (req) => {
 ActionObject is one of:
 - {"type":"run_pipeline","pipeline":"pipeline-a-engagement"|"pipeline-b-weekly"|"pipeline-c-campaign"|"coordinator","needs_confirmation": boolean, "title": string, "description": string}
 - {"type":"write_post","topic": string, "platforms": string[]|null, "event_ref": string|null, "title": string, "description": string}
-- {"type":"create_one_time_post","topic": string, "scheduled_for": "YYYY-MM-DD"|null, "platforms": string[]|null, "event_ref": string|null, "asset_need": "none"|"static"|"carousel"|"video"|"design_brief", "title": string, "description": string}
+- {"type":"create_one_time_post","topic": string, "post_title"?: string|null, "scheduled_for": "YYYY-MM-DD"|null, "platforms": string[]|null, "event_ref": string|null, "asset_need": "none"|"static"|"carousel"|"video"|"design_brief", "title": string, "description": string}
 - {"type":"create_calendar_event","label": string, "event_date": "YYYY-MM-DD", "event_type": "launch"|"promotion"|"seasonal"|"community"|"deadline"|"other", "universities": string[], "run_pipeline_c": boolean, "needs_confirmation": boolean, "title": string, "description": string}
 - {"type":"edit_calendar_event","event_id": string, "label"?: string, "event_date"?: string, "event_type"?: string, "needs_confirmation": boolean, "title": string, "description": string}
 - {"type":"delete_calendar_event","event_id": string, "label": string, "needs_confirmation": boolean, "title": string, "description": string}
@@ -433,6 +439,7 @@ Rules:
 - Only propose run_pipeline when the user is clearly asking to run or trigger a full pipeline with no event creation involved.
 - Use write_post when the user asks to write, draft, or create a single post or message about a topic. This is NOT a campaign — no brief, no CEO gate, no research. Extract the topic from the user message. platforms defaults to null (all platforms). event_ref is optional context. write_post never requires confirmation — it is fast and reversible.
 - Use create_one_time_post when the user asks for a standalone non-campaign post that should land on a specific date, appear in the calendar, or include a visual asset brief. Infer the date relative to today ${today} when needed. Set scheduled_for to null if no date is given. Set asset_need to one of none, static, carousel, video, or design_brief. Do not create an academic_calendar event for a one-time post.
+  - If the user provides a clear working title or theme, pass it as post_title. Otherwise omit it.
 - Use create_calendar_event when the user asks to schedule, add, or create a calendar event.
   - Infer the date from the user message (e.g. "next Friday" relative to today ${today}).
   - Preserve the user's event label as closely as possible. Do not rewrite it into a campus, university, or student-themed event unless the user explicitly asked for that.
@@ -632,6 +639,7 @@ Rules:
           orgId,
           {
             topic,
+            post_title: action.post_title ? String(action.post_title).trim() : null,
             platforms: Array.isArray(action.platforms) ? action.platforms : null,
             event_ref: action.event_ref ? String(action.event_ref) : null,
             scheduled_for: scheduledForRaw,
