@@ -523,6 +523,7 @@ function buildCalendarDayCell(source: CalendarStudioSourceBundle, dayKey: string
     isCurrentMonth: format(parseISO(dayKey), "yyyy-MM") === format(parseMonthIso(monthIso), "yyyy-MM"),
     ownership: buildDayOwnershipMode(activeWindows, dayRows),
     campaignId: primaryWindow?.eventId,
+    campaignEventDate: primaryWindow?.startDate,
     campaignName: primaryWindow?.label,
     campaignColor: primaryWindow?.color,
     ownerPipeline: primaryWindow?.ownerPipeline,

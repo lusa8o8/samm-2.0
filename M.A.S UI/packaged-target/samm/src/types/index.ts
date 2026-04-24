@@ -21,7 +21,7 @@ export interface Module {
 export type PipelineId = 'A' | 'B' | 'C' | 'D' | 'publish';
 export type RunStatus = 'running' | 'waiting_human' | 'failed' | 'completed' | 'scheduled';
 export type ContentStatus = 'draft' | 'scheduled' | 'published' | 'failed' | 'rejected';
-export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'actioned';
 export type Priority = 'high' | 'medium' | 'low';
 export type Channel = 'linkedin' | 'twitter' | 'instagram' | 'email' | 'facebook' | 'whatsapp' | 'youtube' | 'design_brief';
 export type ContentType = 'post' | 'story' | 'article' | 'email' | 'reel';

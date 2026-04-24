@@ -31,20 +31,23 @@ function InboxCard({
   actionState,
 }: {
   item: InboxItem;
-  onApprove: (id: string) => void;
+  onApprove: (item: InboxItem) => void;
   onReject: (id: string) => void;
   onInspect: (item: InboxItem) => void;
-  actionState?: 'approved' | 'rejected';
+  actionState?: 'approved' | 'rejected' | 'actioned';
 }) {
-  const isPending = !actionState && (item.status === 'pending' || item.status === 'new');
+  const effectiveStatus = actionState ?? item.status;
+  const isActionable = effectiveStatus === 'pending' || effectiveStatus === 'new';
+  const statusLabel = effectiveStatus === 'actioned' ? 'seen' : undefined;
 
   return (
     <div
       className={cn(
         'bg-card border border-border rounded-xl p-4 space-y-3 transition-all',
-        actionState === 'approved' && 'opacity-60 border-emerald-200 dark:border-emerald-900/50',
-        actionState === 'rejected' && 'opacity-60 border-red-200 dark:border-red-900/50',
-        !actionState && 'hover:border-border/80 hover:shadow-sm'
+        effectiveStatus === 'approved' && 'opacity-60 border-emerald-200 dark:border-emerald-900/50',
+        effectiveStatus === 'rejected' && 'opacity-60 border-red-200 dark:border-red-900/50',
+        effectiveStatus === 'actioned' && 'opacity-60 border-slate-200 dark:border-slate-800/50',
+        isActionable && 'hover:border-border/80 hover:shadow-sm'
       )}
       data-testid={`inbox-item-${item.id}`}
     >
@@ -58,10 +61,7 @@ function InboxCard({
         </div>
         <div className="flex items-center gap-1.5 flex-shrink-0">
           <StatusChip status={item.priority} />
-          {actionState
-            ? <StatusChip status={actionState} />
-            : <StatusChip status={item.status as never} />
-          }
+          <StatusChip status={effectiveStatus as never} label={statusLabel} />
         </div>
       </div>
 
@@ -72,10 +72,10 @@ function InboxCard({
       </div>
 
       <div className="flex items-center gap-2 pt-1">
-        {!actionState && item.type === 'approval' && (
+        {isActionable && item.type === 'approval' && (
           <>
             <button
-              onClick={() => onApprove(item.id)}
+              onClick={() => onApprove(item)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 text-xs font-medium hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors"
               data-testid={`approve-${item.id}`}
             >
@@ -90,10 +90,10 @@ function InboxCard({
             </button>
           </>
         )}
-        {!actionState && item.type === 'suggestion' && (
+        {isActionable && item.type === 'suggestion' && (
           <>
             <button
-              onClick={() => onApprove(item.id)}
+              onClick={() => onApprove(item)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 text-primary border border-primary/30 text-xs font-medium hover:bg-primary/20 transition-colors"
               data-testid={`approve-suggestion-${item.id}`}
             >
@@ -108,9 +108,9 @@ function InboxCard({
             </button>
           </>
         )}
-        {!actionState && (item.type === 'escalation' || item.type === 'fyi') && (
+        {isActionable && (item.type === 'escalation' || item.type === 'fyi') && (
           <button
-            onClick={() => onApprove(item.id)}
+            onClick={() => onApprove(item)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-card text-muted-foreground border border-border text-xs font-medium hover:bg-muted transition-colors"
             data-testid={`dismiss-${item.id}`}
           >
@@ -131,7 +131,7 @@ function InboxCard({
 
 export default function InboxPage() {
   const [activeTab, setActiveTab] = useState('all');
-  const [actionStates, setActionStates] = useState<Record<string, 'approved' | 'rejected'>>({});
+  const [actionStates, setActionStates] = useState<Record<string, 'approved' | 'rejected' | 'actioned'>>({});
   const [error, setError] = useState<string | null>(null);
   const { openInspector } = useInspector();
   const queryClient = useQueryClient();
@@ -146,10 +146,13 @@ export default function InboxPage() {
   const resolvedQueryError =
     inboxQueryError instanceof Error ? inboxQueryError.message : inboxQueryError ? 'The request failed.' : null;
 
-  const handleApprove = async (id: string) => {
+  const handleApprove = async (item: InboxItem) => {
     try {
-      await approveInboxItem(id);
-      setActionStates(s => ({ ...s, [id]: 'approved' }));
+      await approveInboxItem(item.id);
+      setActionStates((s) => ({
+        ...s,
+        [item.id]: item.type === 'escalation' || item.type === 'fyi' ? 'actioned' : 'approved',
+      }));
       setError(null);
       void queryClient.invalidateQueries({ queryKey: ['inbox-items'] });
       void queryClient.invalidateQueries({ queryKey: ['inbox-summary'] });

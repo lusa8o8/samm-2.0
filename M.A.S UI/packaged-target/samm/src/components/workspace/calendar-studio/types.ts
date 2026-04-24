@@ -53,6 +53,7 @@ export interface CalendarDayCellViewData {
   isCurrentMonth: boolean;
   ownership: DayOwnershipMode;
   campaignId?: string;
+  campaignEventDate?: string;
   campaignName?: string;
   campaignColor?: CampaignColor;
   ownerPipeline?: WorkspacePipelineId;

@@ -64,6 +64,8 @@ function toStatus(value?: string | null): InboxItem["status"] {
       return "approved";
     case "rejected":
       return "rejected";
+    case "actioned":
+      return "actioned";
     case "new":
       return "new";
     default:

@@ -1,17 +1,45 @@
 // supabase/functions/pipeline-d-post/index.ts
 // ---------------------------------------------------------------------
 // Pipeline D - One-Off Post
-// Lightweight utility for ad-hoc "write a post about X" requests.
-// No research, no brief, no CEO gate, no monitor, no pipeline_runs row.
-// Flow: topic -> canonical copy -> parallel platform adapters -> Content Registry drafts
+// Lightweight utility for ad-hoc one-time posts.
+// No research, no CEO gate, no monitor, no pipeline_runs row.
+// Flow: topic -> canonical copy -> parallel platform adapters
+//      -> optional asset brief spec -> Content Registry drafts
 // Designed to complete in < 10 seconds.
 // ---------------------------------------------------------------------
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import {
+  ASSET_NEED,
+  PLANNING_INTENT,
+  buildDefaultExternalGeneration,
+  getDefaultBriefType,
+  normalizeAssetNeed,
+  shouldGenerateDesignBrief,
+  type AssetNeed,
+  type AssetSlideSpec,
+  type AssetStoryboardFrame,
+  type AssetTarget,
+  type CanonicalAssetSpec,
+  type DraftAssetRequest,
+} from '../_shared/asset-brief-contract.ts'
 import { getIntegrationDefinition } from '../_shared/integration-registry.ts'
 import { createAnthropicClient, generateJsonWithAnthropic, generateTextWithAnthropic } from '../_shared/llm-client.ts'
 
 const DEFAULT_PLATFORMS = ['facebook', 'whatsapp', 'youtube', 'email']
+const PLATFORM_DIMENSIONS: Record<string, string> = {
+  facebook: '1080x1080',
+  whatsapp: '1080x1920',
+  youtube: '1080x1920',
+  email: '1200x628',
+}
+
+type CanonicalCopy = {
+  headline: string
+  core_body: string
+  exact_cta: string
+  key_fact: string
+}
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -54,13 +82,167 @@ Good post example: "${brandVoice.example_good_post ?? brandVoice.good_post_examp
 Bad post example: "${brandVoice.example_bad_post ?? brandVoice.bad_post_example ?? ''}"${hashtagLine}${formatLine}`
 }
 
+function normalizeScheduledFor(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return null
+
+  const parsed = new Date(`${trimmed}T00:00:00.000Z`)
+  return Number.isNaN(parsed.getTime()) ? null : trimmed
+}
+
+function toScheduledAt(date: string | null): string | null {
+  return date ? `${date}T09:00:00.000Z` : null
+}
+
+function buildAssetTargets(platforms: string[]): AssetTarget[] {
+  return platforms.map((platform) => ({
+    platform,
+    dimensions: PLATFORM_DIMENSIONS[platform] ?? null,
+  }))
+}
+
+function buildCarouselSlides(canonical: CanonicalCopy, topic: string): AssetSlideSpec[] {
+  return [
+    {
+      slide_number: 1,
+      role: 'hook',
+      headline: canonical.headline,
+      supporting_copy: topic,
+      visual_direction: 'Use the strongest opening visual to establish context immediately.',
+    },
+    {
+      slide_number: 2,
+      role: 'detail',
+      headline: 'What matters most',
+      supporting_copy: canonical.core_body,
+      visual_direction: 'Keep the middle slide informative and easy to scan.',
+    },
+    {
+      slide_number: 3,
+      role: 'proof',
+      headline: 'Key takeaway',
+      supporting_copy: canonical.key_fact,
+      visual_direction: 'Highlight the single most useful or credible detail.',
+    },
+    {
+      slide_number: 4,
+      role: 'cta',
+      headline: canonical.exact_cta,
+      supporting_copy: 'End with a clear instruction or next step.',
+      visual_direction: 'Close with a decisive CTA and clean spacing.',
+    },
+  ]
+}
+
+function buildVideoStoryboard(
+  canonical: CanonicalCopy,
+  topic: string,
+  scheduledFor: string | null,
+): AssetStoryboardFrame[] {
+  return [
+    {
+      frame_number: 1,
+      timestamp_hint: '0-3s',
+      scene_prompt: `Open with a strong scene that immediately communicates ${topic}.`,
+      on_screen_text: canonical.headline,
+    },
+    {
+      frame_number: 2,
+      timestamp_hint: '3-7s',
+      scene_prompt: 'Show the core detail or benefit in motion with simple, readable composition.',
+      voiceover_line: canonical.core_body,
+      on_screen_text: canonical.key_fact,
+    },
+    {
+      frame_number: 3,
+      timestamp_hint: '7-10s',
+      scene_prompt: 'Close with the clearest possible call to action and a final branded frame.',
+      on_screen_text: `${canonical.exact_cta}${scheduledFor ? ` - ${scheduledFor}` : ''}`,
+    },
+  ]
+}
+
+function buildOneTimeAssetSpec(
+  request: DraftAssetRequest,
+  canonical: CanonicalCopy,
+  brandVoice: any,
+): CanonicalAssetSpec {
+  const briefType = getDefaultBriefType(request.intent, request.asset_need)
+  const slides = request.asset_need === ASSET_NEED.CAROUSEL
+    ? buildCarouselSlides(canonical, request.topic)
+    : null
+  const storyboard = request.asset_need === ASSET_NEED.VIDEO
+    ? buildVideoStoryboard(canonical, request.topic, request.scheduled_for ?? null)
+    : null
+  const neverSay = Array.isArray(brandVoice.never_say)
+    ? brandVoice.never_say.filter((value: unknown): value is string => typeof value === 'string' && value.trim().length > 0)
+    : null
+
+  return {
+    version: 'v1',
+    intent: request.intent,
+    asset_need: request.asset_need,
+    brief_type: briefType,
+    objective: request.topic,
+    audience: String(brandVoice.target_audience ?? 'the audience defined in brand voice'),
+    message: canonical.core_body,
+    cta: canonical.exact_cta,
+    scheduled_for: request.scheduled_for ?? null,
+    event_ref: request.event_ref ?? null,
+    campaign_label: request.campaign_label ?? null,
+    targets: buildAssetTargets(request.platforms ?? DEFAULT_PLATFORMS),
+    brand_rules: {
+      tone: brandVoice.tone ?? null,
+      must_include: [canonical.key_fact, canonical.exact_cta].filter(Boolean),
+      must_avoid: neverSay,
+    },
+    notes_for_generation: 'Rendering remains external. Produce the asset in Canva, Higgsfield, or another external tool, then return the finished asset to the content workflow.',
+    slides,
+    storyboard,
+    external_generation: buildDefaultExternalGeneration(request.asset_need),
+  }
+}
+
+function renderAssetBrief(spec: CanonicalAssetSpec): string {
+  const lines = [
+    `One-time asset brief (${spec.asset_need})`,
+    `Objective: ${spec.objective}`,
+    `Audience: ${spec.audience}`,
+    `Message: ${spec.message}`,
+    spec.cta ? `CTA: ${spec.cta}` : null,
+    spec.scheduled_for ? `Scheduled for: ${spec.scheduled_for}` : null,
+    spec.event_ref ? `Related event: ${spec.event_ref}` : null,
+    `Targets: ${spec.targets.map((target) => `${target.platform}${target.dimensions ? ` (${target.dimensions})` : ''}`).join(', ')}`,
+  ]
+
+  if (spec.slides?.length) {
+    lines.push('', 'Carousel slide plan:')
+    for (const slide of spec.slides) {
+      lines.push(`- Slide ${slide.slide_number} [${slide.role}]: ${slide.headline}${slide.supporting_copy ? ` -- ${slide.supporting_copy}` : ''}`)
+    }
+  }
+
+  if (spec.storyboard?.length) {
+    lines.push('', 'Video storyboard:')
+    for (const frame of spec.storyboard) {
+      lines.push(`- Frame ${frame.frame_number}${frame.timestamp_hint ? ` (${frame.timestamp_hint})` : ''}: ${frame.scene_prompt}`)
+    }
+  }
+
+  lines.push('', 'This brief is intended for external rendering, not internal generation.')
+
+  return lines.filter((line): line is string => Boolean(line)).join('\n')
+}
+
 async function runCanonicalCopy(
   anthropic: ReturnType<typeof createAnthropicClient>,
   topic: string,
+  scheduledFor: string | null,
   eventRef: string | null,
   brandVoice: any,
-): Promise<{ headline: string; core_body: string; exact_cta: string; key_fact: string }> {
-  return await generateJsonWithAnthropic<{ headline: string; core_body: string; exact_cta: string; key_fact: string }>(anthropic, {
+): Promise<CanonicalCopy> {
+  return await generateJsonWithAnthropic<CanonicalCopy>(anthropic, {
     task: 'one_off_writer',
     maxTokens: 300,
     system: `${buildSystemPrompt(brandVoice)}
@@ -75,7 +257,7 @@ Respond with JSON only:
 }`,
     messages: [{
       role: 'user',
-      content: `Topic: ${topic}${eventRef ? `\nRelated event: ${eventRef}` : ''}
+      content: `Topic: ${topic}${scheduledFor ? `\nScheduled for: ${scheduledFor}` : ''}${eventRef ? `\nRelated event: ${eventRef}` : ''}
 
 Write the canonical message now.`,
     }],
@@ -85,8 +267,9 @@ Write the canonical message now.`,
 async function runPlatformAdapters(
   anthropic: ReturnType<typeof createAnthropicClient>,
   topic: string,
-  canonical: { headline: string; core_body: string; exact_cta: string; key_fact: string },
+  canonical: CanonicalCopy,
   platforms: string[],
+  scheduledFor: string | null,
   brandVoice: any,
 ): Promise<Array<{ platform: string; body: string; subject_line?: string }>> {
   const PLATFORM_INSTRUCTIONS: Record<string, string> = {
@@ -97,7 +280,7 @@ async function runPlatformAdapters(
   }
 
   const requests = platforms
-    .filter((p) => PLATFORM_INSTRUCTIONS[p])
+    .filter((platform) => PLATFORM_INSTRUCTIONS[platform])
     .map(async (platform) => {
       try {
         const response = await generateTextWithAnthropic(anthropic, {
@@ -116,7 +299,7 @@ Adapt format, length, and tone for the platform only.`,
           messages: [{
             role: 'user',
             content: `Topic: ${topic}
-Core message: ${canonical.core_body}
+${scheduledFor ? `Scheduled for: ${scheduledFor}\n` : ''}Core message: ${canonical.core_body}
 Platform: ${platform}
 Instructions: ${PLATFORM_INSTRUCTIONS[platform]}
 
@@ -145,7 +328,7 @@ Write the copy now.`,
     })
 
   const results = await Promise.all(requests)
-  return results.filter((r): r is NonNullable<typeof r> => r !== null)
+  return results.filter((result): result is NonNullable<typeof result> => result !== null)
 }
 
 Deno.serve(async (req) => {
@@ -165,6 +348,10 @@ Deno.serve(async (req) => {
       ? payload.platforms
       : DEFAULT_PLATFORMS
     const eventRef: string | null = payload?.event_ref ? String(payload.event_ref) : null
+    const scheduledForInput = payload?.scheduled_for ?? payload?.scheduledFor ?? null
+    const scheduledFor = normalizeScheduledFor(scheduledForInput)
+    const providedAssetNeed = payload?.asset_need ?? payload?.assetNeed ?? null
+    const assetNeed: AssetNeed = normalizeAssetNeed(providedAssetNeed)
 
     if (!orgId || typeof orgId !== 'string') {
       return jsonResponse({ ok: false, error: 'orgId is required' }, 400)
@@ -174,15 +361,32 @@ Deno.serve(async (req) => {
       return jsonResponse({ ok: false, error: 'topic is required' }, 400)
     }
 
+    if (scheduledForInput && !scheduledFor) {
+      return jsonResponse({ ok: false, error: 'scheduled_for must be a valid YYYY-MM-DD date' }, 400)
+    }
+
+    if (providedAssetNeed && assetNeed !== providedAssetNeed) {
+      return jsonResponse({ ok: false, error: `asset_need must be one of: ${Object.values(ASSET_NEED).join(', ')}` }, 400)
+    }
+
     const config = await getOrgConfig(supabase, orgId)
     const brandVoice = config?.brand_voice ?? {}
+    const request: DraftAssetRequest = {
+      intent: PLANNING_INTENT.ONE_TIME,
+      topic,
+      scheduled_for: scheduledFor,
+      platforms,
+      event_ref: eventRef,
+      asset_need: assetNeed,
+    }
+    const scheduledAt = toScheduledAt(scheduledFor)
 
-    console.log(`Pipeline D: writing post about "${topic}" for platforms: ${platforms.join(', ')}`)
+    console.log(`Pipeline D: writing one-time post about "${topic}" for platforms: ${platforms.join(', ')}${scheduledFor ? ` on ${scheduledFor}` : ''}${assetNeed !== ASSET_NEED.NONE ? ` with ${assetNeed} asset brief` : ''}`)
 
-    const canonical = await runCanonicalCopy(anthropic, topic, eventRef, brandVoice)
+    const canonical = await runCanonicalCopy(anthropic, topic, scheduledFor, eventRef, brandVoice)
     console.log(`Canonical headline locked: "${canonical.headline}"`)
 
-    const assets = await runPlatformAdapters(anthropic, topic, canonical, platforms, brandVoice)
+    const assets = await runPlatformAdapters(anthropic, topic, canonical, platforms, scheduledFor, brandVoice)
     console.log(`${assets.length} platform drafts produced`)
 
     let inserted = 0
@@ -195,8 +399,17 @@ Deno.serve(async (req) => {
           body: asset.body,
           subject_line: asset.subject_line ?? null,
           status: 'draft',
+          scheduled_at: scheduledAt,
           is_campaign_post: false,
           created_by: 'pipeline-d-post',
+          metadata: {
+            owner_pipeline: 'pipeline-d-post',
+            purpose: 'one_time',
+            content_type: 'one_time_post',
+            scheduled_for: scheduledFor,
+            event_ref: eventRef,
+            asset_need: assetNeed,
+          },
         })
       if (!error) {
         inserted++
@@ -205,9 +418,48 @@ Deno.serve(async (req) => {
       }
     }
 
+    let briefCreated = false
+    if (shouldGenerateDesignBrief(assetNeed)) {
+      const assetSpec = buildOneTimeAssetSpec(request, canonical, brandVoice)
+      const designBrief = renderAssetBrief(assetSpec)
+      const { error: briefInsertError } = await supabase
+        .from('content_registry')
+        .insert({
+          org_id: orgId,
+          platform: 'design_brief',
+          body: designBrief,
+          status: 'draft',
+          is_campaign_post: false,
+          created_by: 'pipeline-d-post',
+          metadata: {
+            owner_pipeline: 'pipeline-d-post',
+            purpose: 'one_time',
+            content_type: 'design_brief',
+            scheduled_for: scheduledFor,
+            event_ref: eventRef,
+            asset_need: assetNeed,
+            brief_type: assetSpec.brief_type,
+            asset_spec: assetSpec,
+          },
+        })
+
+      if (briefInsertError) {
+        console.error('Pipeline D design brief insert failed:', briefInsertError.message)
+      } else {
+        briefCreated = true
+      }
+    }
+
     console.log(`Pipeline D complete: ${inserted} drafts in Content Registry`)
 
-    return jsonResponse({ ok: true, drafts_created: inserted, platforms_written: assets.map((a) => a.platform) })
+    return jsonResponse({
+      ok: true,
+      drafts_created: inserted,
+      brief_created: briefCreated,
+      platforms_written: assets.map((asset) => asset.platform),
+      scheduled_for: scheduledFor,
+      asset_need: assetNeed,
+    })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     console.error('Pipeline D failed:', err)

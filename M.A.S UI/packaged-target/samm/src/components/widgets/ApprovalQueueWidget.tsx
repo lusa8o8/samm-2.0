@@ -34,14 +34,16 @@ const typeConfig: Record<string, { icon: React.ReactNode; label: string; color: 
 };
 
 function InboxItemDetail({ item }: { item: InboxItem }) {
-  const [actionState, setActionState] = useState<"approved" | "rejected" | null>(null);
+  const [actionState, setActionState] = useState<"approved" | "rejected" | "actioned" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const cfg = typeConfig[item.type] ?? typeConfig.fyi;
+  const effectiveStatus = actionState ?? item.status;
+  const isActionable = effectiveStatus === "pending" || effectiveStatus === "new";
 
   const handleApprove = async () => {
     try {
       await approveInboxItem(item.id);
-      setActionState("approved");
+      setActionState(item.type === "escalation" || item.type === "fyi" ? "actioned" : "approved");
       setError(null);
     } catch (err) {
       setError(await readFunctionError(err));
@@ -73,7 +75,10 @@ function InboxItemDetail({ item }: { item: InboxItem }) {
 
       <div className="flex items-center gap-2">
         <StatusChip status={item.priority} />
-        <StatusChip status={(actionState ?? item.status) as never} />
+        <StatusChip
+          status={effectiveStatus as never}
+          label={effectiveStatus === "actioned" ? "seen" : undefined}
+        />
         <span className="ml-1 text-[11px] text-muted-foreground">{item.source}</span>
       </div>
 
@@ -88,7 +93,7 @@ function InboxItemDetail({ item }: { item: InboxItem }) {
         <p className="text-[12px] italic leading-relaxed text-foreground/80">{item.rationale}</p>
       </div>
 
-      {!actionState && (
+      {isActionable && (
         <div className="flex gap-2 pt-1">
           {item.type === "approval" && (
             <>
@@ -135,16 +140,22 @@ function InboxItemDetail({ item }: { item: InboxItem }) {
         </div>
       )}
 
-      {actionState && (
+      {!isActionable && (
         <div
           className={cn(
             "rounded-xl px-4 py-3 text-center text-sm font-medium",
-            actionState === "approved"
+            effectiveStatus === "approved"
               ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400"
-              : "bg-red-50 text-red-600 dark:bg-red-950/20 dark:text-red-400",
+              : effectiveStatus === "rejected"
+                ? "bg-red-50 text-red-600 dark:bg-red-950/20 dark:text-red-400"
+                : "bg-slate-50 text-slate-600 dark:bg-slate-900/30 dark:text-slate-400",
           )}
         >
-          {actionState === "approved" ? "✓ Actioned" : "✕ Dismissed"}
+          {effectiveStatus === "approved"
+            ? "Approved"
+            : effectiveStatus === "rejected"
+              ? "Dismissed"
+              : "Marked as seen"}
         </div>
       )}
 

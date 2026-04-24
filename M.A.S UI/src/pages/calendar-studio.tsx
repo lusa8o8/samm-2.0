@@ -27,9 +27,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import {
   useCreateCalendarEvent,
+  useCreateOneTimePost,
   useDeleteCalendarEvent,
   useUpdateCalendarEvent,
 } from "@/lib/api";
@@ -64,6 +66,17 @@ type EventFormData = {
   support_content_allowed: boolean;
 };
 
+type OneTimePostFormData = {
+  scheduled_for: string;
+  topic: string;
+  platform: "all" | "facebook" | "whatsapp" | "youtube" | "email";
+  asset_need: "none" | "static" | "carousel" | "video";
+  event_ref: string | null;
+  campaign_name: string | null;
+};
+
+type ManualEntryType = "one_time" | "campaign";
+
 type DeleteWindowTarget = {
   id: string;
   label: string;
@@ -89,6 +102,20 @@ const BLANK_FORM: EventFormData = {
   creative_override_allowed: false,
   support_content_allowed: false,
 };
+
+const BLANK_ONE_TIME_POST_FORM: OneTimePostFormData = {
+  scheduled_for: new Date().toISOString().split("T")[0],
+  topic: "",
+  platform: "all",
+  asset_need: "none",
+  event_ref: null,
+  campaign_name: null,
+};
+
+const MANUAL_ENTRY_OPTIONS = [
+  { value: "one_time", label: "One-time post" },
+  { value: "campaign", label: "Campaign" },
+] satisfies Array<{ value: ManualEntryType; label: string }>;
 
 function buildMonthlyPlanningSession(source: Parameters<typeof buildCalendarStudioMonthGrid>[0], monthIso: string) {
   const monthGrid = buildCalendarStudioMonthGrid(source, monthIso);
@@ -295,6 +322,98 @@ function EventForm({
   );
 }
 
+function OneTimePostForm({
+  value,
+  onChange,
+  onSubmit,
+  isPending,
+}: {
+  value: OneTimePostFormData;
+  onChange: (nextValue: OneTimePostFormData) => void;
+  onSubmit: (event: React.FormEvent) => void;
+  isPending: boolean;
+}) {
+  return (
+    <form onSubmit={onSubmit} className="space-y-4 pt-4">
+      <div className="space-y-2">
+        <Label>Date</Label>
+        <Input
+          type="date"
+          value={value.scheduled_for}
+          onChange={(event) => onChange({ ...value, scheduled_for: event.target.value })}
+          required
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Post brief</Label>
+        <Textarea
+          value={value.topic}
+          onChange={(event) => onChange({ ...value, topic: event.target.value })}
+          placeholder="Describe the one-time post samm should draft."
+          className="min-h-[120px]"
+          required
+        />
+        <p className="text-[11px] text-muted-foreground">
+          Keep it simple: what the post is about, who it is for, and the action you want the audience to take.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label>Primary channel</Label>
+          <Select value={value.platform} onValueChange={(nextValue: OneTimePostFormData["platform"]) => onChange({ ...value, platform: nextValue })}>
+            <SelectTrigger>
+              <SelectValue placeholder="Choose channel" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All supported channels</SelectItem>
+              <SelectItem value="facebook">Facebook</SelectItem>
+              <SelectItem value="whatsapp">WhatsApp</SelectItem>
+              <SelectItem value="youtube">YouTube</SelectItem>
+              <SelectItem value="email">Email</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Visual need</Label>
+          <Select
+            value={value.asset_need}
+            onValueChange={(nextValue: OneTimePostFormData["asset_need"]) => onChange({ ...value, asset_need: nextValue })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select visual need" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Text only</SelectItem>
+              <SelectItem value="static">Single image</SelectItem>
+              <SelectItem value="carousel">Carousel</SelectItem>
+              <SelectItem value="video">Video</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {value.campaign_name ? (
+        <div className="rounded-md border border-amber-100 bg-amber-50/60 p-3 text-[11px] leading-relaxed text-amber-800">
+          This day sits inside the <span className="font-semibold">{value.campaign_name}</span> campaign window. samm will keep that context while treating this as a one-time post, not a new campaign.
+        </div>
+      ) : (
+        <div className="rounded-md border border-border/60 bg-muted/30 p-3 text-[11px] leading-relaxed text-muted-foreground">
+          One-time posts do not create campaign windows. Use this for a single dated post that should land on the calendar directly.
+        </div>
+      )}
+
+      <DialogFooter>
+        <Button type="submit" disabled={isPending}>
+          {isPending ? "Queueing..." : "Queue one-time post"}
+        </Button>
+      </DialogFooter>
+    </form>
+  );
+}
+
 export default function CalendarStudioPage() {
   const [monthDate, setMonthDate] = useState(() => {
     const now = new Date();
@@ -302,6 +421,10 @@ export default function CalendarStudioPage() {
   });
   const [createOpen, setCreateOpen] = useState(false);
   const [createForm, setCreateForm] = useState<EventFormData>(BLANK_FORM);
+  const [manualEntryOpen, setManualEntryOpen] = useState(false);
+  const [manualEntryType, setManualEntryType] = useState<ManualEntryType>("one_time");
+  const [manualCampaignForm, setManualCampaignForm] = useState<EventFormData>(BLANK_FORM);
+  const [manualOneTimeForm, setManualOneTimeForm] = useState<OneTimePostFormData>(BLANK_ONE_TIME_POST_FORM);
   const [editWindowId, setEditWindowId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<EventFormData>(BLANK_FORM);
   const [deleteWindowTarget, setDeleteWindowTarget] = useState<DeleteWindowTarget | null>(null);
@@ -327,12 +450,22 @@ export default function CalendarStudioPage() {
     void queryClient.invalidateQueries({ queryKey: ["calendar-events"] });
   }, [queryClient]);
 
+  const invalidateOneTimePostViews = useCallback(() => {
+    invalidateStudio();
+    void queryClient.invalidateQueries({ queryKey: ["content-registry"] });
+    void queryClient.invalidateQueries({ queryKey: ["pipeline-runs"] });
+  }, [invalidateStudio, queryClient]);
+
   const createMutation = useCreateCalendarEvent({
     mutation: {
       onSuccess: () => {
         invalidateStudio();
         setCreateOpen(false);
         setCreateForm(BLANK_FORM);
+        setManualEntryOpen(false);
+        setManualEntryType("one_time");
+        setManualCampaignForm(BLANK_FORM);
+        setManualOneTimeForm(BLANK_ONE_TIME_POST_FORM);
         toast({
           title: "Calendar window added",
           description: "Calendar Studio has been refreshed with the new event.",
@@ -341,6 +474,35 @@ export default function CalendarStudioPage() {
       onError: (nextError: unknown) => {
         toast({
           title: "Could not add the calendar window",
+          description: nextError instanceof Error ? nextError.message : "Unknown error",
+          variant: "destructive",
+        });
+      },
+    },
+  });
+
+  const createOneTimePostMutation = useCreateOneTimePost({
+    mutation: {
+      onSuccess: (response: { message?: string }) => {
+        invalidateOneTimePostViews();
+        window.setTimeout(() => {
+          invalidateOneTimePostViews();
+        }, 1500);
+        closeInspector();
+        setManualEntryOpen(false);
+        setManualEntryType("one_time");
+        setManualCampaignForm(BLANK_FORM);
+        setManualOneTimeForm(BLANK_ONE_TIME_POST_FORM);
+        toast({
+          title: "One-time post queued",
+          description:
+            response.message ||
+            "samm has started drafting the one-time post. It will appear on the calendar after the draft lands.",
+        });
+      },
+      onError: (nextError: unknown) => {
+        toast({
+          title: "Could not queue the one-time post",
           description: nextError instanceof Error ? nextError.message : "Unknown error",
           variant: "destructive",
         });
@@ -401,6 +563,22 @@ export default function CalendarStudioPage() {
       support_content_allowed: initial?.support_content_allowed ?? false,
     });
     setCreateOpen(true);
+  }, []);
+
+  const openManualDialog = useCallback((day: CalendarDayPanelViewData) => {
+    setManualEntryType(day.campaignContext ? "one_time" : "campaign");
+    setManualCampaignForm({
+      ...BLANK_FORM,
+      event_date: day.date,
+      event_end_date: "",
+    });
+    setManualOneTimeForm({
+      ...BLANK_ONE_TIME_POST_FORM,
+      scheduled_for: day.date,
+      event_ref: day.campaignContext?.id ?? null,
+      campaign_name: day.campaignContext?.name ?? null,
+    });
+    setManualEntryOpen(true);
   }, []);
 
   const openEditDialog = useCallback((windowId: string) => {
@@ -510,16 +688,7 @@ export default function CalendarStudioPage() {
               );
             },
             addManualForDay: (data: CalendarDayPanelViewData) => {
-              const dayLabel = format(new Date(data.date), "MMMM d, yyyy");
-              const prompt = data.campaignContext
-                ? `Help me decide the right manual content to add on ${dayLabel} inside the ${data.campaignContext.name} campaign window. Explain the why before we commit anything.`
-                : `Help me decide the right manual content to add on ${dayLabel}. Explain the why before we commit anything.`;
-              handoffToSamm(
-                "planning",
-                prompt,
-                "Planning handoff prepared",
-                `samm is ready in Planning mode to help shape the manual content for ${dayLabel}.`,
-              );
+              openManualDialog(data);
             },
             editRulesForDay: (data: CalendarDayPanelViewData) => {
               if (data.campaignContext?.id) {
@@ -587,7 +756,7 @@ export default function CalendarStudioPage() {
             },
           }
         : null,
-    [source, planningSession, closeInspector, toast, openCreateDialog, handoffToSamm, openEditDialog, requestDeleteWindow],
+    [source, planningSession, closeInspector, toast, openCreateDialog, openManualDialog, handoffToSamm, openEditDialog, requestDeleteWindow],
   );
 
   useRegisterCalendarStudioWorkflow(workflowActions);
@@ -729,6 +898,77 @@ export default function CalendarStudioPage() {
             isPending={createMutation.isPending}
             submitLabel="Save window"
           />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={manualEntryOpen}
+        onOpenChange={(open) => {
+          setManualEntryOpen(open);
+          if (!open) {
+            setManualEntryType("one_time");
+            setManualCampaignForm(BLANK_FORM);
+            setManualOneTimeForm(BLANK_ONE_TIME_POST_FORM);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add manually</DialogTitle>
+            <DialogDescription>
+              Choose whether you want a standalone one-time post or a campaign window on this date.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2 pt-4">
+            <Label>What are you adding?</Label>
+            <Select value={manualEntryType} onValueChange={(nextValue: ManualEntryType) => setManualEntryType(nextValue)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Choose type" />
+              </SelectTrigger>
+              <SelectContent>
+                {MANUAL_ENTRY_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {manualEntryType === "one_time" ? (
+            <OneTimePostForm
+              value={manualOneTimeForm}
+              onChange={setManualOneTimeForm}
+              onSubmit={(event) => {
+                event.preventDefault();
+                createOneTimePostMutation.mutate({
+                  topic: manualOneTimeForm.topic.trim(),
+                  scheduledFor: manualOneTimeForm.scheduled_for,
+                  platforms: manualOneTimeForm.platform === "all" ? null : [manualOneTimeForm.platform],
+                  eventRef: manualOneTimeForm.event_ref,
+                  assetNeed: manualOneTimeForm.asset_need,
+                });
+              }}
+              isPending={createOneTimePostMutation.isPending}
+            />
+          ) : (
+            <EventForm
+              value={manualCampaignForm}
+              onChange={setManualCampaignForm}
+              onSubmit={(event) => {
+                event.preventDefault();
+                createMutation.mutate({
+                  data: {
+                    ...manualCampaignForm,
+                    event_end_date: manualCampaignForm.event_end_date || null,
+                  },
+                });
+              }}
+              isPending={createMutation.isPending}
+              submitLabel="Save campaign window"
+            />
+          )}
         </DialogContent>
       </Dialog>
 

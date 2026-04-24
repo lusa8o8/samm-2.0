@@ -9,7 +9,6 @@ import {
   type ChatHistoryItem,
   type ChatResponse,
   type ConversationMode,
-  type NormalizedWritePostIntent,
 } from './scheduler.ts'
 import {
   createAnthropicClient,
@@ -17,6 +16,12 @@ import {
   getErrorMessage,
   isTransientLlmError,
 } from '../_shared/llm-client.ts'
+import {
+  ASSET_NEED,
+  PLANNING_INTENT,
+  normalizeAssetNeed,
+  type AssetNeed,
+} from '../_shared/asset-brief-contract.ts'
 import { ensureDashboardMemoryContext } from '../_shared/samm-memory.ts'
 
 type ChatRole = 'user' | 'coordinator'
@@ -40,6 +45,14 @@ const PLANNING_SUGGESTIONS = [
   'What should this month focus on?',
 ]
 const TRANSIENT_MODEL_ERROR_MESSAGE = 'samm is temporarily busy right now. Please try again in a moment.'
+
+type PipelineDRequestIntent = {
+  topic: string
+  platforms: string[] | null
+  event_ref: string | null
+  scheduled_for?: string | null
+  asset_need?: AssetNeed
+}
 
 function jsonResponse(body: ChatResponse | { error: string }, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -150,15 +163,24 @@ function buildGreetingResponse(
 function buildWritePostResponse(
   supabase: any,
   orgId: string,
-  intent: NormalizedWritePostIntent,
+  intent: PipelineDRequestIntent,
   message?: string,
 ): ChatResponse {
-  const postBody: Record<string, unknown> = { topic: intent.topic }
+  const postBody: Record<string, unknown> = {
+    intent: PLANNING_INTENT.ONE_TIME,
+    topic: intent.topic,
+  }
   if (Array.isArray(intent.platforms) && intent.platforms.length > 0) {
     postBody.platforms = intent.platforms
   }
   if (intent.event_ref) {
     postBody.event_ref = String(intent.event_ref)
+  }
+  if (intent.scheduled_for) {
+    postBody.scheduled_for = intent.scheduled_for
+  }
+  if (intent.asset_need && intent.asset_need !== ASSET_NEED.NONE) {
+    postBody.asset_need = intent.asset_need
   }
 
   const postTask = invokePipeline(supabase, 'pipeline-d-post', orgId, postBody)
@@ -175,9 +197,13 @@ function buildWritePostResponse(
   const platformNote = Array.isArray(intent.platforms) && intent.platforms.length > 0
     ? ` for ${intent.platforms.join(', ')}`
     : ''
+  const scheduleNote = intent.scheduled_for ? ` scheduled for ${intent.scheduled_for}` : ''
+  const assetNote = intent.asset_need && intent.asset_need !== ASSET_NEED.NONE
+    ? ` with a ${intent.asset_need} asset brief`
+    : ''
 
   return {
-    message: message || `Writing a post about "${intent.topic}"${platformNote} now - drafts will appear in Content Registry in a few seconds.`,
+    message: message || `Writing a post about "${intent.topic}"${platformNote}${scheduleNote}${assetNote} now - drafts will appear in Content Registry in a few seconds.`,
     suggestions: ['Check Content Registry', 'What needs my approval?', 'Summarize this week'],
     invoked_action: {
       type: 'run_pipeline',
@@ -230,13 +256,17 @@ Deno.serve(async (req) => {
     const history = Array.isArray(body?.history) ? (body.history as ChatHistoryItem[]) : []
     const mode: ConversationMode = body?.mode === 'planning' ? 'planning' : 'execution'
     const confirmationAction = body?.confirmationAction ? String(body.confirmationAction) : null
+    const explicitAction =
+      body?.action && typeof body.action === 'object' && !Array.isArray(body.action)
+        ? (body.action as Record<string, unknown>)
+        : null
     const orgId = user.app_metadata?.org_id ?? body?.orgId
 
     if (!orgId || typeof orgId !== 'string') {
       return jsonResponse({ error: 'Missing org context' }, 400)
     }
 
-    if (!message) {
+    if (!message && !explicitAction) {
       return jsonResponse({ error: 'Message is required' }, 400)
     }
 
@@ -265,6 +295,40 @@ Deno.serve(async (req) => {
         message: 'Done. The event has been removed from the calendar.',
         suggestions: EXECUTION_SUGGESTIONS,
       })
+    }
+
+    if (explicitAction?.type === 'create_one_time_post') {
+      if (mode === 'planning') {
+        return jsonResponse(buildPlanningModeMutationBlockedResponse('create one-time post drafts directly'))
+      }
+
+      const topic = String(explicitAction.topic ?? '').trim()
+      if (!topic) {
+        return jsonResponse({ error: 'The one-time post needs a topic.' }, 400)
+      }
+
+      const scheduledForRaw = explicitAction.scheduled_for ? String(explicitAction.scheduled_for).trim() : null
+      if (scheduledForRaw && !/^\d{4}-\d{2}-\d{2}$/.test(scheduledForRaw)) {
+        return jsonResponse({ error: 'The one-time post date must be in YYYY-MM-DD format.' }, 400)
+      }
+
+      const assetNeed = normalizeAssetNeed(explicitAction.asset_need)
+      return jsonResponse(
+        buildWritePostResponse(
+          supabase,
+          orgId,
+          {
+            topic,
+            platforms: Array.isArray(explicitAction.platforms)
+              ? explicitAction.platforms.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+              : null,
+            event_ref: explicitAction.event_ref ? String(explicitAction.event_ref) : null,
+            scheduled_for: scheduledForRaw,
+            asset_need: assetNeed,
+          },
+          message || topic,
+        ),
+      )
     }
 
     const today = new Date().toISOString().slice(0, 10)
@@ -351,6 +415,7 @@ Deno.serve(async (req) => {
 ActionObject is one of:
 - {"type":"run_pipeline","pipeline":"pipeline-a-engagement"|"pipeline-b-weekly"|"pipeline-c-campaign"|"coordinator","needs_confirmation": boolean, "title": string, "description": string}
 - {"type":"write_post","topic": string, "platforms": string[]|null, "event_ref": string|null, "title": string, "description": string}
+- {"type":"create_one_time_post","topic": string, "scheduled_for": "YYYY-MM-DD"|null, "platforms": string[]|null, "event_ref": string|null, "asset_need": "none"|"static"|"carousel"|"video"|"design_brief", "title": string, "description": string}
 - {"type":"create_calendar_event","label": string, "event_date": "YYYY-MM-DD", "event_type": "launch"|"promotion"|"seasonal"|"community"|"deadline"|"other", "universities": string[], "run_pipeline_c": boolean, "needs_confirmation": boolean, "title": string, "description": string}
 - {"type":"edit_calendar_event","event_id": string, "label"?: string, "event_date"?: string, "event_type"?: string, "needs_confirmation": boolean, "title": string, "description": string}
 - {"type":"delete_calendar_event","event_id": string, "label": string, "needs_confirmation": boolean, "title": string, "description": string}
@@ -367,6 +432,7 @@ Rules:
 - Execution mode can propose actions when the user is clearly asking for a live change.
 - Only propose run_pipeline when the user is clearly asking to run or trigger a full pipeline with no event creation involved.
 - Use write_post when the user asks to write, draft, or create a single post or message about a topic. This is NOT a campaign — no brief, no CEO gate, no research. Extract the topic from the user message. platforms defaults to null (all platforms). event_ref is optional context. write_post never requires confirmation — it is fast and reversible.
+- Use create_one_time_post when the user asks for a standalone non-campaign post that should land on a specific date, appear in the calendar, or include a visual asset brief. Infer the date relative to today ${today} when needed. Set scheduled_for to null if no date is given. Set asset_need to one of none, static, carousel, video, or design_brief. Do not create an academic_calendar event for a one-time post.
 - Use create_calendar_event when the user asks to schedule, add, or create a calendar event.
   - Infer the date from the user message (e.g. "next Friday" relative to today ${today}).
   - Preserve the user's event label as closely as possible. Do not rewrite it into a campus, university, or student-themed event unless the user explicitly asked for that.
@@ -539,6 +605,37 @@ Rules:
             topic,
             platforms: Array.isArray(action.platforms) ? action.platforms : null,
             event_ref: action.event_ref ? String(action.event_ref) : null,
+          },
+          parsed.message,
+        ),
+      )
+    }
+
+    if (action?.type === 'create_one_time_post') {
+      if (mode === 'planning') {
+        return jsonResponse(buildPlanningModeMutationBlockedResponse('create one-time post drafts directly'))
+      }
+
+      const topic = String(action.topic ?? '').trim()
+      if (!topic) {
+        return jsonResponse({ message: "I couldn't work out what the one-time post should be about. Please be more specific.", suggestions })
+      }
+
+      const scheduledForRaw = action.scheduled_for ? String(action.scheduled_for).trim() : null
+      if (scheduledForRaw && !/^\d{4}-\d{2}-\d{2}$/.test(scheduledForRaw)) {
+        return jsonResponse({ message: 'The one-time post date must be in YYYY-MM-DD format.', suggestions })
+      }
+
+      return jsonResponse(
+        buildWritePostResponse(
+          supabase,
+          orgId,
+          {
+            topic,
+            platforms: Array.isArray(action.platforms) ? action.platforms : null,
+            event_ref: action.event_ref ? String(action.event_ref) : null,
+            scheduled_for: scheduledForRaw,
+            asset_need: normalizeAssetNeed(action.asset_need),
           },
           parsed.message,
         ),

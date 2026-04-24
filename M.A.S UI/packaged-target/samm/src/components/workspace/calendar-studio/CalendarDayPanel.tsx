@@ -172,7 +172,7 @@ export function CalendarDayPanel({ data }: Props) {
           <SubHeading count={data.openSlots}>Open slots</SubHeading>
           <div className="rounded-xl border border-dashed border-border bg-muted/20 px-3 py-3 text-center text-[12px] text-muted-foreground">
             {data.openSlots} {data.openSlots === 1 ? "slot remains" : "slots remain"} open. Create drafts from the
-            committed rules or add one manually.
+            committed rules or add something manually.
           </div>
         </section>
       ) : null}

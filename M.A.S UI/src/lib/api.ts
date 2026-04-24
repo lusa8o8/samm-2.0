@@ -1868,11 +1868,27 @@ export function useGetMetricsSparklines(options?: QueryHookOptions) {
 
 
 
+type OneTimePostAssetNeed = "none" | "static" | "carousel" | "video" | "design_brief";
+
+type CreateOneTimePostAction = {
+  type: "create_one_time_post";
+  topic: string;
+  scheduled_for: string | null;
+  platforms: string[] | null;
+  event_ref: string | null;
+  asset_need: OneTimePostAssetNeed;
+  title?: string;
+  description?: string;
+};
+
+type CoordinatorActionPayload = CreateOneTimePostAction;
+
 type CoordinatorChatRequest = {
   message: string;
   history?: Array<{ role: "user" | "coordinator"; content: string }>;
   mode?: "planning" | "execution";
   confirmationAction?: string | null;
+  action?: CoordinatorActionPayload | null;
 };
 
 type CoordinatorChatResponse = {
@@ -1892,36 +1908,97 @@ type CoordinatorChatResponse = {
 
 const COORDINATOR_FUNCTION = "coordinator-ingress";
 
+async function invokeCoordinatorFunction({
+  message,
+  history = [],
+  mode = "execution",
+  confirmationAction = null,
+  action = null,
+}: CoordinatorChatRequest) {
+  const accessToken = await getAccessToken();
+
+  if (!accessToken) {
+    throw new Error("Your session expired. Please sign in again.");
+  }
+
+  const { data, error } = await supabase.functions.invoke(COORDINATOR_FUNCTION, {
+    body: {
+      message,
+      history,
+      mode,
+      confirmationAction,
+      action,
+      orgId: getOrgId(),
+    },
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? {}) as CoordinatorChatResponse;
+}
+
 export function useCoordinatorChat(options?: MutationHookOptions) {
   return useMutation({
-    mutationFn: async ({ message, history = [], mode = "execution", confirmationAction = null }: CoordinatorChatRequest) => {
+    mutationFn: async ({
+      message,
+      history = [],
+      mode = "execution",
+      confirmationAction = null,
+      action = null,
+    }: CoordinatorChatRequest) => {
       try {
-        const accessToken = await getAccessToken();
-
-        if (!accessToken) {
-          throw new Error("Your session expired. Please sign in again.");
-        }
-
-        const { data, error } = await supabase.functions.invoke(COORDINATOR_FUNCTION, {
-          body: {
-            message,
-            history,
-            mode,
-            confirmationAction,
-            orgId: getOrgId(),
-          },
-          headers: accessToken
-            ? {
-                Authorization: `Bearer ${accessToken}`,
-              }
-            : undefined,
+        return await invokeCoordinatorFunction({
+          message,
+          history,
+          mode,
+          confirmationAction,
+          action,
         });
+      } catch (error) {
+        const message = await readFunctionError(error);
+        throw new Error(message);
+      }
+    },
+    ...options?.mutation,
+  });
+}
 
-        if (error) {
-          throw error;
-        }
-
-        return (data ?? {}) as CoordinatorChatResponse;
+export function useCreateOneTimePost(options?: MutationHookOptions) {
+  return useMutation({
+    mutationFn: async ({
+      topic,
+      scheduledFor,
+      platforms = null,
+      eventRef = null,
+      assetNeed = "none",
+    }: {
+      topic: string;
+      scheduledFor: string;
+      platforms?: string[] | null;
+      eventRef?: string | null;
+      assetNeed?: OneTimePostAssetNeed;
+    }) => {
+      try {
+        return await invokeCoordinatorFunction({
+          message: topic,
+          mode: "execution",
+          confirmationAction: null,
+          action: {
+            type: "create_one_time_post",
+            topic,
+            scheduled_for: scheduledFor,
+            platforms,
+            event_ref: eventRef,
+            asset_need: assetNeed,
+            title: "Create one-time post",
+            description: topic,
+          },
+        });
       } catch (error) {
         const message = await readFunctionError(error);
         throw new Error(message);

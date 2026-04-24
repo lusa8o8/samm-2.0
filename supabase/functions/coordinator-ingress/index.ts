@@ -32,6 +32,7 @@ async function proxyToLegacyCoordinatorChat(
     history: ChatHistoryItem[]
     mode: ConversationMode
     confirmationAction?: string | null
+    action?: Record<string, unknown> | null
     orgId: string
   },
 ) {
@@ -41,6 +42,7 @@ async function proxyToLegacyCoordinatorChat(
       history: params.history,
       mode: params.mode,
       confirmationAction: params.confirmationAction ?? null,
+      action: params.action ?? null,
       orgId: params.orgId,
     },
     headers: {
@@ -98,14 +100,34 @@ Deno.serve(async (req) => {
     const history = Array.isArray(body?.history) ? (body.history as ChatHistoryItem[]) : []
     const mode: ConversationMode = body?.mode === 'planning' ? 'planning' : 'execution'
     const confirmationAction = body?.confirmationAction ? String(body.confirmationAction) : null
+    const action =
+      body?.action && typeof body.action === 'object' && !Array.isArray(body.action)
+        ? (body.action as Record<string, unknown>)
+        : null
     const orgId = user.app_metadata?.org_id ?? body?.orgId
 
     if (!orgId || typeof orgId !== 'string') {
       return jsonResponse({ error: 'Missing org context' }, 400)
     }
 
-    if (!message) {
+    if (!message && !action) {
       return jsonResponse({ error: 'Message is required' }, 400)
+    }
+
+    if (action) {
+      const proxied = await proxyToLegacyCoordinatorChat(supabase, {
+        accessToken,
+        message:
+          message ||
+          String(action.topic ?? action.title ?? action.type ?? 'coordinator action'),
+        history,
+        mode,
+        confirmationAction,
+        action,
+        orgId,
+      })
+
+      return jsonResponse(proxied)
     }
 
     const { data: runsData, error: runsError } = await supabase
@@ -147,6 +169,7 @@ Deno.serve(async (req) => {
       history,
       mode,
       confirmationAction,
+      action: null,
       orgId,
     })
 

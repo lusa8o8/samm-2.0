@@ -71,6 +71,7 @@ function DayCard({ day, onClick }: { day: CalendarDayCellViewData; onClick?: () 
   const colorClasses = day.campaignColor ? campaignColorClasses[day.campaignColor] : null;
   const dayNum = format(new Date(day.date), "d");
   const isMonthStart = dayNum === "1";
+  const showCampaignPill = Boolean(day.campaignName && day.campaignEventDate === day.date);
 
   return (
     <button
@@ -104,10 +105,10 @@ function DayCard({ day, onClick }: { day: CalendarDayCellViewData; onClick?: () 
         ) : null}
       </div>
 
-      {day.campaignName ? (
+      {showCampaignPill ? (
         <div className="px-2">
           <CampaignPill
-            name={day.campaignName}
+            name={day.campaignName!}
             color={day.campaignColor ?? "slate"}
             size="xs"
             exclusive={day.ownership === "campaign_exclusive"}
