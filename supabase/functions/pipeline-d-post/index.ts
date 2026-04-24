@@ -384,6 +384,7 @@ Deno.serve(async (req) => {
       asset_need: assetNeed,
     }
     const scheduledAt = toScheduledAt(scheduledFor)
+    const draftGroupId = crypto.randomUUID()
 
     console.log(`Pipeline D: writing one-time post about "${topic}" for platforms: ${platforms.join(', ')}${scheduledFor ? ` on ${scheduledFor}` : ''}${assetNeed !== ASSET_NEED.NONE ? ` with ${assetNeed} asset brief` : ''}`)
 
@@ -411,6 +412,7 @@ Deno.serve(async (req) => {
             owner_pipeline: 'pipeline-d-post',
             purpose: 'one_time',
             content_type: 'one_time_post',
+            draft_group_id: draftGroupId,
             title: workingTitle,
             scheduled_for: scheduledFor,
             event_ref: eventRef,
@@ -435,12 +437,14 @@ Deno.serve(async (req) => {
           platform: 'design_brief',
           body: designBrief,
           status: 'draft',
+          scheduled_at: scheduledAt,
           is_campaign_post: false,
           created_by: 'pipeline-d-post',
           metadata: {
             owner_pipeline: 'pipeline-d-post',
             purpose: 'one_time',
             content_type: 'design_brief',
+            draft_group_id: draftGroupId,
             title: workingTitle,
             scheduled_for: scheduledFor,
             event_ref: eventRef,

@@ -93,6 +93,28 @@ export interface CalendarDayPanelViewData extends CalendarDayCellViewData {
     reason: string;
     failedAt: string;
   }[];
+  campaignDeleteCandidate?: {
+    id: string;
+    label: string;
+    startDate: string;
+    endDate: string;
+    canDelete: boolean;
+    blockedReason?: string;
+    linkedContentCount: number;
+    publishedContentCount: number;
+  };
+  oneTimeDeleteCandidates: {
+    id: string;
+    groupKey: string;
+    label: string;
+    scheduledFor: string;
+    eventRef?: string | null;
+    channels: WorkspaceChannel[];
+    canDelete: boolean;
+    blockedReason?: string;
+    contentCount: number;
+    publishedContentCount: number;
+  }[];
   notes?: string;
 }
 

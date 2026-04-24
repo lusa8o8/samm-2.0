@@ -69,6 +69,7 @@ type CalendarStudioContentRow = {
   scheduled_at?: string | null;
   published_at?: string | null;
   created_at?: string | null;
+  created_by?: string | null;
   media_url?: string | null;
   rejection_note?: string | null;
   metadata?: Record<string, unknown> | null;
@@ -136,6 +137,10 @@ type NormalizedContentRow = {
   mediaUrl: string | null;
   rejectionNote: string | null;
   isDesignBrief: boolean;
+  purpose: "campaign" | "one_time" | "other";
+  eventRef: string | null;
+  draftGroupId: string | null;
+  createdBy: string | null;
   metadata: Record<string, unknown>;
 };
 
@@ -382,6 +387,13 @@ function getContentTitle(row: CalendarStudioContentRow) {
   );
 }
 
+function normalizeContentPurpose(metadata: Record<string, unknown>) {
+  const purpose = safeString(metadata.purpose)?.toLowerCase();
+  if (purpose === "campaign") return "campaign";
+  if (purpose === "one_time") return "one_time";
+  return "other";
+}
+
 function normalizeContentRows(rows: CalendarStudioContentRow[], windows: ResolvedStudioWindow[]) {
   const labelToCampaignId = new Map<string, string>();
   for (const window of windows) {
@@ -392,6 +404,8 @@ function normalizeContentRows(rows: CalendarStudioContentRow[], windows: Resolve
     const metadata = asRecord(row.metadata);
     const metadataCampaignId = safeString(metadata.campaign_ref);
     const metadataWindowId = safeString(metadata.window_ref);
+    const eventRef = safeString(metadata.event_ref);
+    const draftGroupId = safeString(metadata.draft_group_id);
     const fallbackCampaignId = labelToCampaignId.get(normalizeText(row.campaign_name)) ?? null;
     const campaignId = metadataCampaignId ?? fallbackCampaignId;
     const windowId = metadataWindowId ?? (campaignId ? `window:${campaignId}` : null);
@@ -416,9 +430,29 @@ function normalizeContentRows(rows: CalendarStudioContentRow[], windows: Resolve
       mediaUrl: safeString(row.media_url),
       rejectionNote: safeString(row.rejection_note),
       isDesignBrief,
+      purpose: normalizeContentPurpose(metadata),
+      eventRef,
+      draftGroupId,
+      createdBy: safeString(row.created_by),
       metadata,
     } satisfies NormalizedContentRow;
   });
+}
+
+function buildOneTimeGroupKey(row: NormalizedContentRow) {
+  if (row.purpose !== "one_time") return null;
+  if (row.draftGroupId) return `draft-group:${row.draftGroupId}`;
+
+  const scheduledFor = safeString(row.metadata.scheduled_for) ?? row.bucketDate ?? "";
+  const eventRef = row.eventRef ?? "";
+  const title = normalizeText(row.metadata.title ?? row.title);
+  if (!scheduledFor || !title) return null;
+
+  return `legacy:${scheduledFor}|${eventRef}|${title}`;
+}
+
+function getOneTimeGroupRows(source: CalendarStudioSourceBundle, groupKey: string) {
+  return source.contentRows.filter((row) => buildOneTimeGroupKey(row) === groupKey);
 }
 
 function touchesDay(window: ResolvedStudioWindow, dayKey: string) {
@@ -601,6 +635,67 @@ function buildAssetReadinessFromRows(window: ResolvedStudioWindow, rows: Normali
   };
 }
 
+function buildCampaignDeleteCandidate(source: CalendarStudioSourceBundle, dayKey: string, window: ResolvedStudioWindow | null) {
+  if (!window || dayKey !== window.startDate) return undefined;
+
+  const linkedRows = getLinkedContentForWindow(source, window);
+  const publishedContentCount = linkedRows.filter((row) => row.rawStatus === "published").length;
+  const todayKey = format(new Date(), "yyyy-MM-dd");
+  const isPastEvent = window.startDate < todayKey;
+  const canDelete = !isPastEvent && publishedContentCount === 0;
+
+  return {
+    id: window.eventId,
+    label: window.label,
+    startDate: window.startDate,
+    endDate: window.endDate,
+    canDelete,
+    blockedReason: publishedContentCount > 0
+      ? "This campaign already has published content, so it can no longer be deleted."
+      : isPastEvent
+        ? "Past campaign windows cannot be deleted."
+        : undefined,
+    linkedContentCount: linkedRows.length,
+    publishedContentCount,
+  };
+}
+
+function buildOneTimeDeleteCandidates(source: CalendarStudioSourceBundle, dayKey: string, dayRows: NormalizedContentRow[]) {
+  const groups = new Map<string, NormalizedContentRow[]>();
+
+  for (const row of dayRows) {
+    if (row.purpose !== "one_time" || row.isDesignBrief) continue;
+    const groupKey = buildOneTimeGroupKey(row);
+    if (!groupKey) continue;
+    const existing = groups.get(groupKey) ?? [];
+    existing.push(row);
+    groups.set(groupKey, existing);
+  }
+
+  return Array.from(groups.entries())
+    .map(([groupKey, groupRows]) => {
+      const allRows = getOneTimeGroupRows(source, groupKey);
+      const actionableRows = allRows.filter((row) => !row.isDesignBrief && row.channel);
+      const publishedContentCount = allRows.filter((row) => row.rawStatus === "published").length;
+      const channels = Array.from(new Set(actionableRows.map((row) => row.channel).filter((channel): channel is WorkspaceChannel => Boolean(channel))));
+      const label = safeString(groupRows[0]?.metadata.title) ?? groupRows[0]?.title ?? "One-time post";
+
+      return {
+        id: groupKey,
+        groupKey,
+        label,
+        scheduledFor: safeString(groupRows[0]?.metadata.scheduled_for) ?? dayKey,
+        eventRef: groupRows[0]?.eventRef ?? null,
+        channels,
+        canDelete: publishedContentCount === 0,
+        blockedReason: publishedContentCount > 0 ? "Published one-time posts cannot be deleted." : undefined,
+        contentCount: actionableRows.length,
+        publishedContentCount,
+      };
+    })
+    .sort((a, b) => a.label.localeCompare(b.label));
+}
+
 export async function loadCalendarStudioSourceBundle(): Promise<CalendarStudioSourceBundle> {
   const [calendarResult, contentResult, pipelineRunsResult] = await Promise.all([
     supabase.from("academic_calendar").select("*").eq("org_id", getOrgId()).order("event_date", { ascending: true }),
@@ -685,6 +780,8 @@ export function buildCalendarStudioDayDetail(source: CalendarStudioSourceBundle,
   const scheduledRows = dayRows
     .filter((row) => !row.isDesignBrief && row.channel && ["scheduled", "approved"].includes(row.rawStatus))
     .sort(sortContentRows);
+  const campaignDeleteCandidate = buildCampaignDeleteCandidate(source, dayKey, primaryWindow);
+  const oneTimeDeleteCandidates = buildOneTimeDeleteCandidates(source, dayKey, dayRows);
 
   return {
     ...dayCell,
@@ -719,6 +816,8 @@ export function buildCalendarStudioDayDetail(source: CalendarStudioSourceBundle,
       reason: row.rejectionNote ?? "Delivery or generation failed.",
       failedAt: row.createdAt ?? `${dayKey}T00:00:00.000Z`,
     })),
+    campaignDeleteCandidate,
+    oneTimeDeleteCandidates,
     notes: primaryWindow?.planningNotes,
   };
 }

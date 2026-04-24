@@ -33,6 +33,7 @@ import {
   useCreateCalendarEvent,
   useCreateOneTimePost,
   useDeleteCalendarEvent,
+  useDeleteOneTimePostGroup,
   useUpdateCalendarEvent,
 } from "@/lib/api";
 import {
@@ -46,6 +47,7 @@ import type {
   CalendarDayPanelViewData,
   CampaignPanelViewData,
   MonthlyPlanningSessionViewData,
+  WorkspaceChannel,
 } from "@/components/workspace/calendar-studio/types";
 import {
   buildCalendarStudioAssetReadinessDetail,
@@ -78,11 +80,35 @@ type OneTimePostFormData = {
 
 type ManualEntryType = "one_time" | "campaign";
 
-type DeleteWindowTarget = {
+type CampaignDeleteTarget = {
+  kind: "campaign";
   id: string;
   label: string;
   startDate: string;
   endDate: string;
+  contentIds: string[];
+};
+
+type OneTimeDeleteTarget = {
+  kind: "one_time";
+  groupKey: string;
+  label: string;
+  scheduledFor: string;
+  eventRef?: string | null;
+  channels: WorkspaceChannel[];
+  contentCount: number;
+};
+
+type PendingDeleteTarget = CampaignDeleteTarget | OneTimeDeleteTarget;
+
+type DeleteChoice = {
+  id: string;
+  kind: PendingDeleteTarget["kind"];
+  label: string;
+  summary: string;
+  canDelete: boolean;
+  blockedReason?: string;
+  payload: PendingDeleteTarget;
 };
 
 const EVENT_TYPE_OPTIONS = [
@@ -443,7 +469,8 @@ export default function CalendarStudioPage() {
   const [manualOneTimeForm, setManualOneTimeForm] = useState<OneTimePostFormData>(BLANK_ONE_TIME_POST_FORM);
   const [editWindowId, setEditWindowId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<EventFormData>(BLANK_FORM);
-  const [deleteWindowTarget, setDeleteWindowTarget] = useState<DeleteWindowTarget | null>(null);
+  const [deleteChoices, setDeleteChoices] = useState<DeleteChoice[]>([]);
+  const [pendingDeleteTarget, setPendingDeleteTarget] = useState<PendingDeleteTarget | null>(null);
   const monthIso = format(monthDate, "yyyy-MM");
   const { data: source, isLoading, isError, error } = useCalendarStudioSourceBundle();
   const { openInspector, closeInspector } = useWorkspaceInspector();
@@ -546,13 +573,14 @@ export default function CalendarStudioPage() {
     },
   });
 
-  const deleteMutation = useDeleteCalendarEvent({
+  const deleteCampaignMutation = useDeleteCalendarEvent({
     mutation: {
       onSuccess: () => {
-        const deletedLabel = deleteWindowTarget?.label ?? "Campaign window";
+        const deletedLabel = pendingDeleteTarget?.kind === "campaign" ? pendingDeleteTarget.label : "Campaign window";
         invalidateStudio();
         closeInspector();
-        setDeleteWindowTarget(null);
+        setPendingDeleteTarget(null);
+        setDeleteChoices([]);
         setEditWindowId(null);
         toast({
           title: "Campaign window deleted",
@@ -562,6 +590,29 @@ export default function CalendarStudioPage() {
       onError: (nextError: unknown) => {
         toast({
           title: "Could not delete the campaign window",
+          description: nextError instanceof Error ? nextError.message : "Unknown error",
+          variant: "destructive",
+        });
+      },
+    },
+  });
+
+  const deleteOneTimeMutation = useDeleteOneTimePostGroup({
+    mutation: {
+      onSuccess: () => {
+        const deletedLabel = pendingDeleteTarget?.kind === "one_time" ? pendingDeleteTarget.label : "One-time post";
+        invalidateOneTimePostViews();
+        closeInspector();
+        setPendingDeleteTarget(null);
+        setDeleteChoices([]);
+        toast({
+          title: "One-time post deleted",
+          description: `${deletedLabel} and its generated assets have been removed.`,
+        });
+      },
+      onError: (nextError: unknown) => {
+        toast({
+          title: "Could not delete the one-time post",
           description: nextError instanceof Error ? nextError.message : "Unknown error",
           variant: "destructive",
         });
@@ -622,24 +673,68 @@ export default function CalendarStudioPage() {
     setEditWindowId(window.eventId);
   }, [source, toast]);
 
-  const requestDeleteWindow = useCallback((windowId: string) => {
-    if (!source) return;
-    const window = source.windows.find((item) => item.eventId === windowId || item.id === windowId);
-    if (!window) {
+  const requestDeleteTargets = useCallback((day: CalendarDayPanelViewData) => {
+    const nextChoices: DeleteChoice[] = [];
+
+    if (day.campaignDeleteCandidate) {
+      const window = source?.windows.find(
+        (item) => item.eventId === day.campaignDeleteCandidate?.id || item.id === day.campaignDeleteCandidate?.id,
+      );
+
+      if (window && source) {
+        const linkedContentIds = source.contentRows
+          .filter((row) => row.windowId === window.id || row.campaignId === window.eventId)
+          .map((row) => row.id);
+
+        nextChoices.push({
+          id: `campaign:${window.eventId}`,
+          kind: "campaign",
+          label: day.campaignDeleteCandidate.label,
+          summary: `${format(new Date(day.campaignDeleteCandidate.startDate), "MMMM d, yyyy")} to ${format(new Date(day.campaignDeleteCandidate.endDate), "MMMM d, yyyy")} · ${day.campaignDeleteCandidate.linkedContentCount} linked content item${day.campaignDeleteCandidate.linkedContentCount === 1 ? "" : "s"}`,
+          canDelete: day.campaignDeleteCandidate.canDelete,
+          blockedReason: day.campaignDeleteCandidate.blockedReason,
+          payload: {
+            kind: "campaign",
+            id: window.eventId,
+            label: window.label,
+            startDate: window.startDate,
+            endDate: window.endDate,
+            contentIds: linkedContentIds,
+          },
+        });
+      }
+    }
+
+    for (const candidate of day.oneTimeDeleteCandidates) {
+      nextChoices.push({
+        id: `one-time:${candidate.groupKey}`,
+        kind: "one_time",
+        label: candidate.label,
+        summary: `${candidate.channels.map((channel) => channel[0].toUpperCase() + channel.slice(1)).join(", ")} · ${candidate.contentCount} content item${candidate.contentCount === 1 ? "" : "s"}`,
+        canDelete: candidate.canDelete,
+        blockedReason: candidate.blockedReason,
+        payload: {
+          kind: "one_time",
+          groupKey: candidate.groupKey,
+          label: candidate.label,
+          scheduledFor: candidate.scheduledFor,
+          eventRef: candidate.eventRef ?? null,
+          channels: candidate.channels,
+          contentCount: candidate.contentCount,
+        },
+      });
+    }
+
+    if (nextChoices.length < 1) {
       toast({
-        title: "Campaign window not found",
-        description: "The selected campaign could not be matched to a live calendar rule.",
+        title: "Nothing to delete here",
+        description: "This day has no deletable campaign window or one-time post.",
         variant: "destructive",
       });
       return;
     }
 
-    setDeleteWindowTarget({
-      id: window.eventId,
-      label: window.label,
-      startDate: window.startDate,
-      endDate: window.endDate,
-    });
+    setDeleteChoices(nextChoices);
   }, [source, toast]);
 
   const handoffToSamm = useCallback((
@@ -655,6 +750,22 @@ export default function CalendarStudioPage() {
       description: toastDescription,
     });
   }, [closeInspector, setLocation, toast]);
+
+  const isDeletePending = deleteCampaignMutation.isPending || deleteOneTimeMutation.isPending;
+
+  const confirmDeleteChoice = useCallback((choice: DeleteChoice) => {
+    if (!choice.canDelete) {
+      toast({
+        title: choice.kind === "campaign" ? "Campaign cannot be deleted" : "Post cannot be deleted",
+        description: choice.blockedReason ?? "This item is locked and cannot be deleted right now.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setDeleteChoices([]);
+    setPendingDeleteTarget(choice.payload);
+  }, [toast]);
 
   const workflowActions = useMemo(
     () =>
@@ -724,25 +835,15 @@ export default function CalendarStudioPage() {
               });
             },
             deleteWindowForDay: (data: CalendarDayPanelViewData) => {
-              if (!data.campaignContext?.id) {
+              if (!data.campaignDeleteCandidate && data.oneTimeDeleteCandidates.length < 1) {
                 toast({
                   title: "Nothing to delete here",
-                  description: "This day does not currently belong to a committed calendar window.",
+                  description: "This day has no deletable campaign window or one-time post.",
                   variant: "destructive",
                 });
                 return;
               }
-
-              if (data.date !== data.campaignContext.eventDate) {
-                toast({
-                  title: "Delete from the actual campaign day",
-                  description: `This window can only be deleted from ${format(new Date(data.campaignContext.eventDate), "MMMM d, yyyy")}, not from a lead-window day.`,
-                  variant: "destructive",
-                });
-                return;
-              }
-
-              requestDeleteWindow(data.campaignContext.id);
+              requestDeleteTargets(data);
             },
             createDraftsForCampaign: (data: CampaignPanelViewData) => {
               const prompt = `Create drafts for the ${data.name} campaign window from ${format(new Date(data.startDate), "MMMM d")} to ${format(new Date(data.endDate), "MMMM d, yyyy")} using the committed campaign rules.`;
@@ -773,7 +874,7 @@ export default function CalendarStudioPage() {
             },
           }
         : null,
-    [source, planningSession, closeInspector, toast, openCreateDialog, openManualDialog, handoffToSamm, openEditDialog, requestDeleteWindow],
+    [source, planningSession, closeInspector, toast, openCreateDialog, openManualDialog, handoffToSamm, openEditDialog, requestDeleteTargets],
   );
 
   useRegisterCalendarStudioWorkflow(workflowActions);
@@ -1023,32 +1124,96 @@ export default function CalendarStudioPage() {
         </DialogContent>
       </Dialog>
 
-      <AlertDialog
-        open={Boolean(deleteWindowTarget)}
+      <Dialog
+        open={deleteChoices.length > 0}
         onOpenChange={(open) => {
-          if (!open) setDeleteWindowTarget(null);
+          if (!open) setDeleteChoices([]);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Choose what to delete</DialogTitle>
+            <DialogDescription>
+              Campaign windows delete their unpublished linked content too. One-time posts delete the generated post group for this day.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            {deleteChoices.map((choice) => (
+              <button
+                key={choice.id}
+                type="button"
+                onClick={() => confirmDeleteChoice(choice)}
+                disabled={!choice.canDelete}
+                className="flex w-full items-start justify-between rounded-lg border border-border px-4 py-3 text-left transition-colors enabled:hover:border-destructive/40 enabled:hover:bg-destructive/5 disabled:cursor-not-allowed disabled:opacity-65"
+              >
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-foreground">{choice.label}</span>
+                    <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                      {choice.kind === "campaign" ? "Campaign" : "One-time post"}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">{choice.summary}</p>
+                  {choice.blockedReason ? (
+                    <p className="text-xs text-red-600">{choice.blockedReason}</p>
+                  ) : null}
+                </div>
+                <span className="text-xs font-medium text-muted-foreground">
+                  {choice.canDelete ? "Continue" : "Locked"}
+                </span>
+              </button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog
+        open={Boolean(pendingDeleteTarget)}
+        onOpenChange={(open) => {
+          if (!open) setPendingDeleteTarget(null);
         }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete this campaign window?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {pendingDeleteTarget?.kind === "campaign" ? "Delete this campaign?" : "Delete this one-time post?"}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              {deleteWindowTarget
-                ? `${deleteWindowTarget.label} will be removed from ${format(new Date(deleteWindowTarget.startDate), "MMMM d, yyyy")} to ${format(new Date(deleteWindowTarget.endDate), "MMMM d, yyyy")}. Days in that range will become open again, and future draft creation will stop using this window.`
-                : "This removes the committed calendar window and reopens the affected days."}
+              {pendingDeleteTarget?.kind === "campaign"
+                ? `${pendingDeleteTarget.label} will be removed from ${format(new Date(pendingDeleteTarget.startDate), "MMMM d, yyyy")} to ${format(new Date(pendingDeleteTarget.endDate), "MMMM d, yyyy")}. Any unpublished content linked to this campaign will be deleted too.`
+                : pendingDeleteTarget?.kind === "one_time"
+                  ? `${pendingDeleteTarget.label} will be removed from ${format(new Date(pendingDeleteTarget.scheduledFor), "MMMM d, yyyy")}. samm will delete the generated one-time post group and any unpublished linked assets for this request.`
+                  : "This delete action cannot be undone."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleteMutation.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={isDeletePending}>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              disabled={deleteMutation.isPending}
+              disabled={isDeletePending}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => {
-                if (!deleteWindowTarget) return;
-                deleteMutation.mutate({ id: deleteWindowTarget.id });
+                if (!pendingDeleteTarget) return;
+                if (pendingDeleteTarget.kind === "campaign") {
+                  deleteCampaignMutation.mutate({
+                    id: pendingDeleteTarget.id,
+                    contentIds: pendingDeleteTarget.contentIds,
+                  });
+                  return;
+                }
+
+                deleteOneTimeMutation.mutate({
+                  groupKey: pendingDeleteTarget.groupKey,
+                  scheduledFor: pendingDeleteTarget.scheduledFor,
+                  title: pendingDeleteTarget.label,
+                  eventRef: pendingDeleteTarget.eventRef ?? null,
+                });
               }}
             >
-              {deleteMutation.isPending ? "Deleting..." : "Delete window"}
+              {isDeletePending
+                ? "Deleting..."
+                : pendingDeleteTarget?.kind === "campaign"
+                  ? "Delete campaign"
+                  : "Delete post"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
