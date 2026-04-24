@@ -80,6 +80,17 @@ type FacebookPageOption = {
   tasks?: string[];
 };
 
+function ConfigGuide({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="rounded-md border border-blue-200 bg-blue-50/70 p-3 text-xs text-blue-900">
+      <div className="flex items-start gap-2">
+        <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        <div className="space-y-1">{children}</div>
+      </div>
+    </div>
+  );
+}
+
 export default function AgentSettings() {
   const { data: config, isLoading } = useGetOrgConfig();
   const updateMutation = useUpdateOrgConfig();
@@ -1179,6 +1190,13 @@ export default function AgentSettings() {
                       <div className="text-sm">Active segment</div>
                       <Switch checked={Boolean(icpEditor.active ?? true)} onCheckedChange={(checked) => setIcpEditor({ ...icpEditor, active: checked })} />
                     </div>
+                    <div className="md:col-span-2">
+                      <ConfigGuide>
+                        <p>These four fields below expect valid JSON objects, not lists.</p>
+                        <p>Use <code className="rounded bg-white px-1 py-0.5 font-mono text-[11px]">{`{}`}</code> when a section is intentionally empty.</p>
+                        <p>Example shape: <code className="rounded bg-white px-1 py-0.5 font-mono text-[11px]">{`{"student_stage":["grade_12"],"study_goal":["exam_prep"]}`}</code></p>
+                      </ConfigGuide>
+                    </div>
                     <div className="space-y-2">
                       <Label className="text-xs">Hard filters (JSON)</Label>
                       <Textarea value={icpEditor.hard_filters_json ?? "{}"} onChange={(e) => setIcpEditor({ ...icpEditor, hard_filters_json: e.target.value })} className="h-28 resize-none font-mono text-xs" />
@@ -1353,6 +1371,13 @@ export default function AgentSettings() {
                       <Label className="text-xs">Seasonality periods (JSON array)</Label>
                       <Textarea value={seasonalityEditor.seasonality_periods_json ?? "[]"} onChange={(e) => setSeasonalityEditor({ ...seasonalityEditor, seasonality_periods_json: e.target.value })} className="h-40 resize-none font-mono text-xs" />
                     </div>
+                    <div className="md:col-span-2">
+                      <ConfigGuide>
+                        <p>This field expects a JSON array: start with <code className="rounded bg-white px-1 py-0.5 font-mono text-[11px]">[]</code>, then add one object per demand period.</p>
+                        <p><strong>Current rule:</strong> <code className="rounded bg-white px-1 py-0.5 font-mono text-[11px]">starts_on</code> and <code className="rounded bg-white px-1 py-0.5 font-mono text-[11px]">ends_on</code> must use full dates like <code className="rounded bg-white px-1 py-0.5 font-mono text-[11px]">2026-04-01</code>, even for recurring profiles.</p>
+                        <p>Short month-day values like <code className="rounded bg-white px-1 py-0.5 font-mono text-[11px]">04-01</code> will fail because the backend stores real dates.</p>
+                      </ConfigGuide>
+                    </div>
                   </div>
                   <div className="mt-4 flex justify-end">
                     <Button size="sm" onClick={handleSaveSeasonality} disabled={upsertSeasonalityProfile.isPending}>
@@ -1419,6 +1444,11 @@ export default function AgentSettings() {
                         <div className="text-sm">Approval required</div>
                         <Switch checked={Boolean(discountEditor.approval_required ?? true)} onCheckedChange={(checked) => setDiscountEditor({ ...discountEditor, approval_required: checked })} />
                       </div>
+                      <ConfigGuide>
+                        <p>Condition fields below expect JSON objects.</p>
+                        <p>Use <code className="rounded bg-white px-1 py-0.5 font-mono text-[11px]">{`{}`}</code> if you do not want extra guardrails yet.</p>
+                        <p>Example: <code className="rounded bg-white px-1 py-0.5 font-mono text-[11px]">{`{"seasonality":["exam_prep_push"],"offer_type":["bundle"]}`}</code></p>
+                      </ConfigGuide>
                       <div className="space-y-2">
                         <Label className="text-xs">Allowed conditions (JSON)</Label>
                         <Textarea value={discountEditor.allowed_conditions_json ?? "{}"} onChange={(e) => setDiscountEditor({ ...discountEditor, allowed_conditions_json: e.target.value })} className="h-24 resize-none font-mono text-xs" />
@@ -1490,6 +1520,10 @@ export default function AgentSettings() {
                           <Input type="number" value={outreachEditor.max_contacts_per_30d ?? 0} onChange={(e) => setOutreachEditor({ ...outreachEditor, max_contacts_per_30d: Number(e.target.value || 0) })} className="h-9" />
                         </div>
                       </div>
+                      <ConfigGuide>
+                        <p>Channel rules expect one JSON object keyed by channel name.</p>
+                        <p>Example: <code className="rounded bg-white px-1 py-0.5 font-mono text-[11px]">{`{"whatsapp":{"max_per_7d":2},"email":{"max_per_30d":4}}`}</code></p>
+                      </ConfigGuide>
                       <div className="space-y-2">
                         <Label className="text-xs">Channel rules (JSON)</Label>
                         <Textarea value={outreachEditor.channel_rules_json ?? "{}"} onChange={(e) => setOutreachEditor({ ...outreachEditor, channel_rules_json: e.target.value })} className="h-32 resize-none font-mono text-xs" />
