@@ -23,6 +23,7 @@ import {
   type CanonicalAssetSpec,
   type DraftAssetRequest,
 } from '../_shared/asset-brief-contract.ts'
+import { buildBrandVisualRules, renderBrandVisualRules } from '../_shared/brand-visual-context.ts'
 import { getIntegrationDefinition } from '../_shared/integration-registry.ts'
 import { createAnthropicClient, generateJsonWithAnthropic, generateTextWithAnthropic } from '../_shared/llm-client.ts'
 
@@ -167,6 +168,7 @@ function buildOneTimeAssetSpec(
   request: DraftAssetRequest,
   canonical: CanonicalCopy,
   brandVoice: any,
+  brandRules: CanonicalAssetSpec['brand_rules'],
 ): CanonicalAssetSpec {
   const briefType = getDefaultBriefType(request.intent, request.asset_need)
   const slides = request.asset_need === ASSET_NEED.CAROUSEL
@@ -194,7 +196,8 @@ function buildOneTimeAssetSpec(
     campaign_label: request.campaign_label ?? null,
     targets: buildAssetTargets(request.platforms ?? DEFAULT_PLATFORMS),
     brand_rules: {
-      tone: brandVoice.tone ?? null,
+      ...(brandRules ?? {}),
+      tone: brandRules?.tone ?? brandVoice.tone ?? null,
       must_include: [canonical.key_fact, canonical.exact_cta].filter(Boolean),
       must_avoid: neverSay,
     },
@@ -216,6 +219,9 @@ function renderAssetBrief(spec: CanonicalAssetSpec): string {
     spec.scheduled_for ? `Scheduled for: ${spec.scheduled_for}` : null,
     spec.event_ref ? `Related event: ${spec.event_ref}` : null,
     `Targets: ${spec.targets.map((target) => `${target.platform}${target.dimensions ? ` (${target.dimensions})` : ''}`).join(', ')}`,
+    '',
+    'Brand grounding:',
+    ...renderBrandVisualRules(spec.brand_rules),
   ]
 
   if (spec.slides?.length) {
@@ -232,7 +238,11 @@ function renderAssetBrief(spec: CanonicalAssetSpec): string {
     }
   }
 
-  lines.push('', 'This brief is intended for external rendering, not internal generation.')
+  lines.push(
+    '',
+    'This brief is intended for external rendering, not internal generation.',
+    'Use only the approved brand kit and destinations above. If a value is missing, omit it rather than inventing a substitute.',
+  )
 
   return lines.filter((line): line is string => Boolean(line)).join('\n')
 }
@@ -391,6 +401,14 @@ Deno.serve(async (req) => {
     const canonical = await runCanonicalCopy(anthropic, topic, scheduledFor, eventRef, brandVoice)
     console.log(`Canonical headline locked: "${canonical.headline}"`)
     const workingTitle = postTitle || canonical.headline
+    const brandRules = buildBrandVisualRules(config, {
+      tone: brandVoice.tone ?? null,
+      must_include: [canonical.key_fact, canonical.exact_cta].filter(Boolean),
+      must_avoid: Array.isArray(brandVoice.never_say)
+        ? brandVoice.never_say.filter((value: unknown): value is string => typeof value === 'string' && value.trim().length > 0)
+        : null,
+      strict_mode: true,
+    })
 
     const assets = await runPlatformAdapters(anthropic, topic, canonical, platforms, scheduledFor, brandVoice)
     console.log(`${assets.length} platform drafts produced`)
@@ -428,7 +446,7 @@ Deno.serve(async (req) => {
 
     let briefCreated = false
     if (shouldGenerateDesignBrief(assetNeed)) {
-      const assetSpec = buildOneTimeAssetSpec(request, canonical, brandVoice)
+      const assetSpec = buildOneTimeAssetSpec(request, canonical, brandVoice, brandRules)
       const designBrief = renderAssetBrief(assetSpec)
       const { error: briefInsertError } = await supabase
         .from('content_registry')

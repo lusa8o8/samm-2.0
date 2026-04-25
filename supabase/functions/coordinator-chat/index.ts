@@ -55,6 +55,16 @@ type PipelineDRequestIntent = {
   asset_need?: AssetNeed
 }
 
+function safeString(value: unknown) {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : null
+}
+
+function normalizeText(value: unknown) {
+  return safeString(value)?.toLowerCase().replace(/\s+/g, ' ') ?? ''
+}
+
 function jsonResponse(body: ChatResponse | { error: string }, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -95,6 +105,52 @@ function summarizeEvents(rows: any[]) {
     lead_days: row.lead_days ?? null,
     pipeline_trigger: row.pipeline_trigger ?? null,
   }))
+}
+
+function buildOneTimeGroupKey(row: any) {
+  const metadata = row?.metadata && typeof row.metadata === 'object' ? row.metadata : {}
+  const draftGroupId = safeString(metadata.draft_group_id)
+  if (draftGroupId) return `draft-group:${draftGroupId}`
+
+  const scheduledFor = safeString(metadata.scheduled_for) ?? safeString(row?.scheduled_at)?.slice(0, 10) ?? ''
+  const eventRef = safeString(metadata.event_ref) ?? ''
+  const title = normalizeText(metadata.title ?? row?.subject_line ?? row?.body)
+  if (!scheduledFor || !title) return null
+  return `legacy:${scheduledFor}|${eventRef}|${title}`
+}
+
+function summarizeOneTimePosts(rows: any[]) {
+  const grouped = new Map<string, any[]>()
+
+  for (const row of rows) {
+    if (row?.platform === 'design_brief') continue
+    const groupKey = buildOneTimeGroupKey(row)
+    if (!groupKey) continue
+    const existing = grouped.get(groupKey) ?? []
+    existing.push(row)
+    grouped.set(groupKey, existing)
+  }
+
+  return Array.from(grouped.values())
+    .map((groupRows) => {
+      const firstRow = groupRows[0]
+      const metadata = firstRow?.metadata && typeof firstRow.metadata === 'object' ? firstRow.metadata : {}
+      const platforms = Array.from(
+        new Set(
+          groupRows
+            .map((row) => safeString(row?.platform)?.toLowerCase())
+            .filter((value): value is string => Boolean(value) && value !== 'design_brief'),
+        ),
+      )
+
+      return {
+        title: safeString(metadata.title) ?? safeString(firstRow?.subject_line) ?? 'One-time post',
+        scheduled_for: safeString(metadata.scheduled_for) ?? safeString(firstRow?.scheduled_at)?.slice(0, 10) ?? null,
+        event_ref: safeString(metadata.event_ref),
+        platforms,
+      }
+    })
+    .sort((a, b) => (a.scheduled_for ?? '').localeCompare(b.scheduled_for ?? ''))
 }
 
 function summarizeInbox(rows: any[]) {
@@ -138,13 +194,17 @@ function buildPipelineDGuidanceResponse(): ChatResponse {
 function buildGreetingResponse(
   orgName: string,
   upcomingEvents: Array<{ label?: string; event_date?: string }>,
+  upcomingOneTimePosts: Array<{ title?: string; scheduled_for?: string | null }>,
   pendingCount: number,
   mode: ConversationMode,
 ): ChatResponse {
   const nextEvent = upcomingEvents[0]
+  const nextOneTimePost = upcomingOneTimePosts[0]
   const eventNote = nextEvent?.label && nextEvent?.event_date
     ? ` I see you have ${nextEvent.label} coming up on ${nextEvent.event_date}.`
-    : ''
+    : nextOneTimePost?.title && nextOneTimePost?.scheduled_for
+      ? ` I also see a one-time post, ${nextOneTimePost.title}, scheduled for ${nextOneTimePost.scheduled_for}.`
+      : ''
   if (mode === 'planning') {
     return {
       message: `Hello! I'm samm, your planning collaborator for ${orgName}. We can map the month, define campaigns, clarify what belongs in baseline versus campaign work, and tighten asset needs before anything becomes live.${eventNote}`,
@@ -213,6 +273,58 @@ function buildWritePostResponse(
       type: 'run_pipeline',
       pipeline: 'pipeline-d-post',
       status: 'running',
+      run_id: null,
+    },
+  }
+}
+
+async function buildOneTimePostResponse(
+  supabase: any,
+  orgId: string,
+  intent: PipelineDRequestIntent,
+  message?: string,
+): Promise<ChatResponse> {
+  const postBody: Record<string, unknown> = {
+    intent: PLANNING_INTENT.ONE_TIME,
+    topic: intent.topic,
+  }
+  if (intent.post_title) {
+    postBody.post_title = intent.post_title
+  }
+  if (Array.isArray(intent.platforms) && intent.platforms.length > 0) {
+    postBody.platforms = intent.platforms
+  }
+  if (intent.event_ref) {
+    postBody.event_ref = String(intent.event_ref)
+  }
+  if (intent.scheduled_for) {
+    postBody.scheduled_for = intent.scheduled_for
+  }
+  if (intent.asset_need && intent.asset_need !== ASSET_NEED.NONE) {
+    postBody.asset_need = intent.asset_need
+  }
+
+  const result = await invokePipeline(supabase, 'pipeline-d-post', orgId, postBody)
+  const platformNote = Array.isArray(intent.platforms) && intent.platforms.length > 0
+    ? ` for ${intent.platforms.join(', ')}`
+    : ''
+  const scheduleNote = intent.scheduled_for ? ` scheduled for ${intent.scheduled_for}` : ''
+  const assetNote = intent.asset_need && intent.asset_need !== ASSET_NEED.NONE
+    ? ` with a ${intent.asset_need} asset brief`
+    : ''
+
+  const draftsCreated =
+    typeof result?.drafts_created === 'number' ? result.drafts_created : null
+
+  return {
+    message:
+      message ||
+      `Created ${draftsCreated ?? 'new'} one-time draft${draftsCreated === 1 ? '' : 's'} about "${intent.topic}"${platformNote}${scheduleNote}${assetNote}.`,
+    suggestions: ['Check Content Registry', 'What needs my approval?', 'Summarize this week'],
+    invoked_action: {
+      type: 'run_pipeline',
+      pipeline: 'pipeline-d-post',
+      status: 'completed',
       run_id: null,
     },
   }
@@ -318,11 +430,11 @@ Deno.serve(async (req) => {
 
       const assetNeed = normalizeAssetNeed(explicitAction.asset_need)
       const postTitle = explicitAction.post_title ? String(explicitAction.post_title).trim() : null
-      return jsonResponse(
-        buildWritePostResponse(
-          supabase,
-          orgId,
-          {
+        return jsonResponse(
+          await buildOneTimePostResponse(
+            supabase,
+            orgId,
+            {
             topic,
             post_title: postTitle,
             platforms: Array.isArray(explicitAction.platforms)
@@ -339,11 +451,21 @@ Deno.serve(async (req) => {
 
     const today = new Date().toISOString().slice(0, 10)
 
-    const [orgConfigResult, metricsResult, runsResult, eventsResult, inboxCountResult, inboxResult] = await Promise.all([
+    const [orgConfigResult, metricsResult, runsResult, eventsResult, oneTimePostsResult, inboxCountResult, inboxResult] = await Promise.all([
       supabase.from('org_config').select('*').eq('org_id', orgId).single(),
       supabase.from('platform_metrics').select('*').eq('org_id', orgId).order('snapshot_date', { ascending: false }).limit(8),
       supabase.from('pipeline_runs').select('*').eq('org_id', orgId).order('started_at', { ascending: false }).limit(8),
       supabase.from('academic_calendar').select('*').eq('org_id', orgId).gte('event_date', today).order('event_date', { ascending: true }).limit(5),
+      supabase
+        .from('content_registry')
+        .select('id, platform, subject_line, body, status, scheduled_at, metadata')
+        .eq('org_id', orgId)
+        .eq('created_by', 'pipeline-d-post')
+        .eq('is_campaign_post', false)
+        .not('scheduled_at', 'is', null)
+        .gte('scheduled_at', `${today}T00:00:00`)
+        .order('scheduled_at', { ascending: true })
+        .limit(40),
       supabase.from('human_inbox').select('*', { count: 'exact', head: true }).eq('org_id', orgId).eq('status', 'pending'),
       supabase.from('human_inbox').select('*').eq('org_id', orgId).eq('status', 'pending').order('created_at', { ascending: false }).limit(5),
     ])
@@ -352,6 +474,7 @@ Deno.serve(async (req) => {
     if (metricsResult.error) throw new Error(`Failed to load metrics: ${metricsResult.error.message}`)
     if (runsResult.error) throw new Error(`Failed to load pipeline runs: ${runsResult.error.message}`)
     if (eventsResult.error) throw new Error(`Failed to load calendar events: ${eventsResult.error.message}`)
+    if (oneTimePostsResult.error) throw new Error(`Failed to load one-time posts: ${oneTimePostsResult.error.message}`)
     if (inboxCountResult.error) throw new Error(`Failed to load inbox summary: ${inboxCountResult.error.message}`)
     if (inboxResult.error) throw new Error(`Failed to load inbox items: ${inboxResult.error.message}`)
 
@@ -363,11 +486,12 @@ Deno.serve(async (req) => {
     })
 
     const orgConfig = orgConfigResult.data
-    const metrics = summarizeMetrics(metricsResult.data ?? [])
-    const recentRuns = summarizeRuns(activeRuns)
-    const upcomingEvents = summarizeEvents(eventsResult.data ?? [])
-    const pendingInbox = summarizeInbox(inboxResult.data ?? [])
-    const pendingCount = inboxCountResult.count ?? 0
+      const metrics = summarizeMetrics(metricsResult.data ?? [])
+      const recentRuns = summarizeRuns(activeRuns)
+      const upcomingEvents = summarizeEvents(eventsResult.data ?? [])
+      const upcomingOneTimePosts = summarizeOneTimePosts(oneTimePostsResult.data ?? []).slice(0, 5)
+      const pendingInbox = summarizeInbox(inboxResult.data ?? [])
+      const pendingCount = inboxCountResult.count ?? 0
 
     const explicitSchedulerResult = await resolveExplicitSchedulerRequest({
       supabase,
@@ -400,20 +524,21 @@ Deno.serve(async (req) => {
       return jsonResponse(buildPipelineDGuidanceResponse())
     }
 
-    if (isGreeting(message)) {
-      return jsonResponse(buildGreetingResponse(orgConfig?.org_name ?? 'this workspace', upcomingEvents, pendingCount, mode))
-    }
-    const prompt = {
-      workspace: {
+      if (isGreeting(message)) {
+        return jsonResponse(buildGreetingResponse(orgConfig?.org_name ?? 'this workspace', upcomingEvents, upcomingOneTimePosts, pendingCount, mode))
+      }
+      const prompt = {
+        workspace: {
         org_name: orgConfig?.org_name ?? 'this workspace',
         full_name: orgConfig?.full_name ?? '',
         timezone: orgConfig?.timezone ?? '',
-        pending_inbox_count: pendingCount,
-        pending_inbox: pendingInbox,
-        recent_runs: recentRuns,
-        upcoming_events: upcomingEvents,
-        latest_metrics: metrics,
-      },
+          pending_inbox_count: pendingCount,
+          pending_inbox: pendingInbox,
+          recent_runs: recentRuns,
+          upcoming_events: upcomingEvents,
+          upcoming_one_time_posts: upcomingOneTimePosts,
+          latest_metrics: metrics,
+        },
       conversation: [...history.slice(-8), { role: 'user', content: message }],
       instruction: `You are samm, the coordinating intelligence for this workspace. The current conversation mode is ${mode.toUpperCase()}. Decide whether to answer directly or prepare an action. Return JSON only with this shape:
 {"message": string, "suggestions": string[], "action": null | ActionObject}
@@ -448,9 +573,12 @@ Rules:
   - universities is the existing storage field for audience tags or segments. Use an empty array if the user does not specify any. Never invent universities, campuses, or institutions.
 - Use edit_calendar_event when the user asks to update, change, rename, or reschedule an existing event. Match the event by label or date from the upcoming_events list and use its id. Always set needs_confirmation: false for edits — they are reversible.
 - Use delete_calendar_event when the user asks to remove or delete an existing event. Match from upcoming_events and use its id. Always set needs_confirmation: true for deletes — they are permanent.
-- For status questions, summaries, metrics, approvals, and calendar reads, answer directly.
-- Keep suggestions short and actionable.`
-    }
+  - For status questions, summaries, metrics, approvals, and calendar reads, answer directly.
+  - Treat upcoming_events as campaign windows or dated academic_calendar events.
+  - Treat upcoming_one_time_posts as standalone dated posts that still belong on the calendar, but are not campaign windows.
+  - If the user asks what is on the calendar, mention both upcoming_events and upcoming_one_time_posts when relevant.
+  - Keep suggestions short and actionable.`
+      }
 
     const parsed = await generateJsonWithAnthropic<any>(anthropic, {
       task: 'coordinator',
@@ -603,11 +731,11 @@ Rules:
         return jsonResponse({ message: "I couldn't work out what to write about. Could you be more specific?", suggestions })
       }
 
-      return jsonResponse(
-        buildWritePostResponse(
-          supabase,
-          orgId,
-          {
+        return jsonResponse(
+          await buildOneTimePostResponse(
+            supabase,
+            orgId,
+            {
             type: 'write_post',
             topic,
             platforms: Array.isArray(action.platforms) ? action.platforms : null,

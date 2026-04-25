@@ -348,6 +348,7 @@ function resolveStudioWindow(row: CalendarStudioCalendarRow): ResolvedStudioWind
 
 function toUiContentStatus(status?: string | null): WorkspaceContentStatus {
   if (status === "pending_approval") return "draft";
+  if (status === "scheduled") return "scheduled";
   if (status === "approved") return "scheduled";
   if (status === "published") return "published";
   if (status === "failed") return "failed";
@@ -362,6 +363,8 @@ function toApprovalStatus(status?: string | null): WorkspaceApprovalStatus {
 
 function getBucketDate(row: CalendarStudioContentRow) {
   const rawStatus = (row.status ?? "").toLowerCase();
+  const metadata = asRecord(row.metadata);
+  const metadataScheduledFor = safeString(metadata.scheduled_for);
 
   if (rawStatus === "scheduled" || rawStatus === "approved") {
     return toDayKey(row.scheduled_at);
@@ -370,7 +373,7 @@ function getBucketDate(row: CalendarStudioContentRow) {
     return toDayKey(row.published_at) ?? toDayKey(row.scheduled_at);
   }
   if (["draft", "pending_approval", "rejected", "failed"].includes(rawStatus)) {
-    return toDayKey(row.created_at);
+    return toDayKey(row.scheduled_at) ?? toDayKey(metadataScheduledFor) ?? toDayKey(row.created_at);
   }
 
   return null;
@@ -542,10 +545,23 @@ function buildCalendarDayCell(source: CalendarStudioSourceBundle, dayKey: string
   const primaryWindow = activeWindows[0] ?? null;
   const counts = buildDayCounts(dayRows);
   const capacity = buildDayCapacity(primaryWindow, counts);
-  const previewChips = dayRows
+  const previewRows = dayRows
     .filter((row) => !row.isDesignBrief && row.channel)
     .sort(sortContentRows)
-    .slice(0, 3)
+  const primaryOneTimeRow = previewRows.find((row) => row.purpose === "one_time") ?? null;
+  const selectedPreviewRows: NormalizedContentRow[] = [];
+
+  if (primaryOneTimeRow) {
+    selectedPreviewRows.push(primaryOneTimeRow);
+  }
+
+  for (const row of previewRows) {
+    if (selectedPreviewRows.some((candidate) => candidate.id === row.id)) continue;
+    selectedPreviewRows.push(row);
+    if (selectedPreviewRows.length >= 3) break;
+  }
+
+  const previewChips = selectedPreviewRows
     .map((row) => ({
       id: row.id,
       channel: row.channel as WorkspaceChannel,
@@ -782,6 +798,7 @@ export function buildCalendarStudioDayDetail(source: CalendarStudioSourceBundle,
     .sort(sortContentRows);
   const campaignDeleteCandidate = buildCampaignDeleteCandidate(source, dayKey, primaryWindow);
   const oneTimeDeleteCandidates = buildOneTimeDeleteCandidates(source, dayKey, dayRows);
+  const primaryOneTimeCandidate = !primaryWindow ? oneTimeDeleteCandidates[0] : undefined;
 
   return {
     ...dayCell,
@@ -792,6 +809,15 @@ export function buildCalendarStudioDayDetail(source: CalendarStudioSourceBundle,
           objective: primaryWindow.objective,
           eventDate: primaryWindow.startDate,
           exclusivity: primaryWindow.exclusivity,
+        }
+        : undefined,
+    oneTimeContext: primaryOneTimeCandidate
+      ? {
+          title: primaryOneTimeCandidate.label,
+          scheduledFor: primaryOneTimeCandidate.scheduledFor,
+          channels: primaryOneTimeCandidate.channels,
+          contentCount: primaryOneTimeCandidate.contentCount,
+          additionalCount: Math.max(oneTimeDeleteCandidates.length - 1, 0),
         }
       : undefined,
     supportContentAllowed: primaryWindow?.supportContentAllowed ?? false,

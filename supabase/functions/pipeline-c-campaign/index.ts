@@ -23,6 +23,7 @@ import {
   loadStructuredConfigSnapshot,
   type StructuredConfigSnapshot,
 } from '../_shared/structured-config.ts'
+import { buildBrandVisualRules, renderBrandVisualRules } from '../_shared/brand-visual-context.ts'
 import {
   deriveCampaignConstraintOutput,
   resolveCampaignWindow,
@@ -543,7 +544,7 @@ async function resumePipelineCRun(params: { supabase: any; anthropic: ReturnType
 
     const [copyAssets, designBrief] = await Promise.all([
       runPlatformCopyAdapters(anthropic, campaignBrief, event, config.brand_voice, canonicalCopy),
-      runDesignBriefAgent(anthropic, campaignBrief, event, config.brand_visual ?? {}, config.markdown_design_spec ?? null, config.social_handles ?? {}, config.primary_cta_url ?? null)
+      runGroundedDesignBriefAgent(anthropic, campaignBrief, event, config.brand_visual ?? {}, config.markdown_design_spec ?? null, config.social_handles ?? {}, config.primary_cta_url ?? null)
     ])
 
     results.copy_assets_created = copyAssets.length
@@ -964,6 +965,67 @@ Write the design brief for the graphic designer.`
 }
 
 // ── monitor ───────────────────────────────────────────────────────────
+async function runGroundedDesignBriefAgent(
+  anthropic: ReturnType<typeof createAnthropicClient>,
+  brief: CampaignBrief,
+  event: CalendarEvent,
+  brandVisual: any,
+  markdownDesignSpec: string | null,
+  socialHandles: any,
+  primaryCtaUrl: string | null
+): Promise<string> {
+  const brandRules = buildBrandVisualRules(
+    {
+      brand_visual: brandVisual,
+      markdown_design_spec: markdownDesignSpec,
+      social_handles: socialHandles,
+      primary_cta_url: primaryCtaUrl,
+    },
+    {
+      strict_mode: !event.creative_override_allowed,
+    },
+  )
+
+  const brandVisualBlock = renderBrandVisualRules(brandRules).join('\n')
+  const platformDimensionsBlock = `\nPLATFORM DIMENSIONS (use exact dimensions for each deliverable)
+- Facebook post: 1200Ã—628 (landscape) or 1080Ã—1080 (square)
+- WhatsApp image: 800Ã—800 or 1080Ã—1920 (status)
+- YouTube community: 1080Ã—1080
+- Email header: 600Ã—200`
+
+  const creativeBlock = event.creative_override_allowed
+    ? '\nCREATIVE FREEDOM: Palette deviation permitted within the accent color family. All other brand rules apply.'
+    : '\nCREATIVE FREEDOM: Full brand lock. No palette, typography, or style deviation permitted.'
+
+  const response = await generateTextWithAnthropic(anthropic, {
+    task: 'design_brief_writer',
+    maxTokens: 500,
+    system: `Write a concise design brief for a campaign visual asset.
+Plain text only. No markdown, no asterisks, no bold, no headers. Use plain bullet points with a dash (-). Under 250 words.
+You MUST include: exact brand colors, font names, logo file location, exact social handles, exact CTA URL, and platform dimensions exactly as specified.
+Do not substitute, invent, or omit any of these values.
+Never invent placeholder footer text, domains, or links such as "reallygreatsite.com" or "example.com".
+If a value is missing, explicitly say to omit it rather than guessing.`,
+    messages: [{
+      role: 'user',
+      content: `Campaign: ${brief.name}
+Key message: ${brief.key_message}
+Platforms: ${brief.platforms.join(', ')}
+Target: ${brief.target_audience} at ${event.universities.join(', ')}
+BRAND VISUAL IDENTITY
+${brandVisualBlock || 'No visual brand kit is configured. Omit any unconstrained brand element instead of inventing one.'}
+${platformDimensionsBlock}
+${creativeBlock}
+
+Write the design brief for the graphic designer.`
+    }]
+  })
+
+  return response.content[0].type === 'text'
+    ? response.content[0].text.trim()
+    : 'Design brief unavailable.'
+}
+
 async function runMonitor(
   supabase: any,
   anthropic: ReturnType<typeof createAnthropicClient>,

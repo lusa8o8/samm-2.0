@@ -41,6 +41,7 @@ function SubHeading({
 
 export function CalendarDayPanel({ data }: Props) {
   const context = data.campaignContext;
+  const oneTimeContext = data.oneTimeContext;
   const colorClasses = data.campaignColor ? campaignColorClasses[data.campaignColor] : null;
   const dateObj = new Date(data.date);
   const workflow = useCalendarStudioWorkflow();
@@ -48,7 +49,12 @@ export function CalendarDayPanel({ data }: Props) {
 
   return (
     <div className="space-y-5">
-      <div className={cn("rounded-2xl border p-5", colorClasses ? cn("bg-gradient-to-br", colorClasses.soft, colorClasses.border) : "bg-muted/40 border-border/60")}>
+      <div
+        className={cn(
+          "rounded-2xl border p-5",
+          colorClasses ? cn("bg-gradient-to-br", colorClasses.soft, colorClasses.border) : "bg-muted/40 border-border/60",
+        )}
+      >
         <div className="mb-1.5 flex items-center gap-2 text-[11px] font-medium text-foreground/70">
           <CalendarDays size={12} />
           {format(dateObj, "EEEE")}
@@ -57,19 +63,39 @@ export function CalendarDayPanel({ data }: Props) {
         <h3 className="text-xl font-semibold leading-tight text-foreground">{format(dateObj, "MMMM d, yyyy")}</h3>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           {context ? <CampaignPill name={context.name} color={data.campaignColor ?? "slate"} size="sm" /> : null}
-          <span
-            className={cn(
-              "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium",
-              data.supportContentAllowed
-                ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300"
-                : "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300",
-            )}
-          >
-            {data.supportContentAllowed ? <Unlock size={10} /> : <Lock size={10} />}
-            {data.supportContentAllowed ? "Support content allowed" : "Exclusive — no support"}
-          </span>
+          {oneTimeContext && !context ? (
+            <span className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-medium text-sky-700 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-300">
+              <Plus size={10} />
+              One-time post
+            </span>
+          ) : null}
+          {context ? (
+            <span
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium",
+                data.supportContentAllowed
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300"
+                  : "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300",
+              )}
+            >
+              {data.supportContentAllowed ? <Unlock size={10} /> : <Lock size={10} />}
+              {data.supportContentAllowed ? "Support content allowed" : "Exclusive - no support"}
+            </span>
+          ) : null}
         </div>
         {context ? <p className="mt-3 text-[12px] italic leading-relaxed text-foreground/70">{context.objective}</p> : null}
+        {oneTimeContext && !context ? (
+          <div className="mt-3 space-y-1">
+            <p className="text-[13px] font-medium leading-relaxed text-foreground">{oneTimeContext.title}</p>
+            <p className="text-[11px] text-foreground/70">
+              {oneTimeContext.contentCount} {oneTimeContext.contentCount === 1 ? "draft" : "drafts"} across {oneTimeContext.channels.length}{" "}
+              {oneTimeContext.channels.length === 1 ? "channel" : "channels"}
+              {oneTimeContext.additionalCount > 0
+                ? `, plus ${oneTimeContext.additionalCount} more standalone ${oneTimeContext.additionalCount === 1 ? "post" : "posts"} on this day.`
+                : "."}
+            </p>
+          </div>
+        ) : null}
       </div>
 
       <section>
@@ -106,7 +132,7 @@ export function CalendarDayPanel({ data }: Props) {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[12px] font-medium text-foreground">{item.title}</p>
                   <p className="text-[10px] text-muted-foreground">
-                    {format(new Date(item.scheduledFor), "h:mm a")} · {item.channel}
+                    {format(new Date(item.scheduledFor), "h:mm a")} - {item.channel}
                   </p>
                 </div>
                 <StatusChip status={item.status} />
@@ -155,7 +181,7 @@ export function CalendarDayPanel({ data }: Props) {
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[12px] font-medium text-foreground">{item.title}</p>
                     <p className="text-[10px] text-muted-foreground">
-                      {format(new Date(item.failedAt), "h:mm a")} · {item.channel}
+                      {format(new Date(item.failedAt), "h:mm a")} - {item.channel}
                     </p>
                   </div>
                   <AlertTriangle size={12} className="flex-shrink-0 text-red-600" />
@@ -171,8 +197,7 @@ export function CalendarDayPanel({ data }: Props) {
         <section>
           <SubHeading count={data.openSlots}>Open slots</SubHeading>
           <div className="rounded-xl border border-dashed border-border bg-muted/20 px-3 py-3 text-center text-[12px] text-muted-foreground">
-            {data.openSlots} {data.openSlots === 1 ? "slot remains" : "slots remain"} open. Create drafts from the
-            committed rules or add something manually.
+            {data.openSlots} {data.openSlots === 1 ? "slot remains" : "slots remain"} open. Create drafts from the committed rules or add something manually.
           </div>
         </section>
       ) : null}

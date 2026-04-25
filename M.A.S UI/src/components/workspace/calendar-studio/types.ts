@@ -71,6 +71,13 @@ export interface CalendarDayPanelViewData extends CalendarDayCellViewData {
     eventDate: string;
     exclusivity: "exclusive" | "allows_support";
   };
+  oneTimeContext?: {
+    title: string;
+    scheduledFor: string;
+    channels: WorkspaceChannel[];
+    contentCount: number;
+    additionalCount: number;
+  };
   supportContentAllowed: boolean;
   perChannelLimits: { channel: WorkspaceChannel; used: number; max: number }[];
   scheduledItems: {

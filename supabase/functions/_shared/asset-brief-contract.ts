@@ -66,9 +66,24 @@ export interface AssetTarget {
 export interface BrandVisualRules {
   tone?: string | null
   palette?: string[] | null
+  colors?: {
+    primary?: string | null
+    secondary?: string | null
+    accent?: string | null
+    background?: string | null
+  } | null
   fonts?: string[] | null
+  font_heading?: string | null
+  font_body?: string | null
   logo_rules?: string | null
+  logo_file?: string | null
   image_style?: string | null
+  photography_style?: string | null
+  layout_preference?: string | null
+  social_handles?: Record<string, string> | null
+  landing_url?: string | null
+  design_spec?: string | null
+  strict_mode?: boolean | null
   must_include?: string[] | null
   must_avoid?: string[] | null
 }
