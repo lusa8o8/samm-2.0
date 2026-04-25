@@ -1829,66 +1829,33 @@ export function useDeleteOneTimePostGroup(options?: MutationHookOptions) {
       title: string;
       eventRef?: string | null;
     }) => {
-      const { data: pipelineRows, error: pipelineRowsError } = await supabase
-        .from("content_registry")
-        .select("id, status, created_by, metadata")
-        .eq("org_id", getOrgId())
-        .eq("created_by", "pipeline-d-post");
-
-      if (pipelineRowsError) throw pipelineRowsError;
-
-      const normalizedTitle = title.trim().toLowerCase();
-      const normalizedEventRef = (eventRef ?? "").trim();
-      const matchingRows = (pipelineRows ?? []).filter((row: any) => {
-        const metadata = row.metadata ?? {};
-        if ((metadata.purpose ?? "") !== "one_time") return false;
-
-        const draftGroupId = typeof metadata.draft_group_id === "string" ? metadata.draft_group_id.trim() : "";
-        if (draftGroupId && groupKey === `draft-group:${draftGroupId}`) return true;
-
-        const metadataScheduledFor =
-          typeof metadata.scheduled_for === "string" ? metadata.scheduled_for.trim() : "";
-        const metadataTitle = typeof metadata.title === "string" ? metadata.title.trim().toLowerCase() : "";
-        const metadataEventRef = typeof metadata.event_ref === "string" ? metadata.event_ref.trim() : "";
-
-        return (
-          groupKey.startsWith("legacy:") &&
-          metadataScheduledFor === scheduledFor &&
-          metadataTitle === normalizedTitle &&
-          metadataEventRef === normalizedEventRef
-        );
-      });
-
-      if (matchingRows.length < 1) {
-        throw new Error("No one-time post content was found for this delete request.");
+      const accessToken = await getAccessToken();
+      if (!accessToken) {
+        throw new Error("Your session expired. Please sign in again.");
       }
 
-      const publishedCount = matchingRows.filter((row: any) => row.status === "published").length;
-      if (publishedCount > 0) {
-        throw new Error("Published one-time posts cannot be deleted.");
+      try {
+        const { error } = await supabase.functions.invoke(PIPELINE_D_FUNCTION, {
+          body: {
+            mode: "delete_one_time_group",
+            orgId: getOrgId(),
+            group_key: groupKey,
+            scheduled_for: scheduledFor,
+            post_title: title,
+            event_ref: eventRef ?? null,
+          },
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        });
+
+        if (error) throw error;
+      } catch (error) {
+        const message = await readFunctionError(error);
+        throw new Error(message);
       }
 
-      const matchingIds = matchingRows.map((row: any) => row.id);
-
-      const { error: inboxDeleteError } = await supabase
-        .from("human_inbox")
-        .delete()
-        .eq("org_id", getOrgId())
-        .in("ref_id", matchingIds);
-      if (inboxDeleteError) throw inboxDeleteError;
-
-      const { data: deletedRows, error: deleteError, count } = await supabase
-        .from("content_registry")
-        .delete({ count: "exact" })
-        .eq("org_id", getOrgId())
-        .in("id", matchingIds)
-        .select("id");
-      if (deleteError) throw deleteError;
-      if ((count ?? deletedRows?.length ?? 0) < 1) {
-        throw new Error("No one-time post content was deleted.");
-      }
-
-      return { deletedCount: count ?? deletedRows?.length ?? 0 };
+      return { deletedCount: 1 };
     },
     ...options?.mutation,
   });
@@ -2034,6 +2001,7 @@ type CoordinatorChatResponse = {
 };
 
 const COORDINATOR_FUNCTION = "coordinator-ingress";
+const PIPELINE_D_FUNCTION = "pipeline-d-post";
 
 async function invokeCoordinatorFunction({
   message,

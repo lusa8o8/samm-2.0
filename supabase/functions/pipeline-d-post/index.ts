@@ -84,6 +84,50 @@ function getCreatedAtMs(value: unknown): number | null {
   return Number.isNaN(ms) ? null : ms
 }
 
+async function loadOneTimeRowsForDelete(
+  supabase: any,
+  orgId: string,
+  params: {
+    groupKey: string
+    scheduledFor: string | null
+    title: string
+    eventRef?: string | null
+  },
+) {
+  const { data: pipelineRows, error: pipelineRowsError } = await supabase
+    .from('content_registry')
+    .select('id, status, created_by, metadata')
+    .eq('org_id', orgId)
+    .eq('created_by', 'pipeline-d-post')
+
+  if (pipelineRowsError) {
+    throw new Error(`Failed to load one-time post group: ${pipelineRowsError.message}`)
+  }
+
+  const normalizedTitle = params.title.trim().toLowerCase()
+  const normalizedEventRef = safeString(params.eventRef) ?? ''
+  const normalizedScheduledFor = safeString(params.scheduledFor)
+
+  return (pipelineRows ?? []).filter((row: any) => {
+    const metadata = row?.metadata && typeof row.metadata === 'object' ? row.metadata : {}
+    if ((metadata.purpose ?? '') !== 'one_time') return false
+
+    const draftGroupId = safeString(metadata.draft_group_id)
+    if (draftGroupId && params.groupKey === `draft-group:${draftGroupId}`) return true
+
+    const metadataScheduledFor = safeString(metadata.scheduled_for)
+    const metadataTitle = (safeString(metadata.title) ?? '').toLowerCase()
+    const metadataEventRef = safeString(metadata.event_ref) ?? ''
+
+    return (
+      params.groupKey.startsWith('legacy:') &&
+      metadataScheduledFor === normalizedScheduledFor &&
+      metadataTitle === normalizedTitle &&
+      metadataEventRef === normalizedEventRef
+    )
+  })
+}
+
 async function getOrgConfig(supabase: any, orgId: string) {
   const { data, error } = await supabase
     .from('org_config')
@@ -636,6 +680,75 @@ Deno.serve(async (req) => {
 
     if (!orgId || typeof orgId !== 'string') {
       return jsonResponse({ ok: false, error: 'orgId is required' }, 400)
+    }
+
+    if (mode === 'delete_one_time_group') {
+      const groupKey = safeString(payload?.group_key ?? payload?.groupKey)
+      const title = safeString(payload?.post_title ?? payload?.title)
+      const eventRef = safeString(payload?.event_ref ?? payload?.eventRef)
+      const scheduledFor = normalizeScheduledFor(payload?.scheduled_for ?? payload?.scheduledFor ?? null)
+
+      if (!groupKey) {
+        return jsonResponse({ ok: false, error: 'group_key is required' }, 400)
+      }
+
+      if (!title) {
+        return jsonResponse({ ok: false, error: 'post_title is required' }, 400)
+      }
+
+      const matchingRows = await loadOneTimeRowsForDelete(supabase, orgId, {
+        groupKey,
+        scheduledFor,
+        title,
+        eventRef,
+      })
+
+      if (matchingRows.length < 1) {
+        return jsonResponse({ ok: false, error: 'No one-time post content was found for this delete request.' }, 404)
+      }
+
+      const publishedCount = matchingRows.filter((row: any) => safeString(row?.status)?.toLowerCase() === 'published').length
+      if (publishedCount > 0) {
+        return jsonResponse({ ok: false, error: 'Published one-time posts cannot be deleted.' }, 409)
+      }
+
+      const matchingIds = matchingRows.map((row: any) => row.id).filter((value: unknown): value is string => typeof value === 'string')
+      if (matchingIds.length < 1) {
+        return jsonResponse({ ok: false, error: 'No one-time post content was found for this delete request.' }, 404)
+      }
+
+      const { error: inboxDeleteError } = await supabase
+        .from('human_inbox')
+        .delete()
+        .eq('org_id', orgId)
+        .in('ref_id', matchingIds)
+
+      if (inboxDeleteError) {
+        throw new Error(`Failed to delete inbox references: ${inboxDeleteError.message}`)
+      }
+
+      const { data: deletedRows, error: deleteError, count } = await supabase
+        .from('content_registry')
+        .delete({ count: 'exact' })
+        .eq('org_id', orgId)
+        .in('id', matchingIds)
+        .select('id')
+
+      if (deleteError) {
+        throw new Error(`Failed to delete one-time post group: ${deleteError.message}`)
+      }
+
+      const deletedCount = count ?? deletedRows?.length ?? 0
+      if (deletedCount < 1) {
+        return jsonResponse({ ok: false, error: 'No one-time post content was deleted.' }, 409)
+      }
+
+      return jsonResponse({
+        ok: true,
+        deleted: true,
+        deleted_count: deletedCount,
+        group_key: groupKey,
+      })
     }
 
     if (mode === 'regenerate_asset_brief') {
