@@ -56,6 +56,8 @@ type ExistingOneTimeContext = {
   topic: string
 }
 
+const BRIEF_REGEN_DEDUP_WINDOW_MS = 30_000
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -73,6 +75,13 @@ function safeString(value: unknown): string | null {
   if (typeof value !== 'string') return null
   const trimmed = value.trim()
   return trimmed.length > 0 ? trimmed : null
+}
+
+function getCreatedAtMs(value: unknown): number | null {
+  const iso = safeString(value)
+  if (!iso) return null
+  const ms = new Date(iso).getTime()
+  return Number.isNaN(ms) ? null : ms
 }
 
 async function getOrgConfig(supabase: any, orgId: string) {
@@ -291,7 +300,13 @@ async function loadOneTimeRegenerationContext(
   }
 
   const nonBriefRows = groupRows.filter((row) => row?.platform !== 'design_brief')
-  const designBriefRow = groupRows.find((row) => row?.platform === 'design_brief') ?? null
+  const designBriefRows = [...groupRows]
+    .filter((row) => row?.platform === 'design_brief')
+    .sort((a, b) => (getCreatedAtMs(b?.created_at) ?? 0) - (getCreatedAtMs(a?.created_at) ?? 0))
+  const designBriefRow =
+    designBriefRows.find((row) => safeString(row?.status)?.toLowerCase() !== 'rejected') ??
+    designBriefRows[0] ??
+    null
 
   if (nonBriefRows.length === 0) {
     throw new Error('The selected one-time post group has no copy drafts to ground a visual brief.')
@@ -300,13 +315,23 @@ async function loadOneTimeRegenerationContext(
   const firstRow = nonBriefRows[0]
   const firstMeta = firstRow?.metadata && typeof firstRow.metadata === 'object' ? firstRow.metadata : {}
   const briefMeta = designBriefRow?.metadata && typeof designBriefRow.metadata === 'object' ? designBriefRow.metadata : {}
-  const platforms = Array.from(
+  const derivedPlatforms = Array.from(
     new Set(
       nonBriefRows
         .map((row) => safeString(row?.platform)?.toLowerCase())
         .filter((value): value is string => Boolean(value) && value !== 'design_brief'),
     ),
   )
+  const fallbackPlatforms = Array.isArray((briefMeta as any)?.asset_spec?.targets)
+    ? Array.from(
+      new Set(
+        ((briefMeta as any).asset_spec.targets as any[])
+          .map((target) => safeString(target?.platform)?.toLowerCase())
+          .filter((value: string | null): value is string => Boolean(value)),
+      ),
+    )
+    : []
+  const platforms = derivedPlatforms.length > 0 ? derivedPlatforms : fallbackPlatforms
 
   const workingTitle =
     safeString(firstMeta.title) ??
@@ -645,6 +670,28 @@ Deno.serve(async (req) => {
 
       const assetSpec = buildOneTimeAssetSpec(request, canonical, brandVoice, brandRules)
       const designBrief = renderAssetBrief(assetSpec)
+      const latestBriefMeta =
+        context.designBriefRow?.metadata && typeof context.designBriefRow.metadata === 'object'
+          ? context.designBriefRow.metadata
+          : {}
+      const latestBriefCreatedAtMs = getCreatedAtMs(context.designBriefRow?.created_at)
+      const latestBriefIsFreshRegen =
+        safeString((latestBriefMeta as any).regenerated_from_brief_id) !== null &&
+        latestBriefCreatedAtMs !== null &&
+        Date.now() - latestBriefCreatedAtMs < BRIEF_REGEN_DEDUP_WINDOW_MS
+
+      if (latestBriefIsFreshRegen && context.designBriefRow?.id) {
+        return jsonResponse({
+          ok: true,
+          regenerated: false,
+          deduped: true,
+          brief_id: context.designBriefRow.id,
+          draft_group_id: context.draftGroupId,
+          asset_need: context.assetNeed,
+          brief_type: assetSpec.brief_type,
+          scheduled_for: context.scheduledFor,
+        })
+      }
 
       const regenerationTimestamp = new Date().toISOString()
       const { data: insertedBrief, error: briefInsertError } = await supabase

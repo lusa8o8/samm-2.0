@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import {
   useListContent,
@@ -689,6 +689,7 @@ function DesignBriefCard({
 }
 
 type TabStatus = "draft" | "scheduled" | "published" | "comments" | "failed";
+type SortOption = "newest" | "oldest" | "pending" | "platform";
 
 const TABS: { id: TabStatus; label: string }[] = [
   { id: "draft", label: "Drafts" },
@@ -723,6 +724,49 @@ function getItemTimestamp(item: ContentItem, status: TabStatus) {
   if (status === "published") return item.published_at ?? item.updated_at ?? item.created_at ?? null;
   if (status === "failed") return item.updated_at ?? item.created_at ?? null;
   return item.published_at ?? item.scheduled_at ?? item.updated_at ?? item.created_at ?? null;
+}
+
+function getSortTimestamp(item: ContentItem, status: TabStatus) {
+  const value = getItemTimestamp(item, status);
+  return value ? new Date(value).getTime() : 0;
+}
+
+function getStatusPriority(status: string) {
+  switch (status.toLowerCase()) {
+    case "draft":
+    case "pending_approval":
+      return 0;
+    case "scheduled":
+      return 1;
+    case "published":
+      return 2;
+    case "rejected":
+      return 3;
+    case "failed":
+      return 4;
+    default:
+      return 5;
+  }
+}
+
+function compareContentItems(a: ContentItem, b: ContentItem, status: TabStatus, sortBy: SortOption) {
+  if (sortBy === "oldest") {
+    return getSortTimestamp(a, status) - getSortTimestamp(b, status);
+  }
+
+  if (sortBy === "pending") {
+    const priorityDelta = getStatusPriority(a.status) - getStatusPriority(b.status);
+    if (priorityDelta !== 0) return priorityDelta;
+    return getSortTimestamp(b, status) - getSortTimestamp(a, status);
+  }
+
+  if (sortBy === "platform") {
+    const platformDelta = (PLATFORM_LABELS[a.platform] ?? a.platform).localeCompare(PLATFORM_LABELS[b.platform] ?? b.platform);
+    if (platformDelta !== 0) return platformDelta;
+    return getSortTimestamp(b, status) - getSortTimestamp(a, status);
+  }
+
+  return getSortTimestamp(b, status) - getSortTimestamp(a, status);
 }
 
 function groupContentByDay(items: ContentItem[], status: TabStatus) {
@@ -838,6 +882,7 @@ function groupDraftDraftsByDay(
 
 export default function Content() {
   const [status, setStatus] = useState<TabStatus>("draft");
+  const [sortBy, setSortBy] = useState<SortOption>("newest");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
@@ -928,12 +973,14 @@ export default function Content() {
 
   // Design briefs only appear in the Drafts tab.
   // Pipeline A engagement replies have their own Comments tab — exclude from Published.
-  const displayItems = (() => {
-    const all = items ?? [];
-    if (status === "draft") return all;
-    if (status === "comments") return all; // already filtered at query level
-    return all.filter((i: ContentItem) => i.platform !== "design_brief");
-  })();
+  const displayItems = useMemo(() => {
+    const all = (items ?? []) as ContentItem[];
+    const filtered =
+      status === "draft" || status === "comments"
+        ? all
+        : all.filter((i: ContentItem) => i.platform !== "design_brief");
+    return [...filtered].sort((a, b) => compareContentItems(a, b, status, sortBy));
+  }, [items, sortBy, status]);
 
   const { groups, ungrouped } = status === "draft" && displayItems.length > 0
     ? groupDraftsByCampaign(displayItems as ContentItem[])
@@ -957,7 +1004,22 @@ export default function Content() {
             <h1 className="text-xl font-semibold tracking-tight text-foreground">Content Registry</h1>
             <p className="mt-1 text-sm text-muted-foreground">Drafts, scheduled posts, and published assets flowing through the workspace.</p>
           </div>
-          <Button size="sm">New Post</Button>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span>Sort</span>
+              <select
+                value={sortBy}
+                onChange={(event) => setSortBy(event.target.value as SortOption)}
+                className="h-9 rounded-md border border-border bg-background px-3 text-sm text-foreground"
+              >
+                <option value="newest">Newest first</option>
+                <option value="oldest">Oldest first</option>
+                <option value="pending">Pending first</option>
+                <option value="platform">Platform</option>
+              </select>
+            </label>
+            <Button size="sm">New Post</Button>
+          </div>
         </div>
       </header>
 
