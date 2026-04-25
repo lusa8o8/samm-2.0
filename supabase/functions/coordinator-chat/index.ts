@@ -55,6 +55,19 @@ type PipelineDRequestIntent = {
   asset_need?: AssetNeed
 }
 
+type OneTimePostSummary = {
+  title: string
+  scheduled_for: string | null
+  event_ref: string | null
+  platforms: string[]
+  draft_count: number
+  pending_count: number
+  scheduled_count: number
+  published_count: number
+  content_count: number
+  sample_copy: string | null
+}
+
 function safeString(value: unknown) {
   if (typeof value !== 'string') return null
   const trimmed = value.trim()
@@ -142,15 +155,102 @@ function summarizeOneTimePosts(rows: any[]) {
             .filter((value): value is string => Boolean(value) && value !== 'design_brief'),
         ),
       )
+      const statusCounts = groupRows.reduce(
+        (acc, row) => {
+          const status = safeString(row?.status)?.toLowerCase()
+          if (status === 'pending') acc.pending_count += 1
+          else if (status === 'scheduled') acc.scheduled_count += 1
+          else if (status === 'published') acc.published_count += 1
+          else acc.draft_count += 1
+          return acc
+        },
+        { draft_count: 0, pending_count: 0, scheduled_count: 0, published_count: 0 },
+      )
+      const sampleCopy = safeString(firstRow?.body)?.slice(0, 180) ?? null
 
       return {
         title: safeString(metadata.title) ?? safeString(firstRow?.subject_line) ?? 'One-time post',
         scheduled_for: safeString(metadata.scheduled_for) ?? safeString(firstRow?.scheduled_at)?.slice(0, 10) ?? null,
         event_ref: safeString(metadata.event_ref),
         platforms,
+        ...statusCounts,
+        content_count: groupRows.length,
+        sample_copy: sampleCopy,
       }
     })
     .sort((a, b) => (a.scheduled_for ?? '').localeCompare(b.scheduled_for ?? ''))
+}
+
+function isContentGenerationRequest(message: string) {
+  return /\b(generate|create|draft|write|make|produce|revise|rewrite|improve|refresh)\b/i.test(message)
+    && /\b(content|copy|post|caption|carousel|graphic|visual|variation|version|asset|it|that|this)\b/i.test(message)
+}
+
+function referencesExistingPost(message: string) {
+  return /\b(it|that|this|that post|this post|that one|this one)\b/i.test(message)
+}
+
+function countExistingOneTimeDrafts(post: OneTimePostSummary) {
+  return post.draft_count + post.pending_count + post.scheduled_count + post.published_count
+}
+
+function extractHistoryText(history: ChatHistoryItem[]) {
+  return history
+    .slice(-8)
+    .map((item) => (typeof item?.content === 'string' ? item.content.toLowerCase() : ''))
+    .join('\n')
+}
+
+function pickRelevantOneTimePost(
+  message: string,
+  history: ChatHistoryItem[],
+  upcomingOneTimePosts: OneTimePostSummary[],
+) {
+  const normalizedMessage = normalizeText(message)
+  const historyText = extractHistoryText(history)
+  const combinedContext = `${historyText}\n${normalizedMessage}`
+  const postsWithDrafts = upcomingOneTimePosts.filter((post) => countExistingOneTimeDrafts(post) > 0)
+
+  const directMatch = postsWithDrafts.find((post) => {
+    const title = normalizeText(post.title)
+    return title.length > 0 && combinedContext.includes(title)
+  })
+  if (directMatch) return directMatch
+
+  const datedMatch = postsWithDrafts.find((post) => {
+    if (!post.scheduled_for) return false
+    const iso = post.scheduled_for.toLowerCase()
+    const friendly = post.scheduled_for.replace(/^(\d{4})-(\d{2})-(\d{2})$/, '$2/$3/$1').toLowerCase()
+    return combinedContext.includes(iso) || combinedContext.includes(friendly)
+  })
+  if (datedMatch) return datedMatch
+
+  if (postsWithDrafts.length === 1 && referencesExistingPost(message)) {
+    return postsWithDrafts[0]
+  }
+
+  if (postsWithDrafts.length > 0 && referencesExistingPost(message)) {
+    return postsWithDrafts[0]
+  }
+
+  return null
+}
+
+function buildExistingOneTimePostPlanningResponse(post: OneTimePostSummary): ChatResponse {
+  const platformLabel = post.platforms.length > 0 ? post.platforms.join(', ') : 'the planned channels'
+  const pieces = [
+    post.draft_count > 0 ? `${post.draft_count} draft${post.draft_count === 1 ? '' : 's'}` : null,
+    post.pending_count > 0 ? `${post.pending_count} pending` : null,
+    post.scheduled_count > 0 ? `${post.scheduled_count} scheduled` : null,
+    post.published_count > 0 ? `${post.published_count} published` : null,
+  ].filter((value): value is string => Boolean(value))
+  const stateLabel = pieces.length > 0 ? pieces.join(', ') : `${post.content_count} content item${post.content_count === 1 ? '' : 's'}`
+  const sampleNote = post.sample_copy ? ` Current copy starts: "${post.sample_copy}${post.sample_copy.length >= 180 ? '…' : ''}"` : ''
+
+  return {
+    message: `I can already see the one-time post "${post.title}" on ${post.scheduled_for ?? 'the calendar'} with ${stateLabel} across ${platformLabel}. Since you are in Planning mode, I will not generate a second batch from scratch here.${sampleNote} I can help you review what exists, sharpen the angle, improve the hook, or decide whether this needs a revision rather than a new draft set.`,
+    suggestions: ['Review the current draft', 'Improve the hook', 'Tighten the CTA', 'Switch to Execution mode'],
+  }
 }
 
 function summarizeInbox(rows: any[]) {
@@ -194,7 +294,7 @@ function buildPipelineDGuidanceResponse(): ChatResponse {
 function buildGreetingResponse(
   orgName: string,
   upcomingEvents: Array<{ label?: string; event_date?: string }>,
-  upcomingOneTimePosts: Array<{ title?: string; scheduled_for?: string | null }>,
+  upcomingOneTimePosts: Array<{ title?: string; scheduled_for?: string | null; content_count?: number; pending_count?: number; scheduled_count?: number }>,
   pendingCount: number,
   mode: ConversationMode,
 ): ChatResponse {
@@ -203,7 +303,7 @@ function buildGreetingResponse(
   const eventNote = nextEvent?.label && nextEvent?.event_date
     ? ` I see you have ${nextEvent.label} coming up on ${nextEvent.event_date}.`
     : nextOneTimePost?.title && nextOneTimePost?.scheduled_for
-      ? ` I also see a one-time post, ${nextOneTimePost.title}, scheduled for ${nextOneTimePost.scheduled_for}.`
+      ? ` I also see a one-time post, ${nextOneTimePost.title}, scheduled for ${nextOneTimePost.scheduled_for}${nextOneTimePost.pending_count || nextOneTimePost.scheduled_count ? ` with existing drafts already in progress` : ''}.`
       : ''
   if (mode === 'planning') {
     return {
@@ -524,6 +624,15 @@ Deno.serve(async (req) => {
       return jsonResponse(buildPipelineDGuidanceResponse())
     }
 
+    const relevantOneTimePost =
+      isContentGenerationRequest(message) && mode === 'planning'
+        ? pickRelevantOneTimePost(message, history, upcomingOneTimePosts)
+        : null
+
+    if (relevantOneTimePost) {
+      return jsonResponse(buildExistingOneTimePostPlanningResponse(relevantOneTimePost))
+    }
+
       if (isGreeting(message)) {
         return jsonResponse(buildGreetingResponse(orgConfig?.org_name ?? 'this workspace', upcomingEvents, upcomingOneTimePosts, pendingCount, mode))
       }
@@ -576,6 +685,9 @@ Rules:
   - For status questions, summaries, metrics, approvals, and calendar reads, answer directly.
   - Treat upcoming_events as campaign windows or dated academic_calendar events.
   - Treat upcoming_one_time_posts as standalone dated posts that still belong on the calendar, but are not campaign windows.
+  - upcoming_one_time_posts also tell you whether drafts already exist. If draft_count, pending_count, scheduled_count, or published_count is greater than 0, do not talk about that post like a blank slate.
+  - If the user asks to generate content for an existing one-time post that already has drafts, acknowledge the existing content state first. In planning mode, explain that drafts already exist and offer refinement/review guidance instead of asking generic strategy questions. In execution mode, offer to regenerate, revise, or add another variation rather than pretending nothing exists.
+  - When the user refers to "it", "that post", or "this post" right after discussing a specific one-time post, resolve the reference to the most relevant upcoming_one_time_post in context.
   - If the user asks what is on the calendar, mention both upcoming_events and upcoming_one_time_posts when relevant.
   - Keep suggestions short and actionable.`
       }
