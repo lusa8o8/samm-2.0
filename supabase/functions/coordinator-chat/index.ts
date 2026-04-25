@@ -55,11 +55,23 @@ type PipelineDRequestIntent = {
   asset_need?: AssetNeed
 }
 
+type RegenerateAssetBriefIntent = {
+  draft_group_id: string
+  content_id?: string | null
+  title?: string | null
+  asset_need?: AssetNeed
+}
+
 type OneTimePostSummary = {
+  draft_group_id: string | null
   title: string
   scheduled_for: string | null
   event_ref: string | null
   platforms: string[]
+  platform_count: number
+  asset_need: AssetNeed
+  brief_type: string | null
+  has_visual_brief: boolean
   draft_count: number
   pending_count: number
   scheduled_count: number
@@ -136,7 +148,6 @@ function summarizeOneTimePosts(rows: any[]) {
   const grouped = new Map<string, any[]>()
 
   for (const row of rows) {
-    if (row?.platform === 'design_brief') continue
     const groupKey = buildOneTimeGroupKey(row)
     if (!groupKey) continue
     const existing = grouped.get(groupKey) ?? []
@@ -148,9 +159,13 @@ function summarizeOneTimePosts(rows: any[]) {
     .map((groupRows) => {
       const firstRow = groupRows[0]
       const metadata = firstRow?.metadata && typeof firstRow.metadata === 'object' ? firstRow.metadata : {}
+      const nonBriefRows = groupRows.filter((row) => row?.platform !== 'design_brief')
+      const designBriefRow = groupRows.find((row) => row?.platform === 'design_brief')
+      const designBriefMeta =
+        designBriefRow?.metadata && typeof designBriefRow.metadata === 'object' ? designBriefRow.metadata : {}
       const platforms = Array.from(
         new Set(
-          groupRows
+          nonBriefRows
             .map((row) => safeString(row?.platform)?.toLowerCase())
             .filter((value): value is string => Boolean(value) && value !== 'design_brief'),
         ),
@@ -166,24 +181,60 @@ function summarizeOneTimePosts(rows: any[]) {
         },
         { draft_count: 0, pending_count: 0, scheduled_count: 0, published_count: 0 },
       )
-      const sampleCopy = safeString(firstRow?.body)?.slice(0, 180) ?? null
+      const sampleSource = nonBriefRows[0] ?? firstRow
+      const sampleCopy = safeString(sampleSource?.body)?.slice(0, 180) ?? null
+      const assetNeed =
+        normalizeAssetNeed(metadata.asset_need ?? designBriefMeta.asset_need ?? null)
+      const briefType = safeString(designBriefMeta.brief_type)
 
       return {
-        title: safeString(metadata.title) ?? safeString(firstRow?.subject_line) ?? 'One-time post',
-        scheduled_for: safeString(metadata.scheduled_for) ?? safeString(firstRow?.scheduled_at)?.slice(0, 10) ?? null,
+        draft_group_id: safeString(metadata.draft_group_id) ?? safeString(designBriefMeta.draft_group_id),
+        title: safeString(metadata.title) ?? safeString(sampleSource?.subject_line) ?? 'One-time post',
+        scheduled_for: safeString(metadata.scheduled_for) ?? safeString(sampleSource?.scheduled_at)?.slice(0, 10) ?? null,
         event_ref: safeString(metadata.event_ref),
         platforms,
+        platform_count: platforms.length,
+        asset_need: assetNeed,
+        brief_type: briefType,
+        has_visual_brief: Boolean(designBriefRow),
         ...statusCounts,
-        content_count: groupRows.length,
+        content_count: nonBriefRows.length,
         sample_copy: sampleCopy,
       }
     })
     .sort((a, b) => (a.scheduled_for ?? '').localeCompare(b.scheduled_for ?? ''))
 }
 
+function describeOneTimeSubtype(post: Pick<OneTimePostSummary, 'platforms' | 'platform_count' | 'asset_need' | 'brief_type' | 'has_visual_brief'>) {
+  const platformLabel =
+    post.platform_count === 0
+      ? 'cross-channel'
+      : post.platform_count === 1
+        ? `${post.platforms[0]}`
+        : `${post.platform_count} channels`
+
+  let assetLabel = ''
+  if (post.asset_need === ASSET_NEED.CAROUSEL) assetLabel = ' carousel'
+  else if (post.asset_need === ASSET_NEED.VIDEO) assetLabel = ' video'
+  else if (post.asset_need === ASSET_NEED.STATIC) assetLabel = ' visual'
+  else if (post.asset_need === ASSET_NEED.DESIGN_BRIEF) assetLabel = ' design-brief-backed'
+  else if (post.brief_type) assetLabel = ' visual'
+
+  if (post.has_visual_brief && post.asset_need === ASSET_NEED.NONE) {
+    assetLabel = ' visual'
+  }
+
+  return `${platformLabel}${assetLabel}`.trim()
+}
+
 function isContentGenerationRequest(message: string) {
   return /\b(generate|create|draft|write|make|produce|revise|rewrite|improve|refresh)\b/i.test(message)
     && /\b(content|copy|post|caption|carousel|graphic|visual|variation|version|asset|it|that|this)\b/i.test(message)
+}
+
+function isAssetRegenerationRequest(message: string) {
+  return /\b(regen|regenerate|refresh|redo|rework|fix|improve)\b/i.test(message)
+    && /\b(carousel|visual|graphic|image|design brief|brief|asset|creative|brand|off brand|off-brand)\b/i.test(message)
 }
 
 function referencesExistingPost(message: string) {
@@ -237,7 +288,7 @@ function pickRelevantOneTimePost(
 }
 
 function buildExistingOneTimePostPlanningResponse(post: OneTimePostSummary): ChatResponse {
-  const platformLabel = post.platforms.length > 0 ? post.platforms.join(', ') : 'the planned channels'
+  const subtypeLabel = describeOneTimeSubtype(post)
   const pieces = [
     post.draft_count > 0 ? `${post.draft_count} draft${post.draft_count === 1 ? '' : 's'}` : null,
     post.pending_count > 0 ? `${post.pending_count} pending` : null,
@@ -248,8 +299,45 @@ function buildExistingOneTimePostPlanningResponse(post: OneTimePostSummary): Cha
   const sampleNote = post.sample_copy ? ` Current copy starts: "${post.sample_copy}${post.sample_copy.length >= 180 ? '…' : ''}"` : ''
 
   return {
-    message: `I can already see the one-time post "${post.title}" on ${post.scheduled_for ?? 'the calendar'} with ${stateLabel} across ${platformLabel}. Since you are in Planning mode, I will not generate a second batch from scratch here.${sampleNote} I can help you review what exists, sharpen the angle, improve the hook, or decide whether this needs a revision rather than a new draft set.`,
+    message: `I can already see the one-time post "${post.title}" on ${post.scheduled_for ?? 'the calendar'} as a ${subtypeLabel} slot, with ${stateLabel} already in place. Since you are in Planning mode, I will not generate a second batch from scratch here.${sampleNote} I can help you review what exists, sharpen the angle, improve the hook, or decide whether this needs a revision rather than a new draft set.`,
     suggestions: ['Review the current draft', 'Improve the hook', 'Tighten the CTA', 'Switch to Execution mode'],
+  }
+}
+
+async function buildRegenerateAssetBriefResponse(
+  supabase: any,
+  orgId: string,
+  intent: RegenerateAssetBriefIntent,
+  message?: string,
+): Promise<ChatResponse> {
+  const payload: Record<string, unknown> = {
+    mode: 'regenerate_asset_brief',
+    draft_group_id: intent.draft_group_id,
+  }
+  if (intent.content_id) {
+    payload.content_id = intent.content_id
+  }
+  if (intent.asset_need && intent.asset_need !== ASSET_NEED.NONE) {
+    payload.asset_need = intent.asset_need
+  }
+
+  const result = await invokePipeline(supabase, 'pipeline-d-post', orgId, payload)
+  const assetLabel =
+    intent.asset_need && intent.asset_need !== ASSET_NEED.NONE
+      ? `${intent.asset_need} `
+      : ''
+
+  return {
+    message:
+      message ||
+      `Regenerated the ${assetLabel}design brief for "${intent.title ?? 'this one-time post'}". The updated visual brief is back in Content Registry for review.`,
+    suggestions: ['Open Content Registry', 'Review the updated brief', 'What needs my approval?'],
+    invoked_action: {
+      type: 'run_pipeline',
+      pipeline: 'pipeline-d-post',
+      status: result?.ok === false ? 'failed' : 'completed',
+      run_id: null,
+    },
   }
 }
 
@@ -294,16 +382,25 @@ function buildPipelineDGuidanceResponse(): ChatResponse {
 function buildGreetingResponse(
   orgName: string,
   upcomingEvents: Array<{ label?: string; event_date?: string }>,
-  upcomingOneTimePosts: Array<{ title?: string; scheduled_for?: string | null; content_count?: number; pending_count?: number; scheduled_count?: number }>,
+  upcomingOneTimePosts: Array<{ title?: string; scheduled_for?: string | null; content_count?: number; pending_count?: number; scheduled_count?: number; platforms?: string[]; platform_count?: number; asset_need?: AssetNeed; brief_type?: string | null; has_visual_brief?: boolean }>,
   pendingCount: number,
   mode: ConversationMode,
 ): ChatResponse {
   const nextEvent = upcomingEvents[0]
   const nextOneTimePost = upcomingOneTimePosts[0]
+  const nextOneTimeSubtype = nextOneTimePost
+    ? describeOneTimeSubtype({
+        platforms: nextOneTimePost.platforms ?? [],
+        platform_count: nextOneTimePost.platform_count ?? 0,
+        asset_need: nextOneTimePost.asset_need ?? ASSET_NEED.NONE,
+        brief_type: nextOneTimePost.brief_type ?? null,
+        has_visual_brief: nextOneTimePost.has_visual_brief ?? false,
+      })
+    : null
   const eventNote = nextEvent?.label && nextEvent?.event_date
     ? ` I see you have ${nextEvent.label} coming up on ${nextEvent.event_date}.`
     : nextOneTimePost?.title && nextOneTimePost?.scheduled_for
-      ? ` I also see a one-time post, ${nextOneTimePost.title}, scheduled for ${nextOneTimePost.scheduled_for}${nextOneTimePost.pending_count || nextOneTimePost.scheduled_count ? ` with existing drafts already in progress` : ''}.`
+      ? ` I also see a one-time post, ${nextOneTimePost.title}, scheduled for ${nextOneTimePost.scheduled_for}${nextOneTimeSubtype ? ` as a ${nextOneTimeSubtype} slot` : ''}${nextOneTimePost.pending_count || nextOneTimePost.scheduled_count ? ` with existing drafts already in progress` : ''}.`
       : ''
   if (mode === 'planning') {
     return {
@@ -549,6 +646,32 @@ Deno.serve(async (req) => {
       )
     }
 
+    if (explicitAction?.type === 'regenerate_asset_brief') {
+      if (mode === 'planning') {
+        return jsonResponse(buildPlanningModeMutationBlockedResponse('regenerate a visual brief directly'))
+      }
+
+      const draftGroupId = safeString(explicitAction.draft_group_id)
+      if (!draftGroupId) {
+        return jsonResponse({ error: 'The visual regeneration request needs a draft_group_id.' }, 400)
+      }
+
+      const assetNeed = normalizeAssetNeed(explicitAction.asset_need)
+      return jsonResponse(
+        await buildRegenerateAssetBriefResponse(
+          supabase,
+          orgId,
+          {
+            draft_group_id: draftGroupId,
+            content_id: safeString(explicitAction.content_id),
+            title: safeString(explicitAction.title),
+            asset_need: assetNeed,
+          },
+          message || safeString(explicitAction.title) || undefined,
+        ),
+      )
+    }
+
     const today = new Date().toISOString().slice(0, 10)
 
     const [orgConfigResult, metricsResult, runsResult, eventsResult, oneTimePostsResult, inboxCountResult, inboxResult] = await Promise.all([
@@ -625,12 +748,29 @@ Deno.serve(async (req) => {
     }
 
     const relevantOneTimePost =
-      isContentGenerationRequest(message) && mode === 'planning'
+      (isContentGenerationRequest(message) || isAssetRegenerationRequest(message))
         ? pickRelevantOneTimePost(message, history, upcomingOneTimePosts)
         : null
 
     if (relevantOneTimePost) {
-      return jsonResponse(buildExistingOneTimePostPlanningResponse(relevantOneTimePost))
+      if (mode === 'planning') {
+        return jsonResponse(buildExistingOneTimePostPlanningResponse(relevantOneTimePost))
+      }
+
+      if (isAssetRegenerationRequest(message) && relevantOneTimePost.draft_group_id) {
+        return jsonResponse(
+          await buildRegenerateAssetBriefResponse(
+            supabase,
+            orgId,
+            {
+              draft_group_id: relevantOneTimePost.draft_group_id,
+              title: relevantOneTimePost.title,
+              asset_need: relevantOneTimePost.asset_need,
+            },
+            `Regenerating the ${describeOneTimeSubtype(relevantOneTimePost)} brief for "${relevantOneTimePost.title}" now.`,
+          ),
+        )
+      }
     }
 
       if (isGreeting(message)) {
@@ -656,6 +796,7 @@ ActionObject is one of:
 - {"type":"run_pipeline","pipeline":"pipeline-a-engagement"|"pipeline-b-weekly"|"pipeline-c-campaign"|"coordinator","needs_confirmation": boolean, "title": string, "description": string}
 - {"type":"write_post","topic": string, "platforms": string[]|null, "event_ref": string|null, "title": string, "description": string}
 - {"type":"create_one_time_post","topic": string, "post_title"?: string|null, "scheduled_for": "YYYY-MM-DD"|null, "platforms": string[]|null, "event_ref": string|null, "asset_need": "none"|"static"|"carousel"|"video"|"design_brief", "title": string, "description": string}
+- {"type":"regenerate_asset_brief","draft_group_id": string, "content_id"?: string|null, "asset_need"?: "none"|"static"|"carousel"|"video"|"design_brief", "title": string, "description": string}
 - {"type":"create_calendar_event","label": string, "event_date": "YYYY-MM-DD", "event_type": "launch"|"promotion"|"seasonal"|"community"|"deadline"|"other", "universities": string[], "run_pipeline_c": boolean, "needs_confirmation": boolean, "title": string, "description": string}
 - {"type":"edit_calendar_event","event_id": string, "label"?: string, "event_date"?: string, "event_type"?: string, "needs_confirmation": boolean, "title": string, "description": string}
 - {"type":"delete_calendar_event","event_id": string, "label": string, "needs_confirmation": boolean, "title": string, "description": string}
@@ -674,6 +815,7 @@ Rules:
 - Use write_post when the user asks to write, draft, or create a single post or message about a topic. This is NOT a campaign — no brief, no CEO gate, no research. Extract the topic from the user message. platforms defaults to null (all platforms). event_ref is optional context. write_post never requires confirmation — it is fast and reversible.
 - Use create_one_time_post when the user asks for a standalone non-campaign post that should land on a specific date, appear in the calendar, or include a visual asset brief. Infer the date relative to today ${today} when needed. Set scheduled_for to null if no date is given. Set asset_need to one of none, static, carousel, video, or design_brief. Do not create an academic_calendar event for a one-time post.
   - If the user provides a clear working title or theme, pass it as post_title. Otherwise omit it.
+- Use regenerate_asset_brief when the user wants to regenerate, refresh, or redo the visual brief for an existing one-time post without rewriting the copy. Prefer the most relevant upcoming_one_time_post in context and pass its draft_group_id. Do not use write_post for a visual-only rerender.
 - Use create_calendar_event when the user asks to schedule, add, or create a calendar event.
   - Infer the date from the user message (e.g. "next Friday" relative to today ${today}).
   - Preserve the user's event label as closely as possible. Do not rewrite it into a campus, university, or student-themed event unless the user explicitly asked for that.
@@ -686,6 +828,7 @@ Rules:
   - Treat upcoming_events as campaign windows or dated academic_calendar events.
   - Treat upcoming_one_time_posts as standalone dated posts that still belong on the calendar, but are not campaign windows.
   - upcoming_one_time_posts also tell you whether drafts already exist. If draft_count, pending_count, scheduled_count, or published_count is greater than 0, do not talk about that post like a blank slate.
+  - upcoming_one_time_posts may also tell you the subtype via asset_need, brief_type, has_visual_brief, platform_count, and platforms. Use that to say things like "Facebook carousel draft" or "cross-channel video brief" when relevant.
   - If the user asks to generate content for an existing one-time post that already has drafts, acknowledge the existing content state first. In planning mode, explain that drafts already exist and offer refinement/review guidance instead of asking generic strategy questions. In execution mode, offer to regenerate, revise, or add another variation rather than pretending nothing exists.
   - When the user refers to "it", "that post", or "this post" right after discussing a specific one-time post, resolve the reference to the most relevant upcoming_one_time_post in context.
   - If the user asks what is on the calendar, mention both upcoming_events and upcoming_one_time_posts when relevant.
@@ -883,6 +1026,31 @@ Rules:
             platforms: Array.isArray(action.platforms) ? action.platforms : null,
             event_ref: action.event_ref ? String(action.event_ref) : null,
             scheduled_for: scheduledForRaw,
+            asset_need: normalizeAssetNeed(action.asset_need),
+          },
+          parsed.message,
+        ),
+      )
+    }
+
+    if (action?.type === 'regenerate_asset_brief') {
+      if (mode === 'planning') {
+        return jsonResponse(buildPlanningModeMutationBlockedResponse('regenerate a visual brief directly'))
+      }
+
+      const draftGroupId = safeString(action.draft_group_id)
+      if (!draftGroupId) {
+        return jsonResponse({ message: "I couldn't identify which one-time visual brief to regenerate.", suggestions })
+      }
+
+      return jsonResponse(
+        await buildRegenerateAssetBriefResponse(
+          supabase,
+          orgId,
+          {
+            draft_group_id: draftGroupId,
+            content_id: safeString(action.content_id),
+            title: safeString(action.title),
             asset_need: normalizeAssetNeed(action.asset_need),
           },
           parsed.message,

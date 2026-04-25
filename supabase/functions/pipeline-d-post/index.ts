@@ -42,6 +42,20 @@ type CanonicalCopy = {
   key_fact: string
 }
 
+type ExistingOneTimeContext = {
+  groupRows: any[]
+  nonBriefRows: any[]
+  designBriefRow: any | null
+  draftGroupId: string | null
+  workingTitle: string
+  scheduledFor: string | null
+  scheduledAt: string | null
+  eventRef: string | null
+  platforms: string[]
+  assetNeed: AssetNeed
+  topic: string
+}
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -53,6 +67,12 @@ function jsonResponse(body: unknown, status = 200) {
     status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   })
+}
+
+function safeString(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : null
 }
 
 async function getOrgConfig(supabase: any, orgId: string) {
@@ -101,6 +121,152 @@ function buildAssetTargets(platforms: string[]): AssetTarget[] {
     platform,
     dimensions: PLATFORM_DIMENSIONS[platform] ?? null,
   }))
+}
+
+function splitIntoSentences(value: string) {
+  return value
+    .replace(/\s+/g, ' ')
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean)
+}
+
+function buildCanonicalFromExistingRows(
+  rows: any[],
+  workingTitle: string,
+  brandVoice: any,
+): CanonicalCopy {
+  const bodyText = rows
+    .map((row) => safeString(row?.body))
+    .filter((value): value is string => Boolean(value))
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  const sentences = splitIntoSentences(bodyText)
+  const preferredCta =
+    safeString(brandVoice?.cta_preference) ??
+    safeString(brandVoice?.preferred_cta) ??
+    'Start learning smarter today.'
+
+  const headline = workingTitle
+  const coreBody =
+    sentences.slice(0, 2).join(' ') ||
+    bodyText.slice(0, 240) ||
+    workingTitle
+  const keyFact =
+    sentences[1] ??
+    sentences[0] ??
+    coreBody
+
+  return {
+    headline,
+    core_body: coreBody,
+    exact_cta: preferredCta,
+    key_fact: keyFact,
+  }
+}
+
+async function loadOneTimeRegenerationContext(
+  supabase: any,
+  orgId: string,
+  params: {
+    contentId?: string | null
+    draftGroupId?: string | null
+    assetNeedOverride?: AssetNeed | null
+  },
+): Promise<ExistingOneTimeContext> {
+  let draftGroupId = safeString(params.draftGroupId)
+  let seedRow: any | null = null
+
+  if (!draftGroupId && params.contentId) {
+    const { data, error } = await supabase
+      .from('content_registry')
+      .select('*')
+      .eq('org_id', orgId)
+      .eq('id', params.contentId)
+      .single()
+
+    if (error) throw new Error(`Failed to load content item: ${error.message}`)
+    seedRow = data
+    const seedMeta = seedRow?.metadata && typeof seedRow.metadata === 'object' ? seedRow.metadata : {}
+    draftGroupId = safeString(seedMeta.draft_group_id)
+  }
+
+  let groupRows: any[] = []
+  if (draftGroupId) {
+    const { data, error } = await supabase
+      .from('content_registry')
+      .select('*')
+      .eq('org_id', orgId)
+      .eq('created_by', 'pipeline-d-post')
+      .eq('is_campaign_post', false)
+      .contains('metadata', { draft_group_id: draftGroupId })
+      .order('created_at', { ascending: true })
+
+    if (error) throw new Error(`Failed to load one-time post group: ${error.message}`)
+    groupRows = data ?? []
+  } else if (seedRow) {
+    groupRows = [seedRow]
+  }
+
+  if (groupRows.length === 0) {
+    throw new Error('No existing one-time post group was found for visual regeneration.')
+  }
+
+  const nonBriefRows = groupRows.filter((row) => row?.platform !== 'design_brief')
+  const designBriefRow = groupRows.find((row) => row?.platform === 'design_brief') ?? null
+
+  if (nonBriefRows.length === 0) {
+    throw new Error('The selected one-time post group has no copy drafts to ground a visual brief.')
+  }
+
+  const firstRow = nonBriefRows[0]
+  const firstMeta = firstRow?.metadata && typeof firstRow.metadata === 'object' ? firstRow.metadata : {}
+  const briefMeta = designBriefRow?.metadata && typeof designBriefRow.metadata === 'object' ? designBriefRow.metadata : {}
+  const platforms = Array.from(
+    new Set(
+      nonBriefRows
+        .map((row) => safeString(row?.platform)?.toLowerCase())
+        .filter((value): value is string => Boolean(value) && value !== 'design_brief'),
+    ),
+  )
+
+  const workingTitle =
+    safeString(firstMeta.title) ??
+    safeString(firstRow?.subject_line) ??
+    safeString(firstRow?.body)?.slice(0, 100) ??
+    'One-time post'
+
+  const scheduledFor =
+    safeString(firstMeta.scheduled_for) ??
+    safeString(firstRow?.scheduled_at)?.slice(0, 10) ??
+    null
+  const scheduledAt = safeString(firstRow?.scheduled_at) ?? toScheduledAt(scheduledFor)
+  const eventRef = safeString(firstMeta.event_ref) ?? null
+  const storedAssetNeed = normalizeAssetNeed(firstMeta.asset_need ?? briefMeta.asset_need ?? null)
+  const assetNeed =
+    params.assetNeedOverride && params.assetNeedOverride !== ASSET_NEED.NONE
+      ? params.assetNeedOverride
+      : storedAssetNeed
+
+  if (assetNeed === ASSET_NEED.NONE) {
+    throw new Error('This one-time post is not configured for visual generation. Choose a visual asset type first.')
+  }
+
+  return {
+    groupRows,
+    nonBriefRows,
+    designBriefRow,
+    draftGroupId,
+    workingTitle,
+    scheduledFor,
+    scheduledAt,
+    eventRef,
+    platforms,
+    assetNeed,
+    topic: workingTitle,
+  }
 }
 
 function buildCarouselSlides(canonical: CanonicalCopy, topic: string): AssetSlideSpec[] {
@@ -355,6 +521,7 @@ Deno.serve(async (req) => {
 
     const payload = await req.json().catch(() => ({}))
     const orgId = payload?.org_id ?? payload?.orgId
+    const mode = safeString(payload?.mode) ?? 'create'
     const topic: string = String(payload?.topic ?? '').trim()
     const platforms: string[] = Array.isArray(payload?.platforms) && payload.platforms.length > 0
       ? payload.platforms
@@ -368,6 +535,124 @@ Deno.serve(async (req) => {
 
     if (!orgId || typeof orgId !== 'string') {
       return jsonResponse({ ok: false, error: 'orgId is required' }, 400)
+    }
+
+    if (mode === 'regenerate_asset_brief') {
+      const assetNeedOverride = normalizeAssetNeed(payload?.asset_need ?? payload?.assetNeed ?? null)
+      const context = await loadOneTimeRegenerationContext(supabase, orgId, {
+        contentId: safeString(payload?.content_id ?? payload?.contentId),
+        draftGroupId: safeString(payload?.draft_group_id ?? payload?.draftGroupId),
+        assetNeedOverride,
+      })
+
+      const config = await getOrgConfig(supabase, orgId)
+      const brandVoice = config?.brand_voice ?? {}
+      const canonical = buildCanonicalFromExistingRows(context.nonBriefRows, context.workingTitle, brandVoice)
+      const request: DraftAssetRequest = {
+        intent: PLANNING_INTENT.ONE_TIME,
+        topic: context.topic,
+        post_title: context.workingTitle,
+        scheduled_for: context.scheduledFor,
+        platforms: context.platforms,
+        event_ref: context.eventRef,
+        asset_need: context.assetNeed,
+      }
+
+      const brandRules = buildBrandVisualRules(config, {
+        tone: brandVoice.tone ?? null,
+        must_include: [canonical.key_fact, canonical.exact_cta].filter(Boolean),
+        must_avoid: Array.isArray(brandVoice.never_say)
+          ? brandVoice.never_say.filter((value: unknown): value is string => typeof value === 'string' && value.trim().length > 0)
+          : null,
+        strict_mode: true,
+      })
+
+      const assetSpec = buildOneTimeAssetSpec(request, canonical, brandVoice, brandRules)
+      const designBrief = renderAssetBrief(assetSpec)
+
+      if (context.designBriefRow) {
+        const existingMeta =
+          context.designBriefRow.metadata && typeof context.designBriefRow.metadata === 'object'
+            ? context.designBriefRow.metadata
+            : {}
+        const { error: updateError } = await supabase
+          .from('content_registry')
+          .update({
+            body: designBrief,
+            status: 'draft',
+            metadata: {
+              ...existingMeta,
+              owner_pipeline: 'pipeline-d-post',
+              purpose: 'one_time',
+              content_type: 'design_brief',
+              draft_group_id: context.draftGroupId,
+              title: context.workingTitle,
+              scheduled_for: context.scheduledFor,
+              event_ref: context.eventRef,
+              asset_need: context.assetNeed,
+              brief_type: assetSpec.brief_type,
+              asset_spec: assetSpec,
+              regenerated_at: new Date().toISOString(),
+            },
+          })
+          .eq('id', context.designBriefRow.id)
+          .eq('org_id', orgId)
+
+        if (updateError) {
+          throw new Error(`Failed to update one-time design brief: ${updateError.message}`)
+        }
+
+        return jsonResponse({
+          ok: true,
+          regenerated: true,
+          brief_id: context.designBriefRow.id,
+          draft_group_id: context.draftGroupId,
+          asset_need: context.assetNeed,
+          brief_type: assetSpec.brief_type,
+          scheduled_for: context.scheduledFor,
+        })
+      }
+
+      const { data: insertedBrief, error: briefInsertError } = await supabase
+        .from('content_registry')
+        .insert({
+          org_id: orgId,
+          platform: 'design_brief',
+          body: designBrief,
+          status: 'draft',
+          scheduled_at: context.scheduledAt,
+          is_campaign_post: false,
+          created_by: 'pipeline-d-post',
+          metadata: {
+            owner_pipeline: 'pipeline-d-post',
+            purpose: 'one_time',
+            content_type: 'design_brief',
+            draft_group_id: context.draftGroupId,
+            title: context.workingTitle,
+            scheduled_for: context.scheduledFor,
+            event_ref: context.eventRef,
+            asset_need: context.assetNeed,
+            brief_type: assetSpec.brief_type,
+            asset_spec: assetSpec,
+            regenerated_at: new Date().toISOString(),
+          },
+        })
+        .select('id')
+        .single()
+
+      if (briefInsertError) {
+        throw new Error(`Failed to create regenerated one-time design brief: ${briefInsertError.message}`)
+      }
+
+      return jsonResponse({
+        ok: true,
+        regenerated: true,
+        brief_id: insertedBrief?.id ?? null,
+        draft_group_id: context.draftGroupId,
+        asset_need: context.assetNeed,
+        brief_type: assetSpec.brief_type,
+        scheduled_for: context.scheduledFor,
+      })
     }
 
     if (!topic) {

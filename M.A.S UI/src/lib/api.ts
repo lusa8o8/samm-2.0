@@ -1985,7 +1985,7 @@ export function useGetMetricsSparklines(options?: QueryHookOptions) {
 
 
 
-type OneTimePostAssetNeed = "none" | "static" | "carousel" | "video" | "design_brief";
+export type OneTimePostAssetNeed = "none" | "static" | "carousel" | "video" | "design_brief";
 
 type CreateOneTimePostAction = {
   type: "create_one_time_post";
@@ -1999,7 +1999,16 @@ type CreateOneTimePostAction = {
   description?: string;
 };
 
-type CoordinatorActionPayload = CreateOneTimePostAction;
+type RegenerateAssetBriefAction = {
+  type: "regenerate_asset_brief";
+  draft_group_id: string;
+  content_id?: string | null;
+  asset_need?: OneTimePostAssetNeed;
+  title?: string;
+  description?: string;
+};
+
+type CoordinatorActionPayload = CreateOneTimePostAction | RegenerateAssetBriefAction;
 
 type CoordinatorChatRequest = {
   message: string;
@@ -2118,6 +2127,44 @@ export function useCreateOneTimePost(options?: MutationHookOptions) {
             post_title: postTitle,
             title: postTitle ?? "Create one-time post",
             description: topic,
+          },
+        });
+      } catch (error) {
+        const message = await readFunctionError(error);
+        throw new Error(message);
+      }
+    },
+    ...options?.mutation,
+  });
+}
+
+export function useRegenerateAssetBrief(options?: MutationHookOptions) {
+  return useMutation({
+    mutationFn: async ({
+      draftGroupId,
+      contentId = null,
+      assetNeed,
+      title = "Regenerate asset brief",
+      description = "Regenerate the visual brief for this one-time post.",
+    }: {
+      draftGroupId: string;
+      contentId?: string | null;
+      assetNeed?: OneTimePostAssetNeed;
+      title?: string;
+      description?: string;
+    }) => {
+      try {
+        return await invokeCoordinatorFunction({
+          message: description,
+          mode: "execution",
+          confirmationAction: null,
+          action: {
+            type: "regenerate_asset_brief",
+            draft_group_id: draftGroupId,
+            content_id: contentId,
+            asset_need: assetNeed,
+            title,
+            description,
           },
         });
       } catch (error) {

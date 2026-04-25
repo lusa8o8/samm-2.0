@@ -6,6 +6,8 @@ import {
   useActionContent,
   useBatchApproveContent,
   useEditContent,
+  type OneTimePostAssetNeed,
+  useRegenerateAssetBrief,
   useUploadContentImage,
   getListContentQueryKey,
 } from "@/lib/api";
@@ -101,6 +103,10 @@ function getContentType(item: { platform: string; subject_line?: string | null }
 function getWorkingTitle(item: { subject_line?: string | null; metadata?: Record<string, unknown> | null; platform: string }) {
   const metadataTitle = typeof item.metadata?.title === "string" ? item.metadata.title.trim() : "";
   return item.subject_line || metadataTitle || PLATFORM_LABELS[item.platform] || item.platform;
+}
+
+function isOneTimeDesignBrief(item: { platform: string; metadata?: Record<string, unknown> | null }) {
+  return item.platform === "design_brief" && item.metadata?.purpose === "one_time";
 }
 
 interface ContentCardProps {
@@ -467,6 +473,7 @@ function DesignBriefCard({
   onToggle,
   onApprove,
   onEdit,
+  onRegenerate,
   actionPending,
   editPending,
 }: {
@@ -475,6 +482,7 @@ function DesignBriefCard({
   onToggle: () => void;
   onApprove: (id: string, pipelineRunId?: string | null, platform?: string) => void;
   onEdit: (id: string, body: string) => void;
+  onRegenerate: (item: ContentItem) => void;
   actionPending: boolean;
   editPending: boolean;
 }) {
@@ -485,6 +493,7 @@ function DesignBriefCard({
   const { openInspector } = useWorkspaceInspector();
 
   const isDraft = item.status === "draft";
+  const supportsRegeneration = isOneTimeDesignBrief(item);
   const shareText = `Design Brief — ${item.campaign_name ?? "Campaign"}\n\n${item.body}`;
   const encodedText = encodeURIComponent(shareText);
   const encodedSubject = encodeURIComponent(`Design Brief — ${item.campaign_name ?? "Campaign"}`);
@@ -605,6 +614,19 @@ function DesignBriefCard({
                 <Pencil className="mr-1 h-3.5 w-3.5" />
                 Edit
               </Button>
+
+              {supportsRegeneration && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs"
+                  onClick={() => onRegenerate(item)}
+                  disabled={actionPending}
+                >
+                  <RefreshCw className="mr-1 h-3.5 w-3.5" />
+                  Regenerate brief
+                </Button>
+              )}
 
               <div className="relative">
                 <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowShareMenu((v) => !v)}>
@@ -819,6 +841,7 @@ export default function Content() {
   const batchApproveMutation = useBatchApproveContent({ mutation: { onSuccess: invalidate } });
   const editMutation = useEditContent({ mutation: { onSuccess: invalidate } });
   const imageMutation = useUploadContentImage({ mutation: { onSuccess: invalidate } });
+  const regenerateBriefMutation = useRegenerateAssetBrief({ mutation: { onSuccess: invalidate } });
 
   const handleToggle = (id: string) => setExpandedId((prev) => (prev === id ? null : id));
   const handleApprove = (id: string, pipelineRunId?: string | null, platform?: string) =>
@@ -829,6 +852,23 @@ export default function Content() {
     editMutation.mutate({ id, body, subjectLine });
   const handleImageUpload = (id: string, file: File) =>
     imageMutation.mutate({ id, file });
+  const handleRegenerateBrief = (item: ContentItem) => {
+    const draftGroupId =
+      typeof item.metadata?.draft_group_id === "string" ? item.metadata.draft_group_id.trim() : "";
+    if (!draftGroupId) return;
+
+    const assetNeed =
+      typeof item.metadata?.asset_need === "string" ? (item.metadata.asset_need as OneTimePostAssetNeed) : undefined;
+    const title = getWorkingTitle(item);
+
+    regenerateBriefMutation.mutate({
+      draftGroupId,
+      contentId: item.id,
+      assetNeed,
+      title: `Regenerate ${title}`,
+      description: `Regenerate the visual brief for "${title}" without rewriting the copy.`,
+    });
+  };
 
   const renderCard = (item: ContentItem) => {
     if (item.platform === "design_brief") {
@@ -840,7 +880,8 @@ export default function Content() {
           onToggle={() => handleToggle(item.id)}
           onApprove={handleApprove}
           onEdit={(id, body) => handleEdit(id, body)}
-          actionPending={actionMutation.isPending}
+          onRegenerate={handleRegenerateBrief}
+          actionPending={actionMutation.isPending || regenerateBriefMutation.isPending}
           editPending={editMutation.isPending}
         />
       );

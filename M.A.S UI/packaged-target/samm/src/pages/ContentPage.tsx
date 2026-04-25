@@ -15,6 +15,8 @@ import {
   useBatchApproveContent,
   useEditContent,
   useListContent,
+  type OneTimePostAssetNeed,
+  useRegenerateAssetBrief,
   useRetryContent,
   useUploadContentImage,
 } from "@/lib/api";
@@ -145,6 +147,10 @@ function getPreviewTitle(item: ContentItem, preview: string) {
   }
   if (item.campaign_name) return item.campaign_name;
   return PLATFORM_LABELS[item.platform] ?? item.platform;
+}
+
+function isOneTimeDesignBrief(item: { platform: string; metadata?: Record<string, unknown> | null }) {
+  return item.platform === "design_brief" && item.metadata?.purpose === "one_time";
 }
 
 function formatTimestamp(value?: string | null) {
@@ -440,6 +446,7 @@ function ContentCard({
   const isDraft = item.status === "draft";
   const isRejected = item.status === "rejected";
   const isFailed = item.status === "failed";
+  const supportsRegeneration = isOneTimeDesignBrief(item);
   const preview = stripMarkdownToPreviewText(item.body);
   const previewTitle = getPreviewTitle(item, preview);
   const objective = getObjective(item);
@@ -587,14 +594,26 @@ function ContentCard({
         )}
 
         {isDesignBrief && (
-          <ActionButton
-            type="button"
-            className="border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100"
-            onClick={() => onShare(item)}
-          >
-            <Share2 className="h-3.5 w-3.5" />
-            Share
-          </ActionButton>
+          <>
+            {supportsRegeneration && (
+              <ActionButton
+                type="button"
+                className="border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100"
+                onClick={() => onRetry(item)}
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                Regenerate brief
+              </ActionButton>
+            )}
+            <ActionButton
+              type="button"
+              className="border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100"
+              onClick={() => onShare(item)}
+            >
+              <Share2 className="h-3.5 w-3.5" />
+              Share
+            </ActionButton>
+          </>
         )}
       </div>
     </article>
@@ -637,6 +656,7 @@ export default function ContentPage() {
     },
   });
   const imageMutation = useUploadContentImage({ mutation: { onSuccess: invalidate } });
+  const regenerateBriefMutation = useRegenerateAssetBrief({ mutation: { onSuccess: invalidate } });
 
   const displayItems = useMemo(() => {
     const all = (items ?? []) as ContentItem[];
@@ -680,7 +700,28 @@ export default function ContentPage() {
     });
   };
 
-  const handleRetry = (item: ContentItem) => retryMutation.mutate({ id: item.id });
+  const handleRetry = (item: ContentItem) => {
+    if (isOneTimeDesignBrief(item)) {
+      const draftGroupId =
+        typeof item.metadata?.draft_group_id === "string" ? item.metadata.draft_group_id.trim() : "";
+      if (!draftGroupId) return;
+
+      const assetNeed =
+        typeof item.metadata?.asset_need === "string" ? (item.metadata.asset_need as OneTimePostAssetNeed) : undefined;
+      const title = getPreviewTitle(item, stripMarkdownToInspectorText(item.body));
+
+      regenerateBriefMutation.mutate({
+        draftGroupId,
+        contentId: item.id,
+        assetNeed,
+        title: `Regenerate ${title}`,
+        description: `Regenerate the visual brief for "${title}" without rewriting the copy.`,
+      });
+      return;
+    }
+
+    retryMutation.mutate({ id: item.id });
+  };
 
   const handleSave = () => {
     if (!editingItem) return;
