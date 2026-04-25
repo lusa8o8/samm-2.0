@@ -2001,7 +2001,7 @@ type CreateOneTimePostAction = {
 
 type RegenerateAssetBriefAction = {
   type: "regenerate_asset_brief";
-  draft_group_id: string;
+  draft_group_id?: string | null;
   content_id?: string | null;
   asset_need?: OneTimePostAssetNeed;
   title?: string;
@@ -2147,12 +2147,15 @@ export function useRegenerateAssetBrief(options?: MutationHookOptions) {
       title = "Regenerate asset brief",
       description = "Regenerate the visual brief for this one-time post.",
     }: {
-      draftGroupId: string;
+      draftGroupId?: string | null;
       contentId?: string | null;
       assetNeed?: OneTimePostAssetNeed;
       title?: string;
       description?: string;
     }) => {
+      if (!draftGroupId && !contentId) {
+        throw new Error("A visual regeneration request needs a draft group or content item.");
+      }
       try {
         return await invokeCoordinatorFunction({
           message: description,

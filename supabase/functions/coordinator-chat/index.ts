@@ -56,7 +56,7 @@ type PipelineDRequestIntent = {
 }
 
 type RegenerateAssetBriefIntent = {
-  draft_group_id: string
+  draft_group_id?: string | null
   content_id?: string | null
   title?: string | null
   asset_need?: AssetNeed
@@ -312,7 +312,9 @@ async function buildRegenerateAssetBriefResponse(
 ): Promise<ChatResponse> {
   const payload: Record<string, unknown> = {
     mode: 'regenerate_asset_brief',
-    draft_group_id: intent.draft_group_id,
+  }
+  if (intent.draft_group_id) {
+    payload.draft_group_id = intent.draft_group_id
   }
   if (intent.content_id) {
     payload.content_id = intent.content_id
@@ -651,22 +653,23 @@ Deno.serve(async (req) => {
         return jsonResponse(buildPlanningModeMutationBlockedResponse('regenerate a visual brief directly'))
       }
 
-      const draftGroupId = safeString(explicitAction.draft_group_id)
-      if (!draftGroupId) {
-        return jsonResponse({ error: 'The visual regeneration request needs a draft_group_id.' }, 400)
-      }
+        const draftGroupId = safeString(explicitAction.draft_group_id)
+        const contentId = safeString(explicitAction.content_id)
+        if (!draftGroupId && !contentId) {
+          return jsonResponse({ error: 'The visual regeneration request needs a content item or draft group.' }, 400)
+        }
 
-      const assetNeed = normalizeAssetNeed(explicitAction.asset_need)
-      return jsonResponse(
-        await buildRegenerateAssetBriefResponse(
-          supabase,
-          orgId,
-          {
-            draft_group_id: draftGroupId,
-            content_id: safeString(explicitAction.content_id),
-            title: safeString(explicitAction.title),
-            asset_need: assetNeed,
-          },
+        const assetNeed = normalizeAssetNeed(explicitAction.asset_need)
+        return jsonResponse(
+          await buildRegenerateAssetBriefResponse(
+            supabase,
+            orgId,
+            {
+              draft_group_id: draftGroupId,
+              content_id: contentId,
+              title: safeString(explicitAction.title),
+              asset_need: assetNeed,
+            },
           message || safeString(explicitAction.title) || undefined,
         ),
       )
@@ -1038,21 +1041,22 @@ Rules:
         return jsonResponse(buildPlanningModeMutationBlockedResponse('regenerate a visual brief directly'))
       }
 
-      const draftGroupId = safeString(action.draft_group_id)
-      if (!draftGroupId) {
-        return jsonResponse({ message: "I couldn't identify which one-time visual brief to regenerate.", suggestions })
-      }
+        const draftGroupId = safeString(action.draft_group_id)
+        const contentId = safeString(action.content_id)
+        if (!draftGroupId && !contentId) {
+          return jsonResponse({ message: "I couldn't identify which one-time visual brief to regenerate.", suggestions })
+        }
 
-      return jsonResponse(
-        await buildRegenerateAssetBriefResponse(
-          supabase,
-          orgId,
-          {
-            draft_group_id: draftGroupId,
-            content_id: safeString(action.content_id),
-            title: safeString(action.title),
-            asset_need: normalizeAssetNeed(action.asset_need),
-          },
+        return jsonResponse(
+          await buildRegenerateAssetBriefResponse(
+            supabase,
+            orgId,
+            {
+              draft_group_id: draftGroupId,
+              content_id: contentId,
+              title: safeString(action.title),
+              asset_need: normalizeAssetNeed(action.asset_need),
+            },
           parsed.message,
         ),
       )

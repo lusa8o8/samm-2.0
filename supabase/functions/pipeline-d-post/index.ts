@@ -193,6 +193,76 @@ async function loadOneTimeRegenerationContext(
     draftGroupId = safeString(seedMeta.draft_group_id)
   }
 
+  const loadLegacyGroupRows = async () => {
+    if (!seedRow) return [] as any[]
+
+    const seedMeta = seedRow?.metadata && typeof seedRow.metadata === 'object' ? seedRow.metadata : {}
+    const scheduledFor =
+      safeString(seedMeta.scheduled_for) ??
+      safeString(seedRow?.scheduled_at)?.slice(0, 10) ??
+      null
+    const eventRef = safeString(seedMeta.event_ref)
+    const normalizedTitle = (
+      safeString(seedMeta.title) ??
+      safeString(seedRow?.subject_line) ??
+      safeString(seedRow?.body)?.slice(0, 160) ??
+      ''
+    ).toLowerCase()
+
+    let query = supabase
+      .from('content_registry')
+      .select('*')
+      .eq('org_id', orgId)
+      .eq('created_by', 'pipeline-d-post')
+      .eq('is_campaign_post', false)
+      .order('created_at', { ascending: true })
+
+    if (scheduledFor) {
+      const startOfDay = `${scheduledFor}T00:00:00`
+      const endDate = new Date(`${scheduledFor}T00:00:00Z`)
+      endDate.setUTCDate(endDate.getUTCDate() + 1)
+      const nextDay = endDate.toISOString().slice(0, 19)
+      query = query.gte('scheduled_at', startOfDay).lt('scheduled_at', nextDay)
+    }
+
+    const { data, error } = await query
+    if (error) throw new Error(`Failed to load legacy one-time post group: ${error.message}`)
+
+    const matchingRows = (data ?? []).filter((row: any) => {
+      const rowMeta = row?.metadata && typeof row.metadata === 'object' ? row.metadata : {}
+      const rowScheduledFor =
+        safeString(rowMeta.scheduled_for) ??
+        safeString(row?.scheduled_at)?.slice(0, 10) ??
+        null
+      const rowEventRef = safeString(rowMeta.event_ref)
+      const rowTitle = (
+        safeString(rowMeta.title) ??
+        safeString(row?.subject_line) ??
+        safeString(row?.body)?.slice(0, 160) ??
+        ''
+      ).toLowerCase()
+
+      if (scheduledFor && rowScheduledFor !== scheduledFor) return false
+      if (eventRef && rowEventRef !== eventRef) return false
+      if (normalizedTitle && rowTitle !== normalizedTitle) return false
+
+      return true
+    })
+
+    if (!draftGroupId) {
+      const inferredGroupId = matchingRows
+        .map((row: any) => {
+          const rowMeta = row?.metadata && typeof row.metadata === 'object' ? row.metadata : {}
+          return safeString(rowMeta.draft_group_id)
+        })
+        .find((value: string | null): value is string => Boolean(value))
+
+      draftGroupId = inferredGroupId ?? draftGroupId
+    }
+
+    return matchingRows
+  }
+
   let groupRows: any[] = []
   if (draftGroupId) {
     const { data, error } = await supabase
@@ -204,9 +274,15 @@ async function loadOneTimeRegenerationContext(
       .contains('metadata', { draft_group_id: draftGroupId })
       .order('created_at', { ascending: true })
 
-    if (error) throw new Error(`Failed to load one-time post group: ${error.message}`)
-    groupRows = data ?? []
-  } else if (seedRow) {
+      if (error) throw new Error(`Failed to load one-time post group: ${error.message}`)
+      groupRows = data ?? []
+  }
+
+  if (groupRows.length === 0 && seedRow) {
+    groupRows = await loadLegacyGroupRows()
+  }
+
+  if (groupRows.length === 0 && seedRow) {
     groupRows = [seedRow]
   }
 

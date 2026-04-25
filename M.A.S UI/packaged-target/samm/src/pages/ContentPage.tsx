@@ -704,7 +704,6 @@ export default function ContentPage() {
     if (isOneTimeDesignBrief(item)) {
       const draftGroupId =
         typeof item.metadata?.draft_group_id === "string" ? item.metadata.draft_group_id.trim() : "";
-      if (!draftGroupId) return;
 
       const assetNeed =
         typeof item.metadata?.asset_need === "string" ? (item.metadata.asset_need as OneTimePostAssetNeed) : undefined;
