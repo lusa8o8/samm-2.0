@@ -139,6 +139,7 @@ function getPreviewTitle(item: ContentItem, preview: string) {
   if (metadataTitle) return metadataTitle;
   if (item.subject_line) return item.subject_line;
   if (item.platform === "design_brief") {
+    if (isOneTimeDesignBrief(item)) return "One-time asset brief";
     return item.campaign_name ? `${item.campaign_name} Design Brief` : "Design Brief";
   }
   if (preview) {
@@ -151,6 +152,14 @@ function getPreviewTitle(item: ContentItem, preview: string) {
 
 function isOneTimeDesignBrief(item: { platform: string; metadata?: Record<string, unknown> | null }) {
   return item.platform === "design_brief" && item.metadata?.purpose === "one_time";
+}
+
+function getDesignBriefTitle(item: ContentItem, preview: string) {
+  if (isOneTimeDesignBrief(item)) {
+    const metadataTitle = textValue(item.metadata?.title) || textValue(item.metadata?.headline);
+    return metadataTitle || "One-time asset brief";
+  }
+  return getPreviewTitle(item, preview);
 }
 
 function formatTimestamp(value?: string | null) {
@@ -448,13 +457,15 @@ function ContentCard({
   const isFailed = item.status === "failed";
   const supportsRegeneration = isOneTimeDesignBrief(item);
   const preview = stripMarkdownToPreviewText(item.body);
-  const previewTitle = getPreviewTitle(item, preview);
+  const previewTitle = getDesignBriefTitle(item, preview);
   const objective = getObjective(item);
   const cta = getCta(item);
   const tags = getTags(item);
   const statusLabel = item.status === "draft" ? "pending" : item.status;
   const previewKind = isDesignBrief
-    ? "Design brief"
+    ? supportsRegeneration
+      ? "One-time asset brief"
+      : "Design brief"
     : item.platform === "email"
       ? "Email"
       : item.subject_line
@@ -670,9 +681,13 @@ export default function ContentPage() {
   );
 
   const openContentInspector = (item: ContentItem) => {
-    openInspector(item.subject_line || item.campaign_name || PLATFORM_LABELS[item.platform] || "Content", {
+    const preview = stripMarkdownToInspectorText(item.body);
+    const title = item.platform === "design_brief"
+      ? getDesignBriefTitle(item, preview)
+      : item.subject_line || item.campaign_name || PLATFORM_LABELS[item.platform] || "Content";
+    openInspector(title, {
       type: item.platform === "design_brief" ? "campaign_brief" : "content_batch_review",
-      title: item.subject_line || item.campaign_name || PLATFORM_LABELS[item.platform] || "Content",
+      title,
       data: item.platform === "design_brief" ? item : [toInspectorDraft(item)],
     });
   };
@@ -739,7 +754,10 @@ export default function ContentPage() {
   };
 
   const handleShareBrief = async (item: ContentItem) => {
-    const shareText = item.body || item.subject_line || item.campaign_name || "Campaign brief";
+    const preview = stripMarkdownToInspectorText(item.body);
+    const title = item.platform === "design_brief" ? getDesignBriefTitle(item, preview) : (item.subject_line || item.campaign_name || "Content");
+    const label = isOneTimeDesignBrief(item) ? "One-time asset brief" : "Design brief";
+    const shareText = `${label} — ${title}\n\n${item.body || ""}`.trim();
     try {
       await navigator.clipboard.writeText(shareText);
     } catch {

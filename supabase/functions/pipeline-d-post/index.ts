@@ -646,49 +646,7 @@ Deno.serve(async (req) => {
       const assetSpec = buildOneTimeAssetSpec(request, canonical, brandVoice, brandRules)
       const designBrief = renderAssetBrief(assetSpec)
 
-      if (context.designBriefRow) {
-        const existingMeta =
-          context.designBriefRow.metadata && typeof context.designBriefRow.metadata === 'object'
-            ? context.designBriefRow.metadata
-            : {}
-        const { error: updateError } = await supabase
-          .from('content_registry')
-          .update({
-            body: designBrief,
-            status: 'draft',
-            metadata: {
-              ...existingMeta,
-              owner_pipeline: 'pipeline-d-post',
-              purpose: 'one_time',
-              content_type: 'design_brief',
-              draft_group_id: context.draftGroupId,
-              title: context.workingTitle,
-              scheduled_for: context.scheduledFor,
-              event_ref: context.eventRef,
-              asset_need: context.assetNeed,
-              brief_type: assetSpec.brief_type,
-              asset_spec: assetSpec,
-              regenerated_at: new Date().toISOString(),
-            },
-          })
-          .eq('id', context.designBriefRow.id)
-          .eq('org_id', orgId)
-
-        if (updateError) {
-          throw new Error(`Failed to update one-time design brief: ${updateError.message}`)
-        }
-
-        return jsonResponse({
-          ok: true,
-          regenerated: true,
-          brief_id: context.designBriefRow.id,
-          draft_group_id: context.draftGroupId,
-          asset_need: context.assetNeed,
-          brief_type: assetSpec.brief_type,
-          scheduled_for: context.scheduledFor,
-        })
-      }
-
+      const regenerationTimestamp = new Date().toISOString()
       const { data: insertedBrief, error: briefInsertError } = await supabase
         .from('content_registry')
         .insert({
@@ -710,7 +668,8 @@ Deno.serve(async (req) => {
             asset_need: context.assetNeed,
             brief_type: assetSpec.brief_type,
             asset_spec: assetSpec,
-            regenerated_at: new Date().toISOString(),
+            regenerated_at: regenerationTimestamp,
+            regenerated_from_brief_id: context.designBriefRow?.id ?? null,
           },
         })
         .select('id')
@@ -718,6 +677,30 @@ Deno.serve(async (req) => {
 
       if (briefInsertError) {
         throw new Error(`Failed to create regenerated one-time design brief: ${briefInsertError.message}`)
+      }
+
+      if (context.designBriefRow) {
+        const existingMeta =
+          context.designBriefRow.metadata && typeof context.designBriefRow.metadata === 'object'
+            ? context.designBriefRow.metadata
+            : {}
+        const { error: supersedeError } = await supabase
+          .from('content_registry')
+          .update({
+            status: 'rejected',
+            metadata: {
+              ...existingMeta,
+              superseded_at: regenerationTimestamp,
+              superseded_by_brief_id: insertedBrief?.id ?? null,
+              superseded_reason: 'regenerated_asset_brief',
+            },
+          })
+          .eq('id', context.designBriefRow.id)
+          .eq('org_id', orgId)
+
+        if (supersedeError) {
+          console.error('Pipeline D: failed to supersede prior one-time design brief', supersedeError)
+        }
       }
 
       return jsonResponse({

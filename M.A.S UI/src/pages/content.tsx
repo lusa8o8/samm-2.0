@@ -109,6 +109,13 @@ function isOneTimeDesignBrief(item: { platform: string; metadata?: Record<string
   return item.platform === "design_brief" && item.metadata?.purpose === "one_time";
 }
 
+function getDesignBriefTitle(item: { campaign_name?: string | null; metadata?: Record<string, unknown> | null; platform: string; subject_line?: string | null }) {
+  if (isOneTimeDesignBrief(item)) {
+    return getWorkingTitle(item) || "One-time asset brief";
+  }
+  return item.campaign_name ?? "Design Brief";
+}
+
 interface ContentCardProps {
   item: ContentItem;
   isExpanded: boolean;
@@ -494,9 +501,11 @@ function DesignBriefCard({
 
   const isDraft = item.status === "draft";
   const supportsRegeneration = isOneTimeDesignBrief(item);
-  const shareText = `Design Brief — ${item.campaign_name ?? "Campaign"}\n\n${item.body}`;
+  const briefTitle = getDesignBriefTitle(item);
+  const briefLabel = supportsRegeneration ? "One-time asset brief" : "Design Brief";
+  const shareText = `${briefLabel} — ${briefTitle}\n\n${item.body}`;
   const encodedText = encodeURIComponent(shareText);
-  const encodedSubject = encodeURIComponent(`Design Brief — ${item.campaign_name ?? "Campaign"}`);
+  const encodedSubject = encodeURIComponent(`${briefLabel} — ${briefTitle}`);
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(shareText);
@@ -511,13 +520,13 @@ function DesignBriefCard({
     { label: "Email", href: `mailto:?subject=${encodedSubject}&body=${encodedText}` },
   ];
   const inspectorPayload = createInspectorPayload(
-    item.campaign_name ?? "Design Brief",
+    briefTitle,
     {
       type: "campaign_brief",
-      title: item.campaign_name ?? "Design Brief",
+      title: briefTitle,
       data: item,
     },
-    `Design brief in ${item.status} state`
+    `${briefLabel} in ${item.status} state`
   );
 
   return (
@@ -532,9 +541,9 @@ function DesignBriefCard({
       <div className={cn("flex items-start justify-between gap-4 p-5", isExpanded && "cursor-pointer")} onClick={isExpanded ? onToggle : undefined}>
         <div className="flex items-center gap-2">
           <Paintbrush className="h-4 w-4 text-violet-500" />
-          <span className="text-sm font-medium text-violet-700">Design Brief</span>
-          {item.campaign_name && (
-            <span className="text-[11px] text-muted-foreground">· {item.campaign_name}</span>
+          <span className="text-sm font-medium text-violet-700">{briefLabel}</span>
+          {briefTitle && (
+            <span className="text-[11px] text-muted-foreground">· {briefTitle}</span>
           )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
