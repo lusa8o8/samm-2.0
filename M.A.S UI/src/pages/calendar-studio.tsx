@@ -476,7 +476,7 @@ export default function CalendarStudioPage() {
   const { openInspector, closeInspector } = useWorkspaceInspector();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
 
   const monthGrid = useMemo(
     () => (source ? buildCalendarStudioMonthGrid(source, monthIso) : null),
@@ -743,13 +743,29 @@ export default function CalendarStudioPage() {
     toastTitle: string,
     toastDescription: string,
   ) => {
-    closeInspector();
-    setLocation(`/samm?mode=${mode}&prompt=${encodeURIComponent(prompt)}`);
+    const isDesktopCalendarWorkspace =
+      typeof window !== "undefined" &&
+      window.innerWidth >= 1280 &&
+      location.startsWith("/calendar");
+
+    if (isDesktopCalendarWorkspace) {
+      const basePath = location.split("?")[0] || "/calendar";
+      const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+      params.set("mode", mode);
+      params.set("prompt", prompt);
+      params.set("workspace", "samm");
+      params.set("handoff", String(Date.now()));
+      setLocation(`${basePath}?${params.toString()}`);
+    } else {
+      closeInspector();
+      setLocation(`/samm?mode=${mode}&prompt=${encodeURIComponent(prompt)}`);
+    }
+
     toast({
       title: toastTitle,
       description: toastDescription,
     });
-  }, [closeInspector, setLocation, toast]);
+  }, [closeInspector, location, setLocation, toast]);
 
   const isDeletePending = deleteCampaignMutation.isPending || deleteOneTimeMutation.isPending;
 
