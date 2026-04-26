@@ -992,7 +992,7 @@ export default function CalendarStudioPage() {
             <button
               type="button"
               onClick={handlePlanMonth}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3.5 py-2 text-[12px] font-medium text-white shadow-sm shadow-primary/20 transition-all hover:bg-primary/90"
+              className="inline-flex w-fit items-center justify-center gap-1.5 self-start rounded-xl bg-primary px-3 py-2 text-[11px] font-medium text-white shadow-sm shadow-primary/20 transition-all hover:bg-primary/90 sm:px-3.5 sm:text-[12px]"
               data-testid="open-monthly-planning"
             >
               <Sparkles size={13} /> Plan this month
