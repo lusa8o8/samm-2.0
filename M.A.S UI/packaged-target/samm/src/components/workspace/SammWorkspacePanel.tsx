@@ -424,10 +424,10 @@ export function SammWorkspacePanel({
         </div>
       )}
 
-      <div className={cn(embedded ? 'px-5 pb-5' : 'px-6 pb-6')}>
-        <div className="flex items-center gap-3 rounded-2xl border border-border/60 bg-card/80 px-4 py-3 shadow-lg shadow-black/5 backdrop-blur-md transition-all duration-200 focus-within:border-primary/40 focus-within:shadow-primary/10">
+      <div className={cn(embedded ? 'px-5 pb-5' : 'px-4 pb-5 sm:px-6 sm:pb-6')}>
+        <div className="flex items-center gap-2 overflow-hidden rounded-2xl border border-border/60 bg-card/80 px-3 py-2.5 shadow-lg shadow-black/5 backdrop-blur-md transition-all duration-200 focus-within:border-primary/40 focus-within:shadow-primary/10 sm:gap-3 sm:px-4 sm:py-3">
           <input
-            className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none"
+            className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none"
             placeholder={
               mode === 'planning'
                 ? 'Ask samm to help plan the month, define a campaign, or explain the why...'
@@ -443,7 +443,7 @@ export function SammWorkspacePanel({
               void handleSend();
             }}
             disabled={!input.trim() || loading}
-            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary shadow-sm shadow-primary/30 transition-all duration-150 hover:bg-primary/90 disabled:opacity-30 active:scale-95"
+            className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-primary shadow-sm shadow-primary/30 transition-all duration-150 hover:bg-primary/90 disabled:opacity-30 active:scale-95 sm:h-8 sm:w-8"
             data-testid="samm-send"
           >
             <Send size={13} className="translate-x-px text-white" />
@@ -453,4 +453,3 @@ export function SammWorkspacePanel({
     </div>
   );
 }
-

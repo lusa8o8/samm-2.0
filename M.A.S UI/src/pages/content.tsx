@@ -999,18 +999,18 @@ export default function Content() {
   return (
     <div className="flex h-full flex-col bg-[linear-gradient(180deg,rgba(244,241,235,0.45)_0%,rgba(244,241,235,0)_30%)]">
       <header className="shrink-0 border-b border-border/80 bg-background/95 px-4 py-4 backdrop-blur md:px-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight text-foreground">Content Registry</h1>
-            <p className="mt-1 text-sm text-muted-foreground">Drafts, scheduled posts, and published assets flowing through the workspace.</p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
+          <div className="min-w-0">
+            <h1 className="text-lg font-semibold tracking-tight text-foreground sm:text-xl">Content Registry</h1>
+            <p className="mt-1 max-w-xl text-xs leading-relaxed text-muted-foreground sm:text-sm">Drafts, scheduled posts, and published assets flowing through the workspace.</p>
           </div>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <label className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span>Sort</span>
+          <div className="flex w-full items-center gap-2 sm:w-auto sm:gap-3">
+            <label className="flex min-w-0 flex-1 items-center justify-between gap-2 text-xs text-muted-foreground sm:flex-initial sm:justify-start sm:text-sm">
+              <span className="shrink-0">Sort</span>
               <select
                 value={sortBy}
                 onChange={(event) => setSortBy(event.target.value as SortOption)}
-                className="h-9 rounded-md border border-border bg-background px-3 text-sm text-foreground"
+                className="h-9 min-w-0 flex-1 rounded-md border border-border bg-background px-3 text-sm text-foreground sm:w-[150px] sm:flex-initial"
               >
                 <option value="newest">Newest first</option>
                 <option value="oldest">Oldest first</option>
@@ -1018,19 +1018,19 @@ export default function Content() {
                 <option value="platform">Platform</option>
               </select>
             </label>
-            <Button size="sm">New Post</Button>
+            <Button size="sm" className="shrink-0">New Post</Button>
           </div>
         </div>
       </header>
 
       <div className="shrink-0 border-b border-border/80 bg-background/70 px-4 md:px-6">
-        <div className="flex gap-6 overflow-x-auto text-sm font-medium">
+        <div className="flex gap-4 overflow-x-auto text-sm font-medium sm:gap-6">
           {TABS.map((tab) => (
             <button
               key={tab.id}
               onClick={() => { setStatus(tab.id); setExpandedId(null); }}
               className={cn(
-                "border-b-2 py-3 transition-colors",
+                "shrink-0 border-b-2 py-3 transition-colors",
                 status === tab.id
                   ? "border-primary text-foreground"
                   : "border-transparent text-muted-foreground hover:text-foreground"

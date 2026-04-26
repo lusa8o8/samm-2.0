@@ -822,21 +822,21 @@ export default function ContentPage() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="border-b border-border px-5 pb-3 pt-5">
-        <div className="flex items-end justify-between gap-4">
-          <div>
-            <h1 className="text-xl font-semibold text-foreground">Content Registry</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
+      <div className="border-b border-border px-4 pb-3 pt-4 sm:px-5 sm:pt-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
+          <div className="min-w-0">
+            <h1 className="text-lg font-semibold text-foreground sm:text-xl">Content Registry</h1>
+            <p className="mt-1 max-w-xl text-xs leading-relaxed text-muted-foreground sm:text-sm">
               Drafts, scheduled posts, and published assets flowing through the workspace.
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            <label className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span>Sort</span>
+          <div className="flex w-full items-center gap-2 sm:w-auto sm:gap-3">
+            <label className="flex min-w-0 flex-1 items-center justify-between gap-2 text-xs text-muted-foreground sm:flex-initial sm:justify-start sm:text-sm">
+              <span className="shrink-0">Sort</span>
               <select
                 value={sortBy}
                 onChange={(event) => setSortBy(event.target.value as SortOption)}
-                className="h-9 rounded-lg border border-border bg-background px-3 text-sm text-foreground"
+                className="h-9 min-w-0 flex-1 rounded-lg border border-border bg-background px-3 text-sm text-foreground sm:w-[150px] sm:flex-initial"
               >
                 <option value="newest">Newest first</option>
                 <option value="oldest">Oldest first</option>
@@ -844,20 +844,20 @@ export default function ContentPage() {
                 <option value="platform">Platform</option>
               </select>
             </label>
-            <button className="inline-flex h-9 items-center rounded-lg bg-primary px-3.5 text-xs font-medium text-white transition-opacity hover:opacity-90">
+            <button className="inline-flex h-9 shrink-0 items-center rounded-lg bg-primary px-3 text-xs font-medium text-white transition-opacity hover:opacity-90 sm:px-3.5">
               New Post
             </button>
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap gap-1">
+        <div className="mt-4 flex gap-1 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
           {TABS.map((tab) => (
             <button
               key={tab.id}
               type="button"
               onClick={() => setStatus(tab.id)}
               className={cn(
-                "rounded-lg px-3 py-1.5 text-sm transition-colors",
+                "shrink-0 rounded-lg px-3 py-1.5 text-sm transition-colors",
                 status === tab.id
                   ? "bg-primary/10 font-medium text-primary"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground",

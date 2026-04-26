@@ -1,12 +1,12 @@
 import { useLocation, Link } from 'wouter';
 import {
   Cpu, Inbox, FileText, BarChart2, Calendar, Settings,
-  Users, TrendingUp, Star, Zap, LogOut
+  Users, TrendingUp, Star, Zap, LogOut, PanelLeftClose, PanelLeftOpen
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Module, ModuleId } from '../../types';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { signOut } from '../../../../../src/lib/supabase';
 
 const iconMap: Record<string, LucideIcon> = {
@@ -82,9 +82,31 @@ function NavIcon({ icon: Icon, label, path, isActive, badge }: NavIconProps) {
 export function Sidebar({ enabledModules, currentPath }: SidebarProps) {
   const [workspaceHovered, setWorkspaceHovered] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
+  const [isMobileCollapsed, setIsMobileCollapsed] = useState(false);
 
   const navModules = enabledModules.filter(m => m.id !== 'operations');
   const settingsModule = enabledModules.find(m => m.id === 'operations');
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const updateViewport = () => {
+      const nextIsMobile = window.innerWidth < 768;
+      setIsMobileViewport(nextIsMobile);
+      setIsMobileCollapsed((current) => (nextIsMobile ? current : false));
+    };
+
+    updateViewport();
+    window.addEventListener('resize', updateViewport);
+    return () => window.removeEventListener('resize', updateViewport);
+  }, []);
+
+  useEffect(() => {
+    if (isMobileViewport) {
+      setIsMobileCollapsed(true);
+    }
+  }, [isMobileViewport]);
 
   async function handleSignOut() {
     if (signingOut) return;
@@ -97,7 +119,27 @@ export function Sidebar({ enabledModules, currentPath }: SidebarProps) {
   }
 
   return (
-    <aside className="flex-shrink-0 flex flex-col items-center h-full w-[60px] py-3 bg-transparent select-none">
+    <aside
+      className={cn(
+        'z-30 flex flex-col items-center py-3 select-none transition-transform duration-200 ease-out',
+        isMobileViewport
+          ? cn(
+              'fixed inset-y-0 left-0 w-[60px] border-r border-border/60 bg-background/92 shadow-sm backdrop-blur-md',
+              isMobileCollapsed ? '-translate-x-[44px]' : 'translate-x-0'
+            )
+          : 'relative h-full w-[60px] flex-shrink-0 bg-transparent'
+      )}
+    >
+      {isMobileViewport && (
+        <button
+          type="button"
+          onClick={() => setIsMobileCollapsed((current) => !current)}
+          className="absolute right-[-14px] top-24 flex h-10 w-7 items-center justify-center rounded-r-full border border-l-0 border-border/60 bg-background/95 text-muted-foreground shadow-sm transition-colors hover:text-foreground"
+          aria-label={isMobileCollapsed ? 'Expand navigation' : 'Collapse navigation'}
+        >
+          {isMobileCollapsed ? <PanelLeftOpen size={14} /> : <PanelLeftClose size={14} />}
+        </button>
+      )}
 
       {/* Workspace logo */}
       <div
