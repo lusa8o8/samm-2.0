@@ -20,13 +20,19 @@ export function DayMetricCounts({ counts, size = "xs", align = "start", classNam
   if (visible.length === 0) return null;
 
   return (
-    <div className={cn("flex items-center gap-1.5", align === "between" && "w-full justify-between", className)}>
+    <div
+      className={cn(
+        "flex flex-wrap items-center gap-x-1 gap-y-0.5",
+        align === "between" && "w-full justify-between",
+        className,
+      )}
+    >
       {visible.map((d) => (
         <span
           key={d.key}
           className={cn(
             "inline-flex items-center gap-1 leading-none",
-            size === "xs" ? "text-[9px]" : "text-[10px]",
+            size === "xs" ? "text-[8px] sm:text-[9px]" : "text-[9px] sm:text-[10px]",
             d.tone,
           )}
           title={`${d.label}: ${counts[d.key]}`}

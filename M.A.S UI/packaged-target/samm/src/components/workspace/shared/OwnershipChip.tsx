@@ -62,7 +62,7 @@ export function CampaignPill({ name, color, size = "xs", exclusive, onClick, cla
   const c = campaignColorClasses[color];
   const classes = cn(
     "inline-flex max-w-full items-center gap-1 truncate rounded-full border font-medium transition-colors",
-    size === "xs" ? "px-1.5 py-px text-[9px]" : "px-2 py-0.5 text-[10px]",
+    size === "xs" ? "px-1 py-px text-[8px] sm:px-1.5 sm:text-[9px]" : "px-1.5 py-0.5 text-[9px] sm:px-2 sm:text-[10px]",
     c.bg,
     c.border,
     c.text,
@@ -123,7 +123,7 @@ export function OwnershipChip({ ownership, ownerPipeline, size = "xs" }: Ownersh
     <span
       className={cn(
         "inline-flex items-center gap-1 rounded-full border font-medium",
-        size === "xs" ? "px-1.5 py-px text-[9px]" : "px-2 py-0.5 text-[10px]",
+        size === "xs" ? "px-1 py-px text-[8px] sm:px-1.5 sm:text-[9px]" : "px-1.5 py-0.5 text-[9px] sm:px-2 sm:text-[10px]",
         ownershipTone[ownership],
       )}
     >

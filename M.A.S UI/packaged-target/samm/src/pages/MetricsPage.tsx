@@ -38,12 +38,12 @@ function ChannelRow({ metric }: { metric: ChannelMetric }) {
   const trendColor = metric.trend === 'up' ? 'text-emerald-600' : metric.trend === 'down' ? 'text-red-500' : 'text-muted-foreground';
 
   return (
-    <div className="flex items-center gap-4 py-3 border-b border-border last:border-0">
-      <div className="flex items-center gap-2 w-32 flex-shrink-0">
+    <div className="space-y-3 py-3 border-b border-border last:border-0 sm:flex sm:items-center sm:gap-4 sm:space-y-0">
+      <div className="flex items-center gap-2 sm:w-32 sm:flex-shrink-0">
         <ChannelIcon channel={metric.channel} size={14} />
         <span className="text-sm font-medium text-foreground">{channelLabels[metric.channel]}</span>
       </div>
-      <div className="grid grid-cols-4 gap-4 flex-1 text-sm">
+      <div className="grid flex-1 grid-cols-2 gap-3 text-sm sm:grid-cols-4 sm:gap-4">
         <div>
           <p className="text-xs text-muted-foreground">Reach</p>
           <p className="font-semibold">{(metric.reach / 1000).toFixed(1)}k</p>
@@ -61,7 +61,7 @@ function ChannelRow({ metric }: { metric: ChannelMetric }) {
           <p className="font-semibold">{metric.conversions}</p>
         </div>
       </div>
-      <div className="w-8 flex justify-end">
+      <div className="flex justify-end sm:w-8">
         <TrendIcon size={14} className={trendColor} />
       </div>
     </div>
@@ -94,8 +94,8 @@ export default function MetricsPage() {
         <p className="text-sm text-muted-foreground mt-0.5">{periodLabel}</p>
       </div>
 
-      <div className="px-6 py-6 space-y-8">
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+      <div className="px-4 py-5 space-y-6 sm:px-6 sm:py-6 sm:space-y-8">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
           {kpis.map((kpi) => <KPICard key={kpi.label} kpi={kpi} />)}
         </div>
 

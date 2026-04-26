@@ -25,7 +25,7 @@ export function ContentChip({ chip, className }: ContentChipProps) {
   return (
     <div
       className={cn(
-        "flex items-center gap-1 truncate rounded-md border px-1 py-0.5",
+        "flex items-center gap-0.5 truncate rounded-md border px-1 py-px sm:gap-1 sm:px-1 sm:py-0.5",
         statusBorder[chip.status],
         statusBg[chip.status],
         className,
@@ -33,7 +33,7 @@ export function ContentChip({ chip, className }: ContentChipProps) {
       title={chip.title}
     >
       <ChannelIcon channel={chip.channel} size={9} className="flex-shrink-0" />
-      <span className="truncate text-[9px] leading-none text-foreground/80">{chip.title}</span>
+      <span className="truncate text-[8px] leading-none text-foreground/80 sm:text-[9px]">{chip.title}</span>
     </div>
   );
 }

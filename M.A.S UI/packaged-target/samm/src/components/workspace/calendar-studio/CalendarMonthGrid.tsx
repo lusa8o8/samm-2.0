@@ -15,7 +15,7 @@ interface Props {
 export function CalendarMonthGrid({ data, onDayClick, onCampaignClick }: Props) {
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3 px-1">
+      <div className="flex flex-col gap-2 px-1 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-3">
         <div className="flex flex-wrap items-center gap-3">
           {data.activeCampaigns.map((campaign) => (
             <CampaignPill
@@ -27,7 +27,7 @@ export function CalendarMonthGrid({ data, onDayClick, onCampaignClick }: Props) 
             />
           ))}
         </div>
-        <div className="flex items-center gap-4 text-[11px] text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted-foreground sm:gap-4 sm:text-[11px]">
           <span>
             <span className="font-semibold tabular-nums text-foreground">{data.committedPercent}%</span> committed
           </span>
@@ -48,15 +48,15 @@ export function CalendarMonthGrid({ data, onDayClick, onCampaignClick }: Props) 
         </div>
       </div>
 
-      <div className="grid grid-cols-7 gap-2 px-1">
+      <div className="grid grid-cols-7 gap-1 px-1 sm:gap-2">
         {data.weekdayLabels.map((weekday) => (
-          <div key={weekday} className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">
+          <div key={weekday} className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground/70 sm:text-[10px]">
             {weekday}
           </div>
         ))}
       </div>
 
-      <div className="grid grid-cols-7 gap-2">
+      <div className="grid grid-cols-7 gap-1 sm:gap-2">
         {data.days.map((day) => (
           <DayCard key={day.date} day={day} onClick={() => onDayClick?.(day)} />
         ))}
@@ -79,7 +79,7 @@ function DayCard({ day, onClick }: { day: CalendarDayCellViewData; onClick?: () 
       onClick={onClick}
       disabled={isOtherMonth}
       className={cn(
-        "group flex min-h-[110px] flex-col rounded-2xl border bg-card text-left shadow-sm transition-all duration-150 hover:shadow-md",
+        "group flex min-h-[98px] flex-col rounded-[18px] border bg-card text-left shadow-sm transition-all duration-150 hover:shadow-md sm:min-h-[110px] sm:rounded-2xl",
         isOtherMonth && "pointer-events-none opacity-30",
         day.isToday && "ring-2 ring-primary/40 border-primary/40",
         !day.isToday && !isFailureHeavy && "border-border/60 hover:border-border",
@@ -88,17 +88,17 @@ function DayCard({ day, onClick }: { day: CalendarDayCellViewData; onClick?: () 
       )}
       data-testid={`calendar-day-${day.date}`}
     >
-      <div className="flex items-start justify-between gap-1 px-2 pb-1 pt-2">
+      <div className="flex items-start justify-between gap-1 px-1.5 pb-1 pt-1.5 sm:px-2 sm:pt-2">
         <div className="flex items-center gap-1">
-          <span className={cn("text-[12px] font-semibold leading-none tabular-nums", day.isToday ? "text-primary" : "text-foreground")}>
+          <span className={cn("text-[11px] font-semibold leading-none tabular-nums sm:text-[12px]", day.isToday ? "text-primary" : "text-foreground")}>
             {dayNum}
           </span>
           {isMonthStart && day.isCurrentMonth ? (
-            <span className="text-[9px] uppercase tracking-wide text-muted-foreground">{format(new Date(day.date), "MMM")}</span>
+            <span className="text-[8px] uppercase tracking-wide text-muted-foreground sm:text-[9px]">{format(new Date(day.date), "MMM")}</span>
           ) : null}
         </div>
         {day.openSlots > 0 && day.counts.scheduled === 0 && day.counts.drafts === 0 ? (
-          <span className="text-[9px] italic leading-none text-muted-foreground/60">+{day.openSlots} open</span>
+          <span className="text-[8px] italic leading-none text-muted-foreground/60 sm:text-[9px]">+{day.openSlots} open</span>
         ) : null}
         {day.openSlots > 0 && (day.counts.scheduled > 0 || day.counts.drafts > 0) ? (
           <span className="h-1.5 w-1.5 rounded-full bg-primary/40" title={`${day.openSlots} open slots`} />
@@ -106,7 +106,7 @@ function DayCard({ day, onClick }: { day: CalendarDayCellViewData; onClick?: () 
       </div>
 
       {showCampaignPill ? (
-        <div className="px-2">
+        <div className="px-1.5 sm:px-2">
           <CampaignPill
             name={day.campaignName!}
             color={day.campaignColor ?? "slate"}
@@ -117,13 +117,17 @@ function DayCard({ day, onClick }: { day: CalendarDayCellViewData; onClick?: () 
         </div>
       ) : null}
 
-      <div className="mt-1 flex-1 space-y-0.5 px-2">
-        {day.previewChips.slice(0, 3).map((chip) => (
-          <ContentChip key={chip.id} chip={chip} />
+      <div className="mt-1 flex-1 space-y-0.5 px-1.5 sm:px-2">
+        {day.previewChips.slice(0, 3).map((chip, index) => (
+          <ContentChip
+            key={chip.id}
+            chip={chip}
+            className={cn(index === 2 && "hidden sm:flex")}
+          />
         ))}
       </div>
 
-      <div className="space-y-1 px-2 pb-2 pt-1">
+      <div className="space-y-1 px-1.5 pb-1.5 pt-1 sm:px-2 sm:pb-2">
         {day.capacity.max > 0 ? <ContentCapacityBar used={day.capacity.used} max={day.capacity.max} size="xs" /> : null}
         <DayMetricCounts counts={day.counts} size="xs" />
       </div>

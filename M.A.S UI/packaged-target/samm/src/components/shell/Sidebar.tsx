@@ -37,15 +37,17 @@ interface NavIconProps {
   path: string;
   isActive: boolean;
   badge?: number;
+  onNavigate?: () => void;
 }
 
-function NavIcon({ icon: Icon, label, path, isActive, badge }: NavIconProps) {
+function NavIcon({ icon: Icon, label, path, isActive, badge, onNavigate }: NavIconProps) {
   const [hovered, setHovered] = useState(false);
 
   return (
     <Link href={path} data-testid={`nav-${label.toLowerCase()}`}>
       <div
         className="relative flex items-center"
+        onClick={onNavigate}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
       >
@@ -108,6 +110,12 @@ export function Sidebar({ enabledModules, currentPath }: SidebarProps) {
     }
   }, [isMobileViewport]);
 
+  const collapseMobileRail = () => {
+    if (isMobileViewport) {
+      setIsMobileCollapsed(true);
+    }
+  };
+
   async function handleSignOut() {
     if (signingOut) return;
     setSigningOut(true);
@@ -119,101 +127,114 @@ export function Sidebar({ enabledModules, currentPath }: SidebarProps) {
   }
 
   return (
-    <aside
-      className={cn(
-        'z-30 flex flex-col items-center py-3 select-none transition-transform duration-200 ease-out',
-        isMobileViewport
-          ? cn(
-              'fixed inset-y-0 left-0 w-[60px] border-r border-border/60 bg-background/92 shadow-sm backdrop-blur-md',
-              isMobileCollapsed ? '-translate-x-[44px]' : 'translate-x-0'
-            )
-          : 'relative h-full w-[60px] flex-shrink-0 bg-transparent'
-      )}
-    >
-      {isMobileViewport && (
+    <>
+      {isMobileViewport && !isMobileCollapsed ? (
         <button
           type="button"
-          onClick={() => setIsMobileCollapsed((current) => !current)}
-          className="absolute right-[-14px] top-24 flex h-10 w-7 items-center justify-center rounded-r-full border border-l-0 border-border/60 bg-background/95 text-muted-foreground shadow-sm transition-colors hover:text-foreground"
-          aria-label={isMobileCollapsed ? 'Expand navigation' : 'Collapse navigation'}
-        >
-          {isMobileCollapsed ? <PanelLeftOpen size={14} /> : <PanelLeftClose size={14} />}
-        </button>
-      )}
+          aria-label="Collapse navigation"
+          onClick={collapseMobileRail}
+          className="fixed inset-0 z-20 bg-black/10 backdrop-blur-[1px]"
+        />
+      ) : null}
 
-      {/* Workspace logo */}
-      <div
-        className="relative mb-3"
-        onMouseEnter={() => setWorkspaceHovered(true)}
-        onMouseLeave={() => setWorkspaceHovered(false)}
+      <aside
+        className={cn(
+          'z-30 flex flex-col items-center py-3 select-none transition-transform duration-200 ease-out',
+          isMobileViewport
+            ? cn(
+                'fixed inset-y-0 left-0 w-[60px] border-r border-border/60 bg-background/92 shadow-sm backdrop-blur-md',
+                isMobileCollapsed ? '-translate-x-[46px]' : 'translate-x-0'
+              )
+            : 'relative h-full w-[60px] flex-shrink-0 bg-transparent'
+        )}
       >
-        <div className="h-9 w-9 rounded-xl bg-primary flex items-center justify-center cursor-default shadow-md shadow-primary/30">
-          <Zap size={16} className="text-white" />
+        {isMobileViewport && (
+          <button
+            type="button"
+            onClick={() => setIsMobileCollapsed((current) => !current)}
+            className="absolute right-[-14px] top-24 flex h-10 w-7 items-center justify-center rounded-r-full border border-l-0 border-border/60 bg-background/95 text-muted-foreground shadow-sm transition-colors hover:text-foreground"
+            aria-label={isMobileCollapsed ? 'Expand navigation' : 'Collapse navigation'}
+          >
+            {isMobileCollapsed ? <PanelLeftOpen size={14} /> : <PanelLeftClose size={14} />}
+          </button>
+        )}
+
+        {/* Workspace logo */}
+        <div
+          className="relative mb-3"
+          onMouseEnter={() => setWorkspaceHovered(true)}
+          onMouseLeave={() => setWorkspaceHovered(false)}
+        >
+          <div className="h-9 w-9 rounded-xl bg-primary flex items-center justify-center cursor-default shadow-md shadow-primary/30">
+            <Zap size={16} className="text-white" />
+          </div>
+
+          {workspaceHovered && (
+            <div className="absolute left-[calc(100%+10px)] top-1/2 -translate-y-1/2 z-50 pointer-events-none">
+              <div className="bg-popover border border-border rounded-lg px-2.5 py-1.5 shadow-lg whitespace-nowrap">
+                <p className="text-xs font-semibold text-foreground">Northstar Co.</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">Production workspace</p>
+              </div>
+              <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1 w-2 h-2 bg-popover border-l border-b border-border rotate-45" />
+            </div>
+          )}
         </div>
 
-        {workspaceHovered && (
-          <div className="absolute left-[calc(100%+10px)] top-1/2 -translate-y-1/2 z-50 pointer-events-none">
-            <div className="bg-popover border border-border rounded-lg px-2.5 py-1.5 shadow-lg whitespace-nowrap">
-              <p className="text-xs font-semibold text-foreground">Northstar Co.</p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">Production workspace</p>
-            </div>
-            <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1 w-2 h-2 bg-popover border-l border-b border-border rotate-45" />
-          </div>
-        )}
-      </div>
+        <div className="mb-2" />
 
-      <div className="mb-2" />
+        {/* Main nav */}
+        <nav className="flex flex-col items-center gap-1 flex-1">
+          {navModules.map(module => {
+            const Icon = iconMap[module.icon];
+            if (!Icon) return null;
+            const path = routeMap[module.id];
+            const isActive = currentPath === path || (path !== '/' && currentPath.startsWith(path));
 
-      {/* Main nav */}
-      <nav className="flex flex-col items-center gap-1 flex-1">
-        {navModules.map(module => {
-          const Icon = iconMap[module.icon];
-          if (!Icon) return null;
-          const path = routeMap[module.id];
-          const isActive = currentPath === path || (path !== '/' && currentPath.startsWith(path));
+            return (
+              <NavIcon
+                key={module.id}
+                icon={Icon}
+                label={module.label}
+                path={path}
+                isActive={isActive}
+                badge={module.badge}
+                onNavigate={collapseMobileRail}
+              />
+            );
+          })}
+        </nav>
 
-          return (
+        {/* Settings at bottom */}
+        {settingsModule && (
+          <>
+            <div className="mb-1" />
             <NavIcon
-              key={module.id}
-              icon={Icon}
-              label={module.label}
-              path={path}
-              isActive={isActive}
-              badge={module.badge}
+              icon={Settings}
+              label="Operations"
+              path="/operations"
+              isActive={currentPath === '/operations' || currentPath.startsWith('/operations')}
+              onNavigate={collapseMobileRail}
             />
-          );
-        })}
-      </nav>
-
-      {/* Settings at bottom */}
-      {settingsModule && (
-        <>
-          <div className="mb-1" />
-          <NavIcon
-            icon={Settings}
-            label="Operations"
-            path="/operations"
-            isActive={currentPath === '/operations' || currentPath.startsWith('/operations')}
-          />
-        </>
-      )}
-
-      <div className="mb-1" />
-      <button
-        type="button"
-        onClick={handleSignOut}
-        disabled={signingOut}
-        className={cn(
-          "relative flex h-9 w-9 items-center justify-center rounded-xl transition-all duration-150",
-          signingOut
-            ? "cursor-not-allowed bg-muted text-muted-foreground"
-            : "text-foreground/25 hover:bg-red-50 hover:text-red-600"
+          </>
         )}
-        title="Sign out"
-        data-testid="nav-sign-out"
-      >
-        <LogOut size={16} />
-      </button>
-    </aside>
+
+        <div className="mb-1" />
+        <button
+          type="button"
+          onClick={handleSignOut}
+          disabled={signingOut}
+          className={cn(
+            "relative flex h-9 w-9 items-center justify-center rounded-xl transition-all duration-150",
+            signingOut
+              ? "cursor-not-allowed bg-muted text-muted-foreground"
+              : "text-foreground/25 hover:bg-red-50 hover:text-red-600"
+          )}
+          title="Sign out"
+          data-testid="nav-sign-out"
+        >
+          <LogOut size={16} />
+        </button>
+      </aside>
+    </>
   );
 }
