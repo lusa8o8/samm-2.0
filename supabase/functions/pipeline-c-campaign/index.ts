@@ -626,6 +626,7 @@ async function runPerformanceAnalyser(
     .from('platform_metrics')
     .select('*')
     .eq('org_id', context.orgId)
+    .eq('source', 'meta_graph')
     .order('snapshot_date', { ascending: false })
     .limit(8)
 
@@ -1069,6 +1070,7 @@ async function runMonitor(
     .from('platform_metrics')
     .select('*')
     .eq('org_id', context.orgId)
+    .eq('source', 'meta_graph')
     .order('snapshot_date', { ascending: false })
     .limit(4)
 
@@ -1131,6 +1133,7 @@ async function runPostCampaignReport(
     .from('platform_metrics')
     .select('*')
     .eq('org_id', context.orgId)
+    .eq('source', 'meta_graph')
     .order('snapshot_date', { ascending: false })
     .limit(4)
 

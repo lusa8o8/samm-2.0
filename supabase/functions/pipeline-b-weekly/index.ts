@@ -277,6 +277,7 @@ Deno.serve(async (req) => {
         .from('platform_metrics')
         .select('*')
         .eq('org_id', context.orgId)
+        .eq('source', 'meta_graph')
         .order('snapshot_date', { ascending: false })
         .limit(8),
       loadCampaignCalendarPlanningContext(supabase, context.orgId, context.today),
@@ -593,6 +594,7 @@ async function resumePipelineBRun(params: {
       .from('platform_metrics')
       .select('*')
       .eq('org_id', context.orgId)
+      .eq('source', 'meta_graph')
       .order('snapshot_date', { ascending: false })
       .limit(8)
 

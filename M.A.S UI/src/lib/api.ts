@@ -1927,6 +1927,7 @@ export function useListMetrics(options?: QueryHookOptions) {
         .from("platform_metrics")
         .select("*")
         .eq("org_id", getOrgId())
+        .eq("source", "meta_graph")
         .order("snapshot_date", { ascending: false })
         .limit(40);
 
@@ -1977,6 +1978,7 @@ export function useGetMetricsSparklines(options?: QueryHookOptions) {
         .from("platform_metrics")
         .select("platform, signups, snapshot_date")
         .eq("org_id", getOrgId())
+        .eq("source", "meta_graph")
         .order("snapshot_date", { ascending: false })
         .limit(80);
 

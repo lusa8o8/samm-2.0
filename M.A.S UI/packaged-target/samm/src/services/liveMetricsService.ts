@@ -3,6 +3,7 @@ import type { Channel, ChannelMetric, MetricKPI } from "../types";
 
 type MetricRow = {
   platform?: string | null;
+  source?: string | null;
   snapshot_date?: string | null;
   followers?: number | null;
   post_reach?: number | null;
@@ -229,6 +230,7 @@ export async function getMetrics() {
     .from("platform_metrics")
     .select("*")
     .eq("org_id", getOrgId())
+    .eq("source", "meta_graph")
     .order("snapshot_date", { ascending: false })
     .limit(80);
 

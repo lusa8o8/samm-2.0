@@ -88,6 +88,7 @@ Deno.serve(async (req) => {
       .from('platform_metrics')
       .select('*')
       .eq('org_id', ORG_ID)
+      .eq('source', 'meta_graph')
       .order('snapshot_date', { ascending: false })
       .limit(4)
 

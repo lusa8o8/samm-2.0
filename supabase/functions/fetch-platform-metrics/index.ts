@@ -206,6 +206,7 @@ async function loadPreviousMetric(supabase: any, orgId: string, platform: Platfo
     .select('followers, post_reach, reach, engagement_rate, engagement, signups')
     .eq('org_id', orgId)
     .eq('platform', platform)
+    .eq('source', 'meta_graph')
     .lt('snapshot_date', snapshotDate)
     .order('snapshot_date', { ascending: false })
     .limit(1)

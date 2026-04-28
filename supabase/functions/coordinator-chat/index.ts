@@ -782,7 +782,7 @@ Deno.serve(async (req) => {
 
     const [orgConfigResult, metricsResult, runsResult, eventsResult, oneTimePostsResult, inboxCountResult, inboxResult] = await Promise.all([
       supabase.from('org_config').select('*').eq('org_id', orgId).single(),
-      supabase.from('platform_metrics').select('*').eq('org_id', orgId).order('snapshot_date', { ascending: false }).limit(8),
+      supabase.from('platform_metrics').select('*').eq('org_id', orgId).eq('source', 'meta_graph').order('snapshot_date', { ascending: false }).limit(8),
       supabase.from('pipeline_runs').select('*').eq('org_id', orgId).order('started_at', { ascending: false }).limit(8),
       supabase.from('academic_calendar').select('*').eq('org_id', orgId).gte('event_date', today).order('event_date', { ascending: true }).limit(5),
       supabase
