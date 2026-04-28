@@ -25,6 +25,7 @@ export type IntegrationDefinition = {
   kind: 'social' | 'content' | 'messaging' | 'analytics'
   capabilities: IntegrationCapability[]
   mocked: boolean
+  metrics_provider?: 'meta_graph' | 'manual' | 'none'
   enabled_by_capability?: string | null
   cadence_policy?: CadencePolicy
 }
@@ -36,6 +37,7 @@ export const INTEGRATION_REGISTRY = {
     kind: 'social',
     capabilities: ['fetch_comments', 'post_reply', 'publish_post', 'post_poll', 'fetch_metrics'],
     mocked: false,
+    metrics_provider: 'meta_graph',
     enabled_by_capability: 'facebook_enabled',
     // Tuesday + Thursday — peak engagement days for educational content in SSA markets.
     // Two posts per campaign: launch blast on day 0 + one sustaining post mid-window.
@@ -53,6 +55,7 @@ export const INTEGRATION_REGISTRY = {
     kind: 'social',
     capabilities: ['publish_post', 'fetch_metrics'],
     mocked: true,
+    metrics_provider: 'meta_graph',
     enabled_by_capability: 'instagram_enabled',
     // Visual-first social channel. Keep volume modest until real publishing is wired.
     cadence_policy: {

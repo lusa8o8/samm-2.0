@@ -3,14 +3,11 @@ import {
   mockInboxItems,
   mockContentDrafts,
   mockCalendarEvents,
-  mockKPIs,
-  mockChannelMetrics,
   mockContacts,
   mockSegments,
   mockTriggerQueue,
   mockSalesSequences,
   mockOfferDecisions,
-  mockPatternSummaries,
   mockWorkspaceContext,
   mockSammMessages,
 } from '../data/mockData';
@@ -20,14 +17,11 @@ import type {
   InboxItem,
   ContentDraft,
   CalendarEvent,
-  MetricKPI,
-  ChannelMetric,
   Contact,
   Segment,
   TriggerQueueItem,
   SalesSequence,
   OfferDecision,
-  PatternSummary,
   WorkspaceContext,
   SammMessage,
 } from '../types';
@@ -89,13 +83,6 @@ export async function sendSammMessage(content: string): Promise<SammMessage> {
       timestamp: new Date().toISOString(),
       widgets: [{ type: 'lead_card', title: 'High-intent contacts', data: mockContacts.slice(0, 2) }],
     },
-    patterns: {
-      id: `msg-${Date.now()}`,
-      role: 'samm',
-      content: 'I\'ve identified **3 content patterns** from the last 30 days:\n\n1. Case study posts outperform product posts 3:1 on LinkedIn\n2. Tuesday 10am posts have 2.1x reach\n3. Offers with urgency framing convert 40% better\n\nI\'ve already applied pattern #3 to the Spring Sale content drafts.',
-      timestamp: new Date().toISOString(),
-      widgets: [{ type: 'pattern_summary', title: 'Detected patterns', data: mockPatternSummaries }],
-    },
   };
 
   const lower = content.toLowerCase();
@@ -103,7 +90,6 @@ export async function sendSammMessage(content: string): Promise<SammMessage> {
   if (lower.includes('content') || lower.includes('draft')) return responses.content;
   if (lower.includes('fail') || lower.includes('error') || lower.includes('broken')) return responses.failure;
   if (lower.includes('crm') || lower.includes('contact') || lower.includes('lead')) return responses.crm;
-  if (lower.includes('pattern') || lower.includes('insight') || lower.includes('learn')) return responses.patterns;
   return responses.default;
 }
 
@@ -147,30 +133,6 @@ export async function getCalendarEvents(): Promise<CalendarEvent[]> {
   return [...mockCalendarEvents];
 }
 
-export async function getOperationsOverview(): Promise<{
-  runs: PipelineRun[];
-  kpis: MetricKPI[];
-}> {
-  await delay(300);
-  return {
-    runs: mockPipelineRuns,
-    kpis: mockKPIs,
-  };
-}
-
-export async function getMetrics(): Promise<{
-  kpis: MetricKPI[];
-  channels: ChannelMetric[];
-  patterns: PatternSummary[];
-}> {
-  await delay(300);
-  return {
-    kpis: mockKPIs,
-    channels: mockChannelMetrics,
-    patterns: mockPatternSummaries,
-  };
-}
-
 export async function getContacts(): Promise<Contact[]> {
   await delay(300);
   return [...mockContacts];
@@ -194,11 +156,6 @@ export async function getSalesSequences(): Promise<SalesSequence[]> {
 export async function getOfferDecisions(): Promise<OfferDecision[]> {
   await delay(300);
   return [...mockOfferDecisions];
-}
-
-export async function getPatternSummaries(): Promise<PatternSummary[]> {
-  await delay(300);
-  return [...mockPatternSummaries];
 }
 
 export async function retryRun(runId: string): Promise<{ success: boolean }> {

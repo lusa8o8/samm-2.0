@@ -3,14 +3,11 @@ import type {
   InboxItem,
   ContentDraft,
   CalendarEvent,
-  MetricKPI,
-  ChannelMetric,
   Contact,
   Segment,
   TriggerQueueItem,
   SalesSequence,
   OfferDecision,
-  PatternSummary,
   SammMessage,
   WorkspaceContext,
 } from '../types';
@@ -334,22 +331,6 @@ export const mockCalendarEvents: CalendarEvent[] = [
   },
 ];
 
-export const mockKPIs: MetricKPI[] = [
-  { label: 'Reach (7d)', value: '124,840', delta: '+18%', deltaDirection: 'up', deltaGood: true, sublabel: 'vs last week' },
-  { label: 'Engagement Rate', value: '4.7%', delta: '+0.9pp', deltaDirection: 'up', deltaGood: true, sublabel: 'avg across channels' },
-  { label: 'Content Published', value: '23', delta: '+5', deltaDirection: 'up', deltaGood: true, sublabel: 'this month' },
-  { label: 'Approvals Pending', value: '7', delta: '+3', deltaDirection: 'up', deltaGood: false, sublabel: 'need your attention' },
-  { label: 'Pipeline Success Rate', value: '91%', delta: '-2pp', deltaDirection: 'down', deltaGood: false, sublabel: '7-day avg' },
-  { label: 'Leads Generated', value: '38', delta: '+12', deltaDirection: 'up', deltaGood: true, sublabel: 'from content this month' },
-];
-
-export const mockChannelMetrics: ChannelMetric[] = [
-  { channel: 'linkedin', reach: 82400, engagement: 5.2, clicks: 1840, conversions: 28, trend: 'up' },
-  { channel: 'twitter', reach: 24600, engagement: 2.8, clicks: 420, conversions: 5, trend: 'flat' },
-  { channel: 'instagram', reach: 15200, engagement: 6.1, clicks: 310, conversions: 3, trend: 'up' },
-  { channel: 'email', reach: 2640, engagement: 38.4, clicks: 290, conversions: 18, trend: 'up' },
-];
-
 export const mockContacts: Contact[] = [
   {
     id: 'contact-001',
@@ -552,40 +533,6 @@ export const mockOfferDecisions: OfferDecision[] = [
     decision: 'pending',
     reason: 'Waiting for budget approval from procurement',
     decidedAt: '2026-04-19T16:10:00Z',
-  },
-];
-
-export const mockPatternSummaries: PatternSummary[] = [
-  {
-    id: 'pattern-001',
-    pattern: 'Case study posts outperform product posts 3:1',
-    description: 'Content featuring real customer outcomes consistently drives 3x the engagement vs feature-only posts.',
-    frequency: 12,
-    impact: 'high',
-    channels: ['linkedin'],
-    exampleContent: '"How Nexus Corp scaled 3x with automation" — 4.2% engagement rate',
-    lastSeen: '2026-04-19T00:00:00Z',
-    recommendation: 'Prioritize 2 customer story posts per week in weekly baseline',
-  },
-  {
-    id: 'pattern-002',
-    pattern: 'Tuesday 10am posts have 2.1x reach',
-    description: 'Posts scheduled for Tuesday 10:00-11:00 AM consistently reach a larger portion of followers.',
-    frequency: 8,
-    impact: 'medium',
-    channels: ['linkedin', 'twitter'],
-    lastSeen: '2026-04-15T00:00:00Z',
-    recommendation: 'Prioritize high-value content for Tuesday morning scheduling',
-  },
-  {
-    id: 'pattern-003',
-    pattern: 'Offers with urgency framing convert 40% better',
-    description: 'Direct response posts that include explicit deadline framing drive significantly higher click-through.',
-    frequency: 5,
-    impact: 'high',
-    channels: ['linkedin', 'email'],
-    lastSeen: '2026-04-10T00:00:00Z',
-    recommendation: 'Add deadline language to all Spring Sale content',
   },
 ];
 
