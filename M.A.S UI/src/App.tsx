@@ -8,6 +8,7 @@ import { Layout } from "@/components/layout";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
 import Landing from "@/pages/landing";
+import Waitlist from "@/pages/waitlist";
 import Privacy from "@/pages/privacy";
 import Terms from "@/pages/terms";
 import { getActiveSession, supabase } from "@/lib/supabase";
@@ -30,6 +31,7 @@ function PublicRouter() {
     <Switch>
       <Route path="/" component={Landing} />
       <Route path="/login" component={Login} />
+      <Route path="/waitlist" component={Waitlist} />
       <Route path="/privacy" component={Privacy} />
       <Route path="/terms" component={Terms} />
       <Route component={Landing} />

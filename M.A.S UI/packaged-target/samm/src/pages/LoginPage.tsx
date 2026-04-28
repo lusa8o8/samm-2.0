@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
-import { Redirect, useLocation } from "wouter";
+import { Link, Redirect, useLocation } from "wouter";
 import { AlertCircle, LockKeyhole, Mail } from "lucide-react";
 import type { Session } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
@@ -64,7 +64,8 @@ export default function LoginPage() {
           <p className="text-[11px] font-semibold lowercase tracking-[0.24em] text-muted-foreground">samm</p>
           <h1 className="mt-4 text-3xl font-semibold tracking-tight text-foreground">sign in to the workspace</h1>
           <p className="mt-3 text-sm leading-6 text-muted-foreground">
-            The packaged UI runs on its own local runtime, so sign in here to inspect it against the live backend.
+            Access is onboarding-only for now. Sign in here if your workspace is already active, or join the waitlist
+            for manual review.
           </p>
         </div>
 
@@ -112,6 +113,14 @@ export default function LoginPage() {
             {isSubmitting ? "Signing in..." : "Sign in"}
           </Button>
         </form>
+
+        <div className="mt-5 rounded-2xl border border-border/80 bg-background px-4 py-4 text-sm text-muted-foreground">
+          Need access for your team?{" "}
+          <Link href="/waitlist" className="font-medium text-foreground underline underline-offset-4 hover:opacity-70">
+            Join the waitlist
+          </Link>
+          .
+        </div>
       </div>
     </div>
   );

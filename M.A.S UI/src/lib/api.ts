@@ -207,6 +207,22 @@ export type ApprovalPolicy = {
   updated_at?: string;
 };
 
+export type OrgBilling = {
+  org_id: string;
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
+  stripe_checkout_session_id: string | null;
+  status: string;
+  price_id: string | null;
+  product_id: string | null;
+  current_period_end: string | null;
+  cancel_at_period_end: boolean;
+  last_event_id: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  has_access: boolean;
+};
+
 export type SeasonalityProfileInput = {
   id?: string;
   name: string;
@@ -229,12 +245,13 @@ export type SeasonalityProfileInput = {
 const PIPELINE_DESCRIPTIONS: Record<string, string> = {
   coordinator: "Orchestrates all pipelines and schedules.",
   pipeline_a: "Processes engagement and escalations.",
-  pipeline_b: "Drafts and schedules social content.",
+  pipeline_b: "Fills open baseline/support content slots.",
   pipeline_c: "Generates and sends campaign briefs.",
   pipeline_d: "Drafts one-off posts on request.",
 };
 
 const PLATFORM_ORDER = ["facebook", "instagram", "linkedin", "whatsapp", "youtube", "email"];
+const BILLING_ACCESS_STATUSES = new Set(["active", "trialing"]);
 const PIPELINE_RUN_STATUS = {
   idle: 'idle',
   queued: 'queued',
@@ -534,6 +551,24 @@ function toStoredBrandVoice(brandVoice: OrgConfig["brand_voice"], current?: any)
   };
 }
 
+function normalizeOrgBilling(row: any): OrgBilling {
+  return {
+    org_id: row?.org_id ?? getOrgId(),
+    stripe_customer_id: row?.stripe_customer_id ?? null,
+    stripe_subscription_id: row?.stripe_subscription_id ?? null,
+    stripe_checkout_session_id: row?.stripe_checkout_session_id ?? null,
+    status: row?.status ?? "inactive",
+    price_id: row?.price_id ?? null,
+    product_id: row?.product_id ?? null,
+    current_period_end: row?.current_period_end ?? null,
+    cancel_at_period_end: Boolean(row?.cancel_at_period_end),
+    last_event_id: row?.last_event_id ?? null,
+    created_at: row?.created_at ?? null,
+    updated_at: row?.updated_at ?? null,
+    has_access: BILLING_ACCESS_STATUSES.has((row?.status ?? "inactive").toLowerCase()),
+  };
+}
+
 function normalizeCampaignDefaults(row?: any): CampaignDefaults {
   return {
     id: row?.id,
@@ -655,6 +690,10 @@ export function getListContentQueryKey(params?: ContentFilter) {
 
 export function getGetOrgConfigQueryKey() {
   return ["org-config", getOrgId()] as const;
+}
+
+export function getGetOrgBillingQueryKey() {
+  return ["org-billing", getOrgId()] as const;
 }
 
 export function getListIcpCategoriesQueryKey() {
@@ -1101,6 +1140,23 @@ export function useGetOrgConfig(options?: QueryHookOptions) {
       const { data, error } = await supabase.from("org_config").select("*").eq("org_id", getOrgId()).single();
       if (error) throw error;
       return normalizeOrgConfig(data);
+    },
+    ...options?.query,
+  });
+}
+
+export function useGetOrgBilling(options?: QueryHookOptions) {
+  return useQuery({
+    queryKey: options?.query?.queryKey ?? getGetOrgBillingQueryKey(),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("org_billing")
+        .select("*")
+        .eq("org_id", getOrgId())
+        .maybeSingle();
+
+      if (error) throw error;
+      return normalizeOrgBilling(data);
     },
     ...options?.query,
   });
@@ -1958,6 +2014,17 @@ export function useGetMetricsSparklines(options?: QueryHookOptions) {
 
 export type OneTimePostAssetNeed = "none" | "static" | "carousel" | "video" | "design_brief";
 
+type WaitlistLeadSubmission = {
+  fullName: string;
+  email: string;
+  organizationName: string;
+  role?: string;
+  teamSize?: string;
+  channels?: string[];
+  primaryUseCase: string;
+  biggestWorkflowPain: string;
+};
+
 type CreateOneTimePostAction = {
   type: "create_one_time_post";
   topic: string;
@@ -2006,6 +2073,9 @@ type CoordinatorChatResponse = {
 
 const COORDINATOR_FUNCTION = "coordinator-ingress";
 const PIPELINE_D_FUNCTION = "pipeline-d-post";
+const WAITLIST_FUNCTION = "submit-waitlist";
+const STRIPE_CHECKOUT_FUNCTION = "stripe-create-checkout-session";
+const STRIPE_PORTAL_FUNCTION = "stripe-create-portal-session";
 
 async function invokeCoordinatorFunction({
   message,
@@ -2142,6 +2212,90 @@ export function useRegenerateAssetBrief(options?: MutationHookOptions) {
             description,
           },
         });
+      } catch (error) {
+        const message = await readFunctionError(error);
+        throw new Error(message);
+      }
+    },
+    ...options?.mutation,
+  });
+}
+
+export function useCreateStripeCheckoutSession(options?: MutationHookOptions) {
+  return useMutation({
+    mutationFn: async ({ origin }: { origin: string }) => {
+      try {
+        const { data, error } = await supabase.functions.invoke(STRIPE_CHECKOUT_FUNCTION, {
+          body: { origin },
+        });
+
+        if (error) throw error;
+        if (!data?.url) {
+          throw new Error("Stripe checkout did not return a redirect URL.");
+        }
+
+        return data as { url: string };
+      } catch (error) {
+        const message = await readFunctionError(error);
+        throw new Error(message);
+      }
+    },
+    ...options?.mutation,
+  });
+}
+
+export function useSubmitWaitlist(options?: MutationHookOptions) {
+  return useMutation({
+    mutationFn: async ({
+      fullName,
+      email,
+      organizationName,
+      role = "",
+      teamSize = "",
+      channels = [],
+      primaryUseCase,
+      biggestWorkflowPain,
+    }: WaitlistLeadSubmission) => {
+      try {
+        const { data, error } = await supabase.functions.invoke(WAITLIST_FUNCTION, {
+          body: {
+            full_name: fullName,
+            email,
+            organization_name: organizationName,
+            role,
+            team_size: teamSize,
+            channels,
+            primary_use_case: primaryUseCase,
+            biggest_workflow_pain: biggestWorkflowPain,
+            source: "website",
+          },
+        });
+
+        if (error) throw error;
+        return data as { ok: true; id: string; status: string };
+      } catch (error) {
+        const message = await readFunctionError(error);
+        throw new Error(message);
+      }
+    },
+    ...options?.mutation,
+  });
+}
+
+export function useCreateStripePortalSession(options?: MutationHookOptions) {
+  return useMutation({
+    mutationFn: async ({ origin }: { origin: string }) => {
+      try {
+        const { data, error } = await supabase.functions.invoke(STRIPE_PORTAL_FUNCTION, {
+          body: { origin },
+        });
+
+        if (error) throw error;
+        if (!data?.url) {
+          throw new Error("Stripe portal did not return a redirect URL.");
+        }
+
+        return data as { url: string };
       } catch (error) {
         const message = await readFunctionError(error);
         throw new Error(message);

@@ -134,8 +134,8 @@ export default function Landing() {
                 Sign in
               </Button>
             </Link>
-            <Link href="/login">
-              <Button className="rounded-full bg-[#0b0b0c] px-5 text-white hover:bg-[#171717]">Create workspace</Button>
+            <Link href="/waitlist">
+              <Button className="rounded-full bg-[#0b0b0c] px-5 text-white hover:bg-[#171717]">Join waitlist</Button>
             </Link>
           </div>
         </div>
@@ -155,9 +155,9 @@ export default function Landing() {
               </p>
 
               <div className="mt-8 flex flex-wrap gap-3">
-                <Link href="/login">
+                <Link href="/waitlist">
                   <Button className="rounded-full bg-[#0b0b0c] px-6 text-white hover:bg-[#171717]">
-                    Create workspace
+                    Join waitlist
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Button>
                 </Link>
@@ -326,8 +326,8 @@ export default function Landing() {
                 <Link href="/login" className="transition-opacity hover:opacity-70">
                   Sign in
                 </Link>
-                <Link href="/login" className="transition-opacity hover:opacity-70">
-                  Create workspace
+                <Link href="/waitlist" className="transition-opacity hover:opacity-70">
+                  Join waitlist
                 </Link>
               </div>
             </div>

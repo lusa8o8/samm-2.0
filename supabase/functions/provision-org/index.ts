@@ -103,6 +103,12 @@ Deno.serve(async (req) => {
       },
     }
 
+    const defaultBilling = {
+      org_id: orgId,
+      status: 'inactive',
+      cancel_at_period_end: false,
+    }
+
     const { error: configError } = await adminClient
       .from('org_config')
       .insert(defaultConfig)
@@ -146,6 +152,18 @@ Deno.serve(async (req) => {
     if (outreachPolicyError) {
       console.error('outreach_policy insert failed:', outreachPolicyError)
       return new Response(JSON.stringify({ error: outreachPolicyError.message }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    const { error: billingError } = await adminClient
+      .from('org_billing')
+      .insert(defaultBilling)
+
+    if (billingError) {
+      console.error('org_billing insert failed:', billingError)
+      return new Response(JSON.stringify({ error: billingError.message }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })

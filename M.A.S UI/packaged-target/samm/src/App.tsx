@@ -14,6 +14,7 @@ import OperationsPage from "@/pages/OperationsPage";
 import CRMPage from "@/pages/CRMPage";
 import SalesPage from "@/pages/SalesPage";
 import LoginPage from "@/pages/LoginPage";
+import WaitlistPage from "@/pages/WaitlistPage";
 import NotFoundPage from "@/pages/NotFoundPage";
 import { getActiveSession, supabase } from "../../../src/lib/supabase";
 
@@ -23,6 +24,7 @@ function PublicRouter() {
   return (
     <Switch>
       <Route path="/login" component={LoginPage} />
+      <Route path="/waitlist" component={WaitlistPage} />
       <Route>
         <Redirect to="/login" />
       </Route>
