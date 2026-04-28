@@ -729,7 +729,7 @@ Respond with JSON only matching this structure exactly:
   "target_audience": "description",
   "universities": ["array"],
   "duration_days": number,
-  "platforms": ["facebook","whatsapp","youtube","email"],
+  "platforms": ["facebook","instagram","linkedin","whatsapp","youtube","email"],
   "key_message": "core message in one sentence",
   "call_to_action": "exactly what the audience should do",
   "content_needed": ["list of content pieces needed"],
@@ -808,6 +808,11 @@ async function runPlatformCopyAdapters(
   brandVoice: any,
   canonical: { headline: string; core_body: string; exact_cta: string; key_fact: string }
 ): Promise<any[]> {
+  const requestedPlatforms = new Set(
+    (Array.isArray(brief.platforms) ? brief.platforms : [])
+      .map((platform) => String(platform).trim().toLowerCase())
+      .filter(Boolean)
+  )
 
   const platforms = [
     { platform: getIntegrationDefinition('facebook').id, instruction: '2-3 sentences, emoji ok, end with the CTA or primary link if one is available' },
@@ -817,6 +822,20 @@ async function runPlatformCopyAdapters(
     { platform: getIntegrationDefinition('email').id, instruction: 'start first line with Subject: then write email body, warm and helpful' },
     { platform: getIntegrationDefinition('whatsapp').id, instruction: 'partner or word-of-mouth talking points — bullet list of what to say or share' },
   ]
+
+  if (requestedPlatforms.has(getIntegrationDefinition('instagram').id)) {
+    platforms.push({
+      platform: getIntegrationDefinition('instagram').id,
+      instruction: 'caption-first, visual-friendly, strong opening line, concise body, approved hashtags only',
+    })
+  }
+
+  if (requestedPlatforms.has(getIntegrationDefinition('linkedin').id)) {
+    platforms.push({
+      platform: getIntegrationDefinition('linkedin').id,
+      instruction: 'professional and insight-led, 1-2 short paragraphs, no hype, end with a clear next step',
+    })
+  }
 
   const results = await Promise.all(
     platforms.map(async (p, index) => {
@@ -914,6 +933,7 @@ ${socialHandles.youtube ? `- YouTube: ${socialHandles.youtube}` : ''}
 ${socialHandles.facebook ? `- Facebook: ${socialHandles.facebook}` : ''}
 ${socialHandles.whatsapp ? `- WhatsApp: ${socialHandles.whatsapp}` : ''}
 ${socialHandles.instagram ? `- Instagram: ${socialHandles.instagram}` : ''}
+${socialHandles.linkedin ? `- LinkedIn: ${socialHandles.linkedin}` : ''}
 ${socialHandles.tiktok ? `- TikTok: ${socialHandles.tiktok}` : ''}
 ${(socialHandles.custom_app_url ?? socialHandles.studyhub_url) ? `- Product / Landing Page: ${socialHandles.custom_app_url ?? socialHandles.studyhub_url}` : ''}`.replace(/\n-\s*$\n/gm, '')
     : '\nSOCIAL HANDLES: Not configured — ask the brand manager before placing social icons.'
@@ -952,6 +972,8 @@ ${brandVisualBlock}
 ${socialBlock}
 ${ctaBlock}
 ${platformDimensionsBlock}
+- Instagram feed: 1080x1350 or 1080x1080
+- LinkedIn post: 1200x627
 ${creativeBlock}
 ${designSpecBlock}
 
@@ -989,6 +1011,8 @@ async function runGroundedDesignBriefAgent(
   const brandVisualBlock = renderBrandVisualRules(brandRules).join('\n')
   const platformDimensionsBlock = `\nPLATFORM DIMENSIONS (use exact dimensions for each deliverable)
 - Facebook post: 1200Ã—628 (landscape) or 1080Ã—1080 (square)
+- Instagram feed: 1080Ã—1350 or 1080Ã—1080
+- LinkedIn post: 1200Ã—627
 - WhatsApp image: 800Ã—800 or 1080Ã—1920 (status)
 - YouTube community: 1080Ã—1080
 - Email header: 600Ã—200`

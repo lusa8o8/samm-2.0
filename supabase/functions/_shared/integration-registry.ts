@@ -47,6 +47,38 @@ export const INTEGRATION_REGISTRY = {
       max_posts_per_campaign: 2,
     },
   },
+  instagram: {
+    id: 'instagram',
+    label: 'Instagram',
+    kind: 'social',
+    capabilities: ['publish_post', 'fetch_metrics'],
+    mocked: true,
+    enabled_by_capability: 'instagram_enabled',
+    // Visual-first social channel. Keep volume modest until real publishing is wired.
+    cadence_policy: {
+      launch_blast: true,
+      sustaining_interval_days: 6,
+      preferred_days: ['wednesday', 'friday'],
+      preferred_time_utc: '10:00',
+      max_posts_per_campaign: 2,
+    },
+  },
+  linkedin: {
+    id: 'linkedin',
+    label: 'LinkedIn',
+    kind: 'social',
+    capabilities: ['publish_post', 'fetch_metrics'],
+    mocked: true,
+    enabled_by_capability: 'linkedin_enabled',
+    // Professional channel. Lower cadence, stronger insight/proof orientation.
+    cadence_policy: {
+      launch_blast: true,
+      sustaining_interval_days: 7,
+      preferred_days: ['tuesday', 'thursday'],
+      preferred_time_utc: '08:30',
+      max_posts_per_campaign: 2,
+    },
+  },
   whatsapp: {
     id: 'whatsapp',
     label: 'WhatsApp',

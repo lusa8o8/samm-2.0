@@ -12,7 +12,7 @@ import {
   getListContentQueryKey,
 } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
-import { SiFacebook, SiWhatsapp, SiYoutube } from "react-icons/si";
+import { SiFacebook, SiInstagram, SiWhatsapp, SiYoutube } from "react-icons/si";
 import {
   Mail,
   Clock,
@@ -30,6 +30,7 @@ import {
   ImagePlus,
   Paintbrush,
   ExternalLink,
+  Linkedin,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -42,6 +43,8 @@ import { cn, stripMarkdownToPreviewText } from "@/lib/utils";
 
 const PLATFORM_ICONS: Record<string, React.ElementType> = {
   facebook: SiFacebook,
+  instagram: SiInstagram,
+  linkedin: Linkedin,
   whatsapp: SiWhatsapp,
   youtube: SiYoutube,
   email: Mail,
@@ -50,12 +53,16 @@ const PLATFORM_ICONS: Record<string, React.ElementType> = {
 
 const PLATFORM_COLORS: Record<string, string> = {
   facebook: "text-[#1877F2]",
+  instagram: "text-[#E1306C]",
+  linkedin: "text-[#0A66C2]",
   whatsapp: "text-[#25D366]",
   youtube: "text-[#FF0000]",
 };
 
 const PLATFORM_LABELS: Record<string, string> = {
   facebook: "Facebook",
+  instagram: "Instagram",
+  linkedin: "LinkedIn",
   whatsapp: "WhatsApp",
   youtube: "YouTube",
   email: "Email",

@@ -59,6 +59,7 @@ type OrgConfig = {
     facebook: string;
     whatsapp: string;
     instagram: string;
+    linkedin: string;
     tiktok: string;
     custom_app_url: string;
   };
@@ -233,7 +234,7 @@ const PIPELINE_DESCRIPTIONS: Record<string, string> = {
   pipeline_d: "Drafts one-off posts on request.",
 };
 
-const PLATFORM_ORDER = ["facebook", "whatsapp", "youtube", "email"];
+const PLATFORM_ORDER = ["facebook", "instagram", "linkedin", "whatsapp", "youtube", "email"];
 const PIPELINE_RUN_STATUS = {
   idle: 'idle',
   queued: 'queued',
@@ -477,6 +478,7 @@ function normalizeOrgConfig(row: any): OrgConfig {
       facebook: row?.social_handles?.facebook ?? "",
       whatsapp: row?.social_handles?.whatsapp ?? "",
       instagram: row?.social_handles?.instagram ?? "",
+      linkedin: row?.social_handles?.linkedin ?? "",
       tiktok: row?.social_handles?.tiktok ?? "",
       custom_app_url: row?.social_handles?.custom_app_url ?? row?.social_handles?.studyhub_url ?? "",
     },
@@ -1926,6 +1928,8 @@ export function useGetMetricsSparklines(options?: QueryHookOptions) {
 
       const result: Record<string, Array<{ value: number }>> = {
         facebook: [],
+        instagram: [],
+        linkedin: [],
         whatsapp: [],
         youtube: [],
         email: [],

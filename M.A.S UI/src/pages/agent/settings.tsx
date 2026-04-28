@@ -53,17 +53,18 @@ import { Switch } from "@/components/ui/switch";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { SiFacebook, SiWhatsapp, SiYoutube } from "react-icons/si";
+import { SiFacebook, SiInstagram, SiWhatsapp, SiYoutube } from "react-icons/si";
 import { Mail, Monitor, Linkedin, Music2, Hash, Send } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const INTEGRATIONS = [
   { id: "facebook",  name: "Facebook Pages",            Icon: SiFacebook,  color: "#1877F2", live: true },
+  { id: "instagram", name: "Instagram Account",          Icon: SiInstagram, color: "#E1306C", live: true },
+  { id: "linkedin",  name: "LinkedIn Page",              Icon: Linkedin,    color: "#0A66C2", live: true },
   { id: "whatsapp",  name: "WhatsApp Business",         Icon: SiWhatsapp,  color: "#25D366", live: true },
   { id: "youtube",   name: "YouTube Channel",           Icon: SiYoutube,   color: "#FF0000", live: true },
   { id: "email",     name: "Email (SendGrid)",           Icon: Mail,        color: "#000",    live: true },
   { id: "studyhub",  name: "Custom App / Private Tool",   Icon: Building,    color: "#000",    live: true },
-  { id: "linkedin",  name: "LinkedIn Page",             Icon: Linkedin,    color: "#0A66C2", live: false },
   { id: "tiktok",    name: "TikTok Account",            Icon: Music2,      color: "#010101", live: false },
   { id: "slack",     name: "Slack Workspace",           Icon: Hash,        color: "#4A154B", live: false },
   { id: "teams",     name: "Microsoft Teams",           Icon: Monitor,     color: "#6264A7", live: false },
@@ -1711,6 +1712,7 @@ export default function AgentSettings() {
                         { key: "facebook", label: "Facebook", placeholder: "Your page name" },
                         { key: "whatsapp", label: "WhatsApp", placeholder: "+260 97X XXXXXX or wa.me link" },
                         { key: "instagram", label: "Instagram", placeholder: "@yourbrand" },
+                        { key: "linkedin", label: "LinkedIn", placeholder: "Your company page" },
                         { key: "tiktok", label: "TikTok", placeholder: "@yourbrand" },
                         { key: "custom_app_url", label: "Product / Landing Page", placeholder: "https://yourapp.example.com" },
                       ].map(({ key, label, placeholder }) => (
@@ -2140,7 +2142,7 @@ export default function AgentSettings() {
                       <div className="space-y-2">
                         <Label className="text-xs">Default channels</Label>
                         <div className="grid grid-cols-2 gap-2">
-                          {["facebook", "whatsapp", "youtube", "email"].map((channel) => {
+                          {["facebook", "instagram", "linkedin", "whatsapp", "youtube", "email"].map((channel) => {
                             const checked = (campaignDefaultsData.default_channels ?? []).includes(channel);
                             return (
                               <label key={channel} className="flex items-center gap-2 rounded-md border p-2 text-sm">

@@ -72,7 +72,7 @@ type OneTimePostFormData = {
   scheduled_for: string;
   title: string;
   topic: string;
-  platform: "all" | "facebook" | "whatsapp" | "youtube" | "email";
+  platform: "all" | "facebook" | "instagram" | "linkedin" | "whatsapp" | "youtube" | "email";
   asset_need: "none" | "static" | "carousel" | "video";
   event_ref: string | null;
   campaign_name: string | null;
@@ -411,6 +411,8 @@ function OneTimePostForm({
             <SelectContent>
               <SelectItem value="all">All supported channels</SelectItem>
               <SelectItem value="facebook">Facebook</SelectItem>
+              <SelectItem value="instagram">Instagram</SelectItem>
+              <SelectItem value="linkedin">LinkedIn</SelectItem>
               <SelectItem value="whatsapp">WhatsApp</SelectItem>
               <SelectItem value="youtube">YouTube</SelectItem>
               <SelectItem value="email">Email</SelectItem>

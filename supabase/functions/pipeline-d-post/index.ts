@@ -30,6 +30,8 @@ import { createAnthropicClient, generateJsonWithAnthropic, generateTextWithAnthr
 const DEFAULT_PLATFORMS = ['facebook', 'whatsapp', 'youtube', 'email']
 const PLATFORM_DIMENSIONS: Record<string, string> = {
   facebook: '1080x1080',
+  instagram: '1080x1350',
+  linkedin: '1200x627',
   whatsapp: '1080x1920',
   youtube: '1080x1920',
   email: '1200x628',
@@ -597,6 +599,8 @@ async function runPlatformAdapters(
 ): Promise<Array<{ platform: string; body: string; subject_line?: string }>> {
   const PLATFORM_INSTRUCTIONS: Record<string, string> = {
     [getIntegrationDefinition('facebook').id]: '2-3 sentences, emoji ok, end with the CTA or primary link if one is available',
+    [getIntegrationDefinition('instagram').id]: 'caption-first, visual-friendly, strong opening line, concise body, approved hashtags only',
+    [getIntegrationDefinition('linkedin').id]: 'professional and insight-led, 1-2 short paragraphs, no hype, end with a clear next step',
     [getIntegrationDefinition('whatsapp').id]: 'under 200 characters, conversational, one clear call to action',
     [getIntegrationDefinition('youtube').id]: 'short community post, ask a question to drive comments',
     [getIntegrationDefinition('email').id]: 'start first line with Subject: then write email body, warm and helpful',

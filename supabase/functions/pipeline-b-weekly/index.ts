@@ -45,7 +45,7 @@ interface NewContent {
 }
 
 interface WeeklyPost {
-  platform: 'facebook' | 'whatsapp' | 'youtube' | 'email'
+  platform: 'facebook' | 'instagram' | 'linkedin' | 'whatsapp' | 'youtube' | 'email'
   body: string
   subject_line?: string
   content_source?: string
@@ -709,7 +709,7 @@ Respond with JSON only - an array of up to ${maxPosts} plan items:
 [
   {
     "slot_id": "must match one allowed slot exactly",
-    "platform": "facebook|whatsapp|youtube|email",
+    "platform": "facebook|instagram|linkedin|whatsapp|youtube|email",
     "content_id": "id of the new content to feature, or null for original",
     "angle": "what angle or hook to use",
     "scheduled_day": "monday|tuesday|wednesday|thursday|friday",
@@ -899,6 +899,8 @@ async function runCopyWriter(
 For email: include a subject line on the first line starting with "Subject: "
 For WhatsApp: keep under 200 characters, conversational
 For Facebook: 2-3 sentences, engaging hook, emoji ok
+For Instagram: caption-first, visual-friendly, strong opening line, approved hashtags only
+For LinkedIn: professional and insight-led, 1-2 short paragraphs, no hype
 For YouTube community: short, drives comments
 Use the provided CTA exactly when one is supplied.
 ${supportRule}
@@ -1123,8 +1125,8 @@ function buildChannelTargets(
   profile: string,
 ) {
   const defaults = profile === 'b2c_retail_cpg_default'
-    ? { facebook: 0.34, whatsapp: 0.33, youtube: 0.17, email: 0.16 }
-    : { facebook: 0.3, whatsapp: 0.2, youtube: 0.3, email: 0.2 }
+    ? { facebook: 0.25, instagram: 0.18, whatsapp: 0.25, youtube: 0.12, email: 0.1, linkedin: 0.1 }
+    : { facebook: 0.22, instagram: 0.16, linkedin: 0.16, whatsapp: 0.16, youtube: 0.18, email: 0.12 }
 
   const targets: Record<string, number> = {}
   const activeSet = new Set(activeChannels)
@@ -1330,6 +1332,10 @@ function getChannelCategoryPreference(channel: string): BaselineContentCategory[
   switch (channel) {
     case 'facebook':
       return ['trust', 'inspiration', 'interactive', 'promotional', 'education']
+    case 'instagram':
+      return ['inspiration', 'trust', 'education', 'interactive', 'promotional']
+    case 'linkedin':
+      return ['trust', 'education', 'promotional', 'inspiration', 'interactive']
     case 'whatsapp':
       return ['promotional', 'trust', 'interactive', 'education', 'inspiration']
     case 'youtube':

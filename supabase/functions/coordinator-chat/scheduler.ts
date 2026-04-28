@@ -121,10 +121,15 @@ type ModelSchedulerParams = {
 
 const PLATFORM_NORMALIZERS: Array<{ keywords: string[]; platform: string }> = [
   { keywords: ['facebook', 'fb'], platform: 'facebook' },
+  { keywords: ['instagram', 'insta', 'ig'], platform: 'instagram' },
+  { keywords: ['linkedin', 'linked in'], platform: 'linkedin' },
   { keywords: ['whatsapp', 'wa'], platform: 'whatsapp' },
   { keywords: ['youtube', 'yt'], platform: 'youtube' },
   { keywords: ['email', 'mail', 'newsletter'], platform: 'email' },
 ]
+
+const PLATFORM_PATTERN = '(?:facebook|fb|instagram|insta|ig|linkedin|linked in|whatsapp|wa|youtube|yt|email|mail|newsletter)'
+const CONTENT_FORMAT_PATTERN = '(?:post|message|email|newsletter|caption)'
 
 function extractWritePostTopic(message: string) {
   const normalized = message
@@ -132,11 +137,11 @@ function extractWritePostTopic(message: string) {
     .trim()
 
   const patterns = [
-    /\b(?:write|draft|create|make)\s+(?:me\s+)?(?:a|an)?\s*(?:quick\s+|short\s+|simple\s+)?(?:facebook|whatsapp|youtube|email)?\s*(?:post|message|email|newsletter)\s+about\s+(.+)$/i,
-    /\b(?:can you|could you|please)?\s*(?:write|draft|create|make)\s+(?:me\s+)?(?:a|an)?\s*(?:quick\s+|short\s+|simple\s+)?(?:facebook|whatsapp|youtube|email)?\s*(?:post|message|email|newsletter)\s+about\s+(.+)$/i,
-    /\b(?:i need|we need|need)\s+(?:a|an)?\s*(?:quick\s+|short\s+|simple\s+)?(?:facebook|whatsapp|youtube|email)?\s*(?:post|message|email|newsletter)\s+about\s+(.+)$/i,
-    /\bhelp me\s+(?:write|draft|create|make)\s+(?:a|an)?\s*(?:quick\s+|short\s+|simple\s+)?(?:facebook|whatsapp|youtube|email)?\s*(?:post|message|email|newsletter)\s+about\s+(.+)$/i,
-    /\b(?:write|draft|create|make)\s+(?:a|an)?\s*(?:post|message|email|newsletter)\s+for\s+(.+)$/i,
+    new RegExp(`\\b(?:write|draft|create|make)\\s+(?:me\\s+)?(?:a|an)?\\s*(?:quick\\s+|short\\s+|simple\\s+)?${PLATFORM_PATTERN}?\\s*${CONTENT_FORMAT_PATTERN}\\s+about\\s+(.+)$`, 'i'),
+    new RegExp(`\\b(?:can you|could you|please)?\\s*(?:write|draft|create|make)\\s+(?:me\\s+)?(?:a|an)?\\s*(?:quick\\s+|short\\s+|simple\\s+)?${PLATFORM_PATTERN}?\\s*${CONTENT_FORMAT_PATTERN}\\s+about\\s+(.+)$`, 'i'),
+    new RegExp(`\\b(?:i need|we need|need)\\s+(?:a|an)?\\s*(?:quick\\s+|short\\s+|simple\\s+)?${PLATFORM_PATTERN}?\\s*${CONTENT_FORMAT_PATTERN}\\s+about\\s+(.+)$`, 'i'),
+    new RegExp(`\\bhelp me\\s+(?:write|draft|create|make)\\s+(?:a|an)?\\s*(?:quick\\s+|short\\s+|simple\\s+)?${PLATFORM_PATTERN}?\\s*${CONTENT_FORMAT_PATTERN}\\s+about\\s+(.+)$`, 'i'),
+    new RegExp(`\\b(?:write|draft|create|make)\\s+(?:a|an)?\\s*${CONTENT_FORMAT_PATTERN}\\s+for\\s+(.+)$`, 'i'),
     /\b(?:write|draft|create|make)\s+about\s+(.+)$/i,
   ]
 
@@ -170,7 +175,7 @@ export function resolveNormalizedWritePostIntent(message: string): NormalizedWri
   const normalized = message.toLowerCase().trim()
   const startsLikeWritePost =
     (/(?:\bwrite\b|\bdraft\b|\bcreate\b|\bmake\b)/.test(normalized) || /\b(i need|we need|need|help me)\b/.test(normalized)) &&
-    /\b(post|message|email|newsletter)\b/.test(normalized)
+    /\b(post|message|email|newsletter|caption)\b/.test(normalized)
 
   if (!startsLikeWritePost) {
     return null

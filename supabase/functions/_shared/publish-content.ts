@@ -309,6 +309,10 @@ async function dispatchPublish(
   switch (row.platform) {
     case getIntegrationDefinition('facebook').id:
       return await publishFacebook(row, platformConnection)
+    case getIntegrationDefinition('instagram').id:
+      throw new Error('Instagram live publisher scaffolded but not implemented yet')
+    case getIntegrationDefinition('linkedin').id:
+      throw new Error('LinkedIn live publisher scaffolded but not implemented yet')
     case getIntegrationDefinition('whatsapp').id:
       throw new Error('WhatsApp live publisher scaffolded but not implemented yet')
     case getIntegrationDefinition('youtube').id:

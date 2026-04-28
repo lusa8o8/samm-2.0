@@ -1,5 +1,5 @@
-import { Mail, TrendingDown, TrendingUp, Minus, BarChart3, ExternalLink } from "lucide-react";
-import { SiFacebook, SiWhatsapp, SiYoutube } from "react-icons/si";
+import { Mail, TrendingDown, TrendingUp, Minus, BarChart3, ExternalLink, Linkedin } from "lucide-react";
+import { SiFacebook, SiInstagram, SiWhatsapp, SiYoutube } from "react-icons/si";
 import { useGetMetricsSparklines, useListMetrics } from "@/lib/api";
 import { useWorkspaceInspector } from "@/components/layout";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +9,8 @@ import { cn } from "@/lib/utils";
 
 const PLATFORM_META: Record<string, { name: string; icon: React.ElementType; color: string }> = {
   facebook: { name: "Facebook", icon: SiFacebook, color: "text-[#1877F2]" },
+  instagram: { name: "Instagram", icon: SiInstagram, color: "text-[#E1306C]" },
+  linkedin: { name: "LinkedIn", icon: Linkedin, color: "text-[#0A66C2]" },
   whatsapp: { name: "WhatsApp", icon: SiWhatsapp, color: "text-[#25D366]" },
   youtube: { name: "YouTube", icon: SiYoutube, color: "text-[#FF0000]" },
   email: { name: "Email Newsletter", icon: Mail, color: "text-slate-700" },
