@@ -1,5 +1,5 @@
 import { getOrgId, supabase } from "../../../../src/lib/supabase";
-import type { Channel, ChannelMetric, MetricKPI, PatternSummary } from "../types";
+import type { Channel, ChannelMetric, MetricKPI } from "../types";
 
 type MetricRow = {
   platform?: string | null;
@@ -194,60 +194,6 @@ function buildSummary(cards: LiveMetricCard[]) {
   return `${topReach.platform} is leading reach right now, ${topSignups.platform} is driving the most signups, and ${topEngagement.platform} has the strongest engagement rate. Use this surface to spot where baseline effort is compounding and where campaign support is converting cleanly.`;
 }
 
-function buildPatterns(cards: LiveMetricCard[], latestSnapshot: string | null): PatternSummary[] {
-  if (cards.length === 0) return [];
-
-  const topReach = [...cards].sort((a, b) => b.post_reach - a.post_reach)[0];
-  const topSignups = [...cards].sort((a, b) => b.signups - a.signups)[0];
-  const topEngagement = [...cards].sort((a, b) => b.engagement - a.engagement)[0];
-
-  const patterns: PatternSummary[] = [];
-
-  const reachChannel = toChannel(topReach.platform);
-  if (reachChannel) {
-    patterns.push({
-      id: `top-reach-${topReach.platform}`,
-      pattern: `${topReach.platform} is leading reach`,
-      description: `${topReach.platform} is currently producing the largest audience footprint with ${formatCompact(topReach.post_reach)} reach on the latest snapshot.`,
-      frequency: topReach.post_reach,
-      impact: "high",
-      channels: [reachChannel],
-      lastSeen: latestSnapshot ?? new Date().toISOString(),
-      recommendation: `Keep high-visibility creative and campaign anchors strong on ${topReach.platform}.`,
-    });
-  }
-
-  const signupChannel = toChannel(topSignups.platform);
-  if (signupChannel) {
-    patterns.push({
-      id: `top-signups-${topSignups.platform}`,
-      pattern: `${topSignups.platform} is converting best`,
-      description: `${topSignups.platform} delivered ${topSignups.signups} signups on the latest snapshot, making it the strongest current conversion channel.`,
-      frequency: topSignups.signups,
-      impact: "high",
-      channels: [signupChannel],
-      lastSeen: latestSnapshot ?? new Date().toISOString(),
-      recommendation: `Preserve strong CTA clarity on ${topSignups.platform} and use it for campaign closes.`,
-    });
-  }
-
-  const engagementChannel = toChannel(topEngagement.platform);
-  if (engagementChannel) {
-    patterns.push({
-      id: `top-engagement-${topEngagement.platform}`,
-      pattern: `${topEngagement.platform} has the strongest engagement`,
-      description: `${topEngagement.platform} is currently showing the highest engagement rate at ${topEngagement.engagement.toFixed(1)}%.`,
-      frequency: Math.round(topEngagement.engagement * 10),
-      impact: "medium",
-      channels: [engagementChannel],
-      lastSeen: latestSnapshot ?? new Date().toISOString(),
-      recommendation: `Use ${topEngagement.platform} for conversation-driving and trust-building content.`,
-    });
-  }
-
-  return patterns;
-}
-
 function buildSparkData(rows: MetricRow[]) {
   const grouped = new Map<string, { reach: number; engagementTotal: number; engagementCount: number }>();
 
@@ -275,7 +221,7 @@ function buildSparkData(rows: MetricRow[]) {
 function buildPeriodLabel(latestSnapshot: string | null) {
   if (!latestSnapshot) return "No snapshot available";
   const date = new Date(latestSnapshot);
-  return `Latest snapshot · ${date.toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}`;
+  return `Latest snapshot - ${date.toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}`;
 }
 
 export async function getMetrics() {
@@ -295,7 +241,6 @@ export async function getMetrics() {
   return {
     kpis: buildKpis(cards),
     channels: buildChannelMetrics(cards),
-    patterns: buildPatterns(cards, latestSnapshot),
     summary: buildSummary(cards),
     sparkData: buildSparkData(rows),
     periodLabel: buildPeriodLabel(latestSnapshot),

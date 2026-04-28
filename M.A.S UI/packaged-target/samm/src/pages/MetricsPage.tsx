@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { TrendingUp, TrendingDown, Minus, BarChart2, Lightbulb } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus, BarChart2 } from 'lucide-react';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import { ChannelIcon } from '../components/shared/ChannelIcon';
 import { getMetrics } from '../services/liveMetricsService';
-import type { MetricKPI, ChannelMetric, PatternSummary, Channel } from '../types';
+import type { MetricKPI, ChannelMetric, Channel } from '../types';
 
 const channelLabels: Record<Channel, string> = {
   linkedin: 'LinkedIn',
@@ -71,21 +71,38 @@ function ChannelRow({ metric }: { metric: ChannelMetric }) {
 export default function MetricsPage() {
   const [kpis, setKpis] = useState<MetricKPI[]>([]);
   const [channels, setChannels] = useState<ChannelMetric[]>([]);
-  const [patterns, setPatterns] = useState<PatternSummary[]>([]);
   const [sparkData, setSparkData] = useState<Array<{ week: string; reach: number; engagement: number; date: string }>>([]);
   const [summary, setSummary] = useState('Loading live metrics summary...');
   const [periodLabel, setPeriodLabel] = useState('Loading snapshot...');
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getMetrics().then((data) => {
-      setKpis(data.kpis);
-      setChannels(data.channels);
-      setPatterns(data.patterns);
-      setSparkData(data.sparkData);
-      setSummary(data.summary);
-      setPeriodLabel(data.periodLabel);
-    });
+    let isMounted = true;
+
+    getMetrics()
+      .then((data) => {
+        if (!isMounted) return;
+        setKpis(data.kpis);
+        setChannels(data.channels);
+        setSparkData(data.sparkData);
+        setSummary(data.summary);
+        setPeriodLabel(data.periodLabel);
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setSummary('Metrics are not connected for this workspace yet.');
+        setPeriodLabel('No live metrics connected');
+      })
+      .finally(() => {
+        if (isMounted) setLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
+
+  const hasMetrics = kpis.length > 0 || channels.length > 0 || sparkData.length > 0;
 
   return (
     <div className="flex flex-col h-full overflow-y-auto">
@@ -95,9 +112,11 @@ export default function MetricsPage() {
       </div>
 
       <div className="px-4 py-5 space-y-6 sm:px-6 sm:py-6 sm:space-y-8">
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-          {kpis.map((kpi) => <KPICard key={kpi.label} kpi={kpi} />)}
-        </div>
+        {hasMetrics ? (
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+            {kpis.map((kpi) => <KPICard key={kpi.label} kpi={kpi} />)}
+          </div>
+        ) : null}
 
         <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 flex gap-3">
           <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
@@ -106,52 +125,47 @@ export default function MetricsPage() {
           <div>
             <p className="text-sm font-semibold text-foreground">samm summary</p>
             <p className="text-[13px] text-muted-foreground mt-1 leading-relaxed">
-              {summary}
+              {loading ? 'Loading live metrics summary...' : summary}
             </p>
           </div>
         </div>
 
-        <div className="bg-card border border-border rounded-xl p-4">
-          <p className="text-sm font-semibold text-foreground mb-4">Reach trend - latest 4 snapshots</p>
-          <div className="h-48">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={sparkData}>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                <XAxis dataKey="week" className="text-[11px]" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
-                <YAxis tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`} />
-                <Tooltip
-                  contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }}
-                  labelStyle={{ color: 'hsl(var(--foreground))' }}
-                  formatter={(value: number) => [`${(value / 1000).toFixed(1)}k`, 'Reach']}
-                />
-                <Line type="monotone" dataKey="reach" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3, fill: 'hsl(var(--primary))' }} />
-              </LineChart>
-            </ResponsiveContainer>
+        {hasMetrics ? (
+          <div className="bg-card border border-border rounded-xl p-4">
+            <p className="text-sm font-semibold text-foreground mb-4">Reach trend - latest 4 snapshots</p>
+            <div className="h-48">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={sparkData}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                  <XAxis dataKey="week" className="text-[11px]" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
+                  <YAxis tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`} />
+                  <Tooltip
+                    contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }}
+                    labelStyle={{ color: 'hsl(var(--foreground))' }}
+                    formatter={(value: number) => [`${(value / 1000).toFixed(1)}k`, 'Reach']}
+                  />
+                  <Line type="monotone" dataKey="reach" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3, fill: 'hsl(var(--primary))' }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
           </div>
-        </div>
+        ) : null}
 
         <div className="bg-card border border-border rounded-xl p-4">
           <p className="text-sm font-semibold text-foreground mb-1">Channel performance</p>
-          <p className="text-xs text-muted-foreground mb-4">Latest platform snapshot totals</p>
-          {channels.map((channel) => <ChannelRow key={channel.channel} metric={channel} />)}
-        </div>
-
-        <div className="bg-card border border-border rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-4">
-            <Lightbulb size={14} className="text-amber-500" />
-            <p className="text-sm font-semibold text-foreground">Detected content patterns</p>
-          </div>
-          <div className="space-y-3">
-            {patterns.map((pattern) => (
-              <div key={pattern.id} className="border border-border rounded-lg p-3 space-y-1.5">
-                <p className="text-xs font-semibold text-foreground">{pattern.pattern}</p>
-                <p className="text-[12px] text-muted-foreground leading-relaxed">{pattern.description}</p>
-                {pattern.recommendation && (
-                  <p className="text-[11px] text-primary font-medium">{"-> "}{pattern.recommendation}</p>
-                )}
-              </div>
-            ))}
-          </div>
+          <p className="text-xs text-muted-foreground mb-4">
+            {hasMetrics ? 'Latest platform snapshot totals' : 'Connect real channel metrics to populate this section.'}
+          </p>
+          {channels.length > 0 ? (
+            channels.map((channel) => <ChannelRow key={channel.channel} metric={channel} />)
+          ) : (
+            <div className="rounded-lg border border-dashed border-border bg-muted/20 px-4 py-8 text-center">
+              <p className="text-sm font-medium text-foreground">No live channel metrics yet.</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                This surface is ready for connected platform snapshots and will stay empty until real metrics are available.
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>

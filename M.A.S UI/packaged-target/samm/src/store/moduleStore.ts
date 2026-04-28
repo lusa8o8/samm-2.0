@@ -8,7 +8,7 @@ const defaultModules: Module[] = [
   { id: 'metrics', label: 'Metrics', icon: 'BarChart2', enabled: true },
   { id: 'calendar', label: 'Calendar', icon: 'Calendar', enabled: true },
   { id: 'operations', label: 'Operations', icon: 'Settings', enabled: true },
-  { id: 'crm', label: 'CRM', icon: 'Users', enabled: true, optional: true },
+  { id: 'crm', label: 'CRM', icon: 'Users', enabled: false, optional: true },
   { id: 'sales', label: 'Sales', icon: 'TrendingUp', enabled: false, optional: true },
   { id: 'ambassadors', label: 'Ambassadors', icon: 'Star', enabled: false, optional: true },
 ];

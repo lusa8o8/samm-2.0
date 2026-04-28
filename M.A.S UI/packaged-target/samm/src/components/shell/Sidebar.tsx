@@ -19,6 +19,17 @@ interface SidebarProps {
   currentPath: string;
 }
 
+function Tooltip({ label }: { label: string }) {
+  return (
+    <div className="absolute left-[calc(100%+10px)] top-1/2 z-50 -translate-y-1/2 pointer-events-none">
+      <div className="rounded-lg border border-border bg-popover px-2.5 py-1.5 shadow-lg whitespace-nowrap">
+        <span className="text-xs font-medium text-foreground">{label}</span>
+      </div>
+      <div className="absolute left-0 top-1/2 h-2 w-2 -translate-x-1 -translate-y-1/2 rotate-45 border-b border-l border-border bg-popover" />
+    </div>
+  );
+}
+
 const routeMap: Record<ModuleId, string> = {
   samm: '/',
   inbox: '/inbox',
@@ -69,12 +80,7 @@ function NavIcon({ icon: Icon, label, path, isActive, badge, onNavigate }: NavIc
 
         {/* Tooltip */}
         {hovered && (
-          <div className="absolute left-[calc(100%+10px)] top-1/2 -translate-y-1/2 z-50 pointer-events-none">
-            <div className="bg-popover border border-border rounded-lg px-2.5 py-1.5 shadow-lg whitespace-nowrap">
-              <span className="text-xs font-medium text-foreground">{label}</span>
-            </div>
-            <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1 w-2 h-2 bg-popover border-l border-b border-border rotate-45" />
-          </div>
+          <Tooltip label={label} />
         )}
       </div>
     </Link>
@@ -170,13 +176,7 @@ export function Sidebar({ enabledModules, currentPath }: SidebarProps) {
           </div>
 
           {workspaceHovered && (
-            <div className="absolute left-[calc(100%+10px)] top-1/2 -translate-y-1/2 z-50 pointer-events-none">
-              <div className="bg-popover border border-border rounded-lg px-2.5 py-1.5 shadow-lg whitespace-nowrap">
-                <p className="text-xs font-semibold text-foreground">Northstar Co.</p>
-                <p className="text-[10px] text-muted-foreground mt-0.5">Production workspace</p>
-              </div>
-              <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1 w-2 h-2 bg-popover border-l border-b border-border rotate-45" />
-            </div>
+            <Tooltip label="samm workspace" />
           )}
         </div>
 
