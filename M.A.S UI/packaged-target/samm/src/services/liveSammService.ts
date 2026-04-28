@@ -1,4 +1,8 @@
 import { getAccessToken, getOrgId, supabase } from "../../../../src/lib/supabase";
+import {
+  appendSammChatMessage,
+  loadSammChatMessages,
+} from "../../../../src/lib/samm-chat-persistence";
 import type { ActionDescriptor, CalendarEvent, PipelineRun, RunStatus, SammMessage, WorkspaceContext } from "../types";
 
 export type SammConversationMode = "planning" | "execution";
@@ -126,6 +130,25 @@ function buildActions(response: CoordinatorChatResponse): ActionDescriptor[] | u
   ];
 }
 
+function restoreActions(metadata: Record<string, unknown>): ActionDescriptor[] | undefined {
+  if (Array.isArray(metadata.actions)) return metadata.actions as ActionDescriptor[];
+
+  const confirmation =
+    typeof metadata.confirmation === "object" && metadata.confirmation !== null
+      ? (metadata.confirmation as { title?: string; action?: string })
+      : null;
+
+  if (!confirmation?.title || !confirmation.action) return undefined;
+  return [
+    {
+      label: `Confirm: ${confirmation.title}`,
+      action: confirmation.action,
+      variant: "default",
+      payload: { confirmationAction: confirmation.action },
+    },
+  ];
+}
+
 async function readFunctionError(error: unknown) {
   if (error instanceof Error && error.message) return error.message;
   if (typeof error === "object" && error !== null) {
@@ -136,6 +159,17 @@ async function readFunctionError(error: unknown) {
 }
 
 export async function getSammMessages(): Promise<SammMessage[]> {
+  const storedMessages = await loadSammChatMessages();
+  if (storedMessages.length > 0) {
+    return storedMessages.map((message) => ({
+      id: message.id,
+      role: message.role === "coordinator" ? "samm" : "user",
+      content: message.content,
+      timestamp: message.created_at,
+      actions: message.role === "coordinator" ? restoreActions(message.metadata ?? {}) : undefined,
+    }));
+  }
+
   return [
     {
       id: "welcome-live",
@@ -202,6 +236,15 @@ export async function sendSammMessage(
     throw new Error("Your session expired. Please sign in again.");
   }
 
+  const latestUserMessage = [...history].reverse().find((message) => message.role === "user" && message.content === content);
+  void appendSammChatMessage({
+    role: "user",
+    content,
+    mode,
+    metadata: { source: "packaged_workspace" },
+    createdAt: latestUserMessage?.timestamp ?? new Date().toISOString(),
+  });
+
   try {
     const { data, error } = await supabase.functions.invoke(COORDINATOR_FUNCTION, {
       body: {
@@ -224,15 +267,42 @@ export async function sendSammMessage(
     const reply =
       response.message ??
       "I reviewed the current workspace state and prepared the next step.";
-
-    return {
+    const actions = buildActions(response);
+    const replyMessage: SammMessage = {
       id: `live-${Date.now()}`,
       role: "samm",
       content: reply,
       timestamp: new Date().toISOString(),
-      actions: buildActions(response),
+      actions,
     };
+
+    void appendSammChatMessage({
+      role: "coordinator",
+      content: reply,
+      mode,
+      metadata: {
+        source: "packaged_workspace",
+        actions: actions ?? [],
+        confirmation: response.confirmation ?? null,
+        invoked_action: response.invoked_action ?? null,
+        suggestions: response.suggestions ?? [],
+      },
+      createdAt: replyMessage.timestamp,
+    });
+
+    return replyMessage;
   } catch (error) {
-    throw new Error(await readFunctionError(error));
+    const message = await readFunctionError(error);
+    const content = `I couldn't complete that request: ${message}`;
+    void appendSammChatMessage({
+      role: "coordinator",
+      content,
+      mode,
+      metadata: {
+        source: "packaged_workspace",
+        error: message,
+      },
+    });
+    throw new Error(message);
   }
 }

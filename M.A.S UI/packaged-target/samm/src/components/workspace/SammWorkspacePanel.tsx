@@ -298,9 +298,23 @@ export function SammWorkspacePanel({
     setInput('');
     setLoading(true);
 
-    const response = await sendSammMessage(content, [...messages, userMessage], mode, confirmationAction ?? null);
-    setMessages((current) => [...current, response]);
-    setLoading(false);
+    try {
+      const response = await sendSammMessage(content, [...messages, userMessage], mode, confirmationAction ?? null);
+      setMessages((current) => [...current, response]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'The request failed.';
+      setMessages((current) => [
+        ...current,
+        {
+          id: `error-${Date.now()}`,
+          role: 'samm',
+          content: `I couldn't complete that request: ${message}`,
+          timestamp: new Date().toISOString(),
+        },
+      ]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleWidgetClick = (title: string, widget: never) => {

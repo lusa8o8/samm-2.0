@@ -8,6 +8,11 @@ import { Input } from "@/components/ui/input";
 import { useWorkspaceInspector } from "@/components/layout";
 import { useCoordinatorChat } from "@/lib/api";
 import {
+  appendSammChatMessage,
+  loadSammChatMessages,
+  type PersistedSammChatMessage,
+} from "@/lib/samm-chat-persistence";
+import {
   createInspectorPayload,
   type WorkspaceInspectorPayload,
   type WorkspaceMessagePart,
@@ -61,6 +66,45 @@ const MODE_SUGGESTIONS: Record<ConversationMode, string[]> = {
   ],
 };
 
+function mapPersistedMessage(row: PersistedSammChatMessage): ChatMessage {
+  const metadata = row.metadata ?? {};
+  const parts = Array.isArray(metadata.parts)
+    ? (metadata.parts as WorkspaceMessagePart[])
+    : [{ type: "text", text: row.content } as WorkspaceMessagePart];
+  const confirmation =
+    typeof metadata.confirmation === "object" && metadata.confirmation !== null
+      ? (metadata.confirmation as { title?: string; description?: string; action?: string })
+      : null;
+
+  return {
+    id: row.id,
+    role: row.role,
+    content: row.content,
+    parts,
+    isConfirmation: Boolean(confirmation?.title && confirmation?.action),
+    confirmationData:
+      confirmation?.title && confirmation?.action
+        ? {
+            title: confirmation.title,
+            description: confirmation.description ?? "",
+            action: confirmation.action,
+          }
+        : undefined,
+    inspectorPayload:
+      row.role === "coordinator"
+        ? createInspectorPayload(
+            "Saved coordinator response",
+            {
+              type: "custom",
+              title: "Saved coordinator response",
+              data: metadata,
+            },
+            "This is the stored structured context for this coordinator response."
+          )
+        : undefined,
+  };
+}
+
 function getStatusTone(status: ChatStatus) {
   switch (status) {
     case "success":
@@ -106,6 +150,23 @@ export default function AgentChat() {
   const [location] = useLocation();
 
   useEffect(() => {
+    let isMounted = true;
+
+    loadSammChatMessages().then((storedMessages) => {
+      if (!isMounted || storedMessages.length === 0) return;
+      setMessages((current) =>
+        current.length === INITIAL_MESSAGES.length && current[0]?.id === "welcome"
+          ? storedMessages.map(mapPersistedMessage)
+          : current
+      );
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
@@ -143,6 +204,12 @@ export default function AgentChat() {
     const nextMessages = [...messages, userMessage];
     setMessages(nextMessages);
     setInputValue("");
+    void appendSammChatMessage({
+      role: "user",
+      content: trimmed,
+      mode,
+      metadata: { source: "agent_chat" },
+    });
 
     try {
       const response = await coordinatorChat.mutateAsync({
@@ -197,50 +264,73 @@ export default function AgentChat() {
           : "Inspect the structured action/output attached to this coordinator response."
       );
 
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `${Date.now()}-reply`,
-          role: "coordinator",
-          content: nextContent,
+      const coordinatorMessage: ChatMessage = {
+        id: `${Date.now()}-reply`,
+        role: "coordinator",
+        content: nextContent,
+        parts: nextParts,
+        isConfirmation: Boolean(response.confirmation),
+        confirmationData: response.confirmation
+          ? {
+              title: response.confirmation.title,
+              description: response.confirmation.description,
+              action: response.confirmation.action,
+            }
+          : undefined,
+        inspectorPayload,
+      };
+
+      setMessages((prev) => [...prev, coordinatorMessage]);
+      void appendSammChatMessage({
+        role: "coordinator",
+        content: nextContent,
+        mode,
+        metadata: {
+          source: "agent_chat",
           parts: nextParts,
-          isConfirmation: Boolean(response.confirmation),
-          confirmationData: response.confirmation
-            ? {
-                title: response.confirmation.title,
-                description: response.confirmation.description,
-                action: response.confirmation.action,
-              }
-            : undefined,
-          inspectorPayload,
+          confirmation: response.confirmation ?? null,
+          invoked_action: response.invoked_action ?? null,
+          suggestions: nextSuggestions,
         },
-      ]);
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : "The request failed.";
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `${Date.now()}-error`,
-          role: "coordinator",
-          content: `I couldn't complete that request: ${message}`,
-          parts: [
-            { type: "text", text: `I couldn't complete that request: ${message}` },
-            { type: "status", label: "Coordinator request failed", status: "failed" },
-          ],
-          inspectorPayload: createInspectorPayload(
-            "Coordinator failure",
-            {
-              type: "decision_log",
-              title: "Request failed",
-              data: {
-                error: message,
-                latest_user_message: trimmed,
-              },
+      const content = `I couldn't complete that request: ${message}`;
+      const errorParts: WorkspaceMessagePart[] = [
+        { type: "text", text: content },
+        { type: "status", label: "Coordinator request failed", status: "failed" },
+      ];
+      const errorMessage: ChatMessage = {
+        id: `${Date.now()}-error`,
+        role: "coordinator",
+        content,
+        parts: errorParts,
+        inspectorPayload: createInspectorPayload(
+          "Coordinator failure",
+          {
+            type: "decision_log",
+            title: "Request failed",
+            data: {
+              error: message,
+              latest_user_message: trimmed,
             },
-            "This is the raw failure context returned to the workspace."
-          ),
+          },
+          "This is the raw failure context returned to the workspace."
+        ),
+      };
+
+      setMessages((prev) => [...prev, errorMessage]);
+      void appendSammChatMessage({
+        role: "coordinator",
+        content,
+        mode,
+        metadata: {
+          source: "agent_chat",
+          parts: errorParts,
+          error: message,
+          latest_user_message: trimmed,
         },
-      ]);
+      });
     }
   };
 
