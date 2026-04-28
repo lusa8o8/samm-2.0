@@ -211,8 +211,8 @@ export function inferPipelineTarget(text: string): PipelineTarget | null {
   if (normalized.includes('weekly') || normalized.includes('pipeline b') || normalized.includes('pipeline-b') || normalized.includes('content pipeline')) {
     return {
       id: 'pipeline-b-weekly',
-      title: 'Run Pipeline B - Weekly Content',
-      description: 'This will draft the next content batch and queue approvals.',
+      title: 'Fill baseline content slots',
+      description: 'This will draft baseline/support content for currently open calendar slots and queue approvals.',
     }
   }
 

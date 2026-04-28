@@ -1974,13 +1974,13 @@ export default function AgentSettings() {
                   <div className="space-y-4 rounded-lg border bg-background p-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h4 className="text-sm font-medium">Content Drafting Pipeline</h4>
-                        <p className="text-xs text-muted-foreground">Generates weekly social posts for approval</p>
+                        <h4 className="text-sm font-medium">Baseline Drafting Engine</h4>
+                        <p className="text-xs text-muted-foreground">Fills open baseline/support slots only when triggered</p>
                       </div>
                       <Switch checked={pipelineData.pipeline_b_enabled} onCheckedChange={(v) => setPipelineData({ ...pipelineData, pipeline_b_enabled: v })} />
                     </div>
                     <div className="flex items-center gap-3">
-                      <Label className="w-24 text-xs">Run day</Label>
+                      <Label className="w-24 text-xs">Default day</Label>
                       <select className="h-8 w-32 rounded-md border border-input bg-background px-3 py-1 text-xs shadow-sm" value={pipelineData.pipeline_b_run_day} onChange={(e) => setPipelineData({ ...pipelineData, pipeline_b_run_day: e.target.value })} disabled={!pipelineData.pipeline_b_enabled}>
                         <option value="Monday">Monday</option>
                         <option value="Tuesday">Tuesday</option>
@@ -1989,7 +1989,7 @@ export default function AgentSettings() {
                         <option value="Friday">Friday</option>
                       </select>
                       <Input type="time" value={pipelineData.pipeline_b_run_time} onChange={(e) => setPipelineData({ ...pipelineData, pipeline_b_run_time: e.target.value })} className="h-8 w-32 text-xs" disabled={!pipelineData.pipeline_b_enabled} />
-                      <Button size="sm" variant="outline" className="ml-auto h-8 gap-1.5 text-xs" disabled={triggeringPipeline === "b" || !pipelineData.pipeline_b_enabled} onClick={() => handleTriggerPipeline("b", "Content drafting pipeline")}>
+                      <Button size="sm" variant="outline" className="ml-auto h-8 gap-1.5 text-xs" disabled={triggeringPipeline === "b" || !pipelineData.pipeline_b_enabled} onClick={() => handleTriggerPipeline("b", "Baseline drafting engine")}>
                         <Play className="h-3 w-3" />{triggeringPipeline === "b" ? "Starting…" : "Run now"}
                       </Button>
                     </div>

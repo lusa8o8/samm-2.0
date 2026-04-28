@@ -103,12 +103,9 @@ Deno.serve(async (req) => {
       await invokePipeline(supabase, 'pipeline-a-engagement', context)
     }
 
-    // ── 4. fire pipeline_b on the configured run_day ──────────────────
-    const todayName = new Date().toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase()
-    const pipelineBRunDay = (config.pipeline_config.pipeline_b.run_day ?? 'monday').toLowerCase()
-    if (config.pipeline_config.pipeline_b.enabled && todayName === pipelineBRunDay) {
-      await invokePipeline(supabase, 'pipeline-b-weekly', context)
-    }
+    // ── 4. Pipeline B is manual-only ──────────────────
+    // Pipeline B is intentionally not fired from the daily coordinator.
+    // It remains available as an explicit baseline/open-slot drafting action.
 
     // ── 5. fire pipeline_c for any calendar events due today ──────────
     if (config.pipeline_config.pipeline_c.enabled) {
@@ -129,13 +126,12 @@ Deno.serve(async (req) => {
       }
     }
 
-    const pipelinesBRunning = [
+    const automaticPipelinesFired = [
       config.pipeline_config.pipeline_a.enabled ? 1 : 0,
-      (config.pipeline_config.pipeline_b.enabled && todayName === pipelineBRunDay) ? 1 : 0,
     ].reduce((a, b) => a + b, 0)
 
     await finishRun(supabase, runId, 'success', {
-      pipelines_fired: dueToday.length + pipelinesBRunning,
+      pipelines_fired: dueToday.length + automaticPipelinesFired,
       calendar_events_triggered: dueToday.length,
       events: dueToday.map((e: CalendarEvent) => e.label)
     })
@@ -144,8 +140,7 @@ Deno.serve(async (req) => {
       JSON.stringify({
         ok: true,
         today,
-        pipeline_b_day: pipelineBRunDay,
-        today_is_run_day: todayName === pipelineBRunDay,
+        pipeline_b_auto_run: false,
         calendar_events_triggered: dueToday.length,
         events: dueToday.map((e: CalendarEvent) => e.label)
       }),

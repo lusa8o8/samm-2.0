@@ -4,7 +4,7 @@ import type { PipelineId, PipelineRun, RunStatus } from "../types";
 const PIPELINE_DESCRIPTIONS: Record<string, string> = {
   coordinator: "Orchestrates all pipelines and schedules.",
   pipeline_a: "Processes engagement and escalations.",
-  pipeline_b: "Drafts and schedules social content.",
+  pipeline_b: "Fills open baseline/support content slots.",
   pipeline_c: "Generates and sends campaign briefs.",
   pipeline_d: "Drafts one-off posts on request.",
 };
