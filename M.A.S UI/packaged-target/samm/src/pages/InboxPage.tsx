@@ -4,7 +4,7 @@ import { format } from 'date-fns';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { StatusChip } from '../components/shared/StatusChip';
 import { useInspector } from '../components/shell/WorkspaceShell';
-import { getInboxItems, approveInboxItem, rejectInboxItem, readFunctionError } from '../services/liveInboxService';
+import { getInboxItems, approveInboxItem, rejectInboxItem, readFunctionError, updateInboxCampaignSchedule } from '../services/liveInboxService';
 import type { InboxItem } from '../types';
 import { cn } from '@/lib/utils';
 
@@ -23,17 +23,210 @@ const typeIcons: Record<string, React.ReactNode> = {
   fyi: <Info size={13} className="text-muted-foreground" />,
 };
 
+type CampaignScheduleItem = {
+  slot_id: string;
+  date: string;
+  channel: string;
+  role: string;
+  content_type: string;
+  visual_need: string;
+  title_seed: string;
+  rationale: string;
+  countdown_label?: string | null;
+  plan_item_id?: string | null;
+};
+
+const campaignChannels = ['facebook', 'instagram', 'linkedin', 'whatsapp', 'youtube', 'email'];
+const visualNeeds = ['text_only', 'static', 'carousel', 'video'];
+const contentTypes = ['announcement', 'value', 'proof', 'countdown', 'conversion', 'reminder', 'campaign'];
+
+function getCampaignSchedule(item: InboxItem): CampaignScheduleItem[] {
+  const payload = item.payload ?? {};
+  const schedule = payload.proposed_schedule ?? payload.campaign_brief?.proposed_schedule;
+  return Array.isArray(schedule) ? schedule : [];
+}
+
+function CampaignScheduleEditor({
+  item,
+  onSaved,
+}: {
+  item: InboxItem;
+  onSaved: () => void;
+}) {
+  const initialSchedule = getCampaignSchedule(item);
+  const [rows, setRows] = useState<CampaignScheduleItem[]>(initialSchedule);
+  const [saving, setSaving] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
+
+  if (initialSchedule.length === 0) return null;
+
+  const updateRow = (index: number, patch: Partial<CampaignScheduleItem>) => {
+    setRows((current) => current.map((row, rowIndex) => (
+      rowIndex === index
+        ? {
+            ...row,
+            ...patch,
+            slot_id: patch.date || patch.channel
+              ? `${patch.date ?? row.date}:${patch.channel ?? row.channel}:campaign:manual:${index + 1}`
+              : row.slot_id,
+          }
+        : row
+    )));
+  };
+
+  const removeRow = (index: number) => {
+    setRows((current) => current.filter((_, rowIndex) => rowIndex !== index));
+  };
+
+  const addRow = () => {
+    const last = rows[rows.length - 1];
+    const date = last?.date ?? new Date().toISOString().slice(0, 10);
+    const channel = last?.channel ?? 'facebook';
+    const nextIndex = rows.length + 1;
+    setRows((current) => [
+      ...current,
+      {
+        slot_id: `${date}:${channel}:campaign:manual:${nextIndex}`,
+        date,
+        channel,
+        role: 'campaign support',
+        content_type: 'campaign',
+        visual_need: 'static',
+        title_seed: item.title,
+        rationale: 'Manual campaign schedule item.',
+        countdown_label: null,
+        plan_item_id: null,
+      },
+    ]);
+  };
+
+  const save = async () => {
+    try {
+      setSaving(true);
+      setLocalError(null);
+      await updateInboxCampaignSchedule(item.id, rows);
+      onSaved();
+    } catch (err) {
+      setLocalError(await readFunctionError(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-3 space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold text-blue-900">Campaign schedule</p>
+          <p className="text-[11px] text-blue-800/70">Edit the actual dates and roles before approving this brief.</p>
+        </div>
+        <button
+          type="button"
+          onClick={addRow}
+          className="rounded-lg border border-blue-200 bg-white px-2.5 py-1 text-[11px] font-medium text-blue-700 hover:bg-blue-50"
+        >
+          Add item
+        </button>
+      </div>
+
+      <div className="space-y-2">
+        {rows.map((row, index) => (
+          <div key={`${row.slot_id}-${index}`} className="grid grid-cols-1 gap-2 rounded-lg border border-blue-100 bg-white p-2 lg:grid-cols-[130px_120px_1fr_120px_120px_auto]">
+            <input
+              type="date"
+              value={row.date}
+              onChange={(event) => updateRow(index, { date: event.target.value })}
+              className="h-9 rounded-lg border border-border bg-background px-2 text-xs"
+            />
+            <select
+              value={row.channel}
+              onChange={(event) => updateRow(index, { channel: event.target.value })}
+              className="h-9 rounded-lg border border-border bg-background px-2 text-xs capitalize"
+            >
+              {campaignChannels.map((channel) => (
+                <option key={channel} value={channel}>{channel}</option>
+              ))}
+            </select>
+            <input
+              value={row.role}
+              onChange={(event) => updateRow(index, { role: event.target.value })}
+              className="h-9 rounded-lg border border-border bg-background px-2 text-xs"
+              placeholder="campaign role"
+            />
+            <select
+              value={row.content_type}
+              onChange={(event) => updateRow(index, { content_type: event.target.value })}
+              className="h-9 rounded-lg border border-border bg-background px-2 text-xs"
+            >
+              {contentTypes.map((type) => (
+                <option key={type} value={type}>{type}</option>
+              ))}
+            </select>
+            <select
+              value={row.visual_need}
+              onChange={(event) => updateRow(index, { visual_need: event.target.value })}
+              className="h-9 rounded-lg border border-border bg-background px-2 text-xs"
+            >
+              {visualNeeds.map((need) => (
+                <option key={need} value={need}>{need}</option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => removeRow(index)}
+              className="h-9 rounded-lg border border-red-100 px-2 text-[11px] font-medium text-red-600 hover:bg-red-50"
+            >
+              Remove
+            </button>
+            <input
+              value={row.title_seed}
+              onChange={(event) => updateRow(index, { title_seed: event.target.value })}
+              className="h-9 rounded-lg border border-border bg-background px-2 text-xs lg:col-span-3"
+              placeholder="title seed"
+            />
+            <input
+              value={row.rationale}
+              onChange={(event) => updateRow(index, { rationale: event.target.value })}
+              className="h-9 rounded-lg border border-border bg-background px-2 text-xs lg:col-span-3"
+              placeholder="why this item exists"
+            />
+          </div>
+        ))}
+      </div>
+
+      {localError && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+          {localError}
+        </div>
+      )}
+
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={save}
+          disabled={saving || rows.length === 0}
+          className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
+        >
+          {saving ? 'Saving...' : 'Save schedule'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function InboxCard({
   item,
   onApprove,
   onReject,
   onInspect,
+  onScheduleSaved,
   actionState,
 }: {
   item: InboxItem;
   onApprove: (item: InboxItem) => void;
   onReject: (id: string) => void;
   onInspect: (item: InboxItem) => void;
+  onScheduleSaved: () => void;
   actionState?: 'approved' | 'rejected' | 'actioned';
 }) {
   const effectiveStatus = actionState ?? item.status;
@@ -70,6 +263,10 @@ function InboxCard({
       <div className="bg-muted/40 rounded-lg px-3 py-2 border border-border/50">
         <p className="text-[11px] text-muted-foreground italic leading-relaxed">{item.rationale}</p>
       </div>
+
+      {item.linkedObjectType === 'campaign_brief' && (
+        <CampaignScheduleEditor item={item} onSaved={onScheduleSaved} />
+      )}
 
       <div className="flex items-center gap-2 pt-1">
         {isActionable && item.type === 'approval' && (
@@ -258,6 +455,7 @@ export default function InboxPage() {
             onApprove={handleApprove}
             onReject={handleReject}
             onInspect={handleInspect}
+            onScheduleSaved={() => void queryClient.invalidateQueries({ queryKey: ['inbox-items'] })}
             actionState={actionStates[item.id]}
           />
         ))}

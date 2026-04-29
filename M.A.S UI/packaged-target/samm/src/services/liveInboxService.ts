@@ -161,6 +161,7 @@ function mapInboxItem(row: LiveInboxRow): InboxItem {
     createdAt: row.created_at ?? new Date().toISOString(),
     linkedObjectId: row.ref_id ?? undefined,
     linkedObjectType: row.item_type ?? undefined,
+    payload,
   };
 }
 
@@ -272,6 +273,32 @@ export async function approveInboxItem(id: string) {
 
 export async function rejectInboxItem(id: string, note?: string) {
   return performAction(id, "reject", note);
+}
+
+export async function updateInboxCampaignSchedule(id: string, schedule: any[]) {
+  const inboxRow = await requireSingleRow("human_inbox", id);
+  const payload = inboxRow.payload && typeof inboxRow.payload === "object" ? inboxRow.payload : {};
+  const campaignBrief = payload.campaign_brief && typeof payload.campaign_brief === "object"
+    ? payload.campaign_brief
+    : {};
+  const nextPayload = {
+    ...payload,
+    proposed_schedule: schedule,
+    campaign_brief: {
+      ...campaignBrief,
+      proposed_schedule: schedule,
+    },
+    schedule_edited_at: new Date().toISOString(),
+  };
+
+  const { error } = await supabase
+    .from("human_inbox")
+    .update({ payload: nextPayload })
+    .eq("id", id)
+    .eq("org_id", getOrgId());
+
+  if (error) throw error;
+  return { id };
 }
 
 export async function readFunctionError(error: unknown) {

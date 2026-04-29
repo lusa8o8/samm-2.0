@@ -28,6 +28,7 @@ import {
   deriveCampaignConstraintOutput,
   resolveCampaignWindow,
   loadCampaignCalendarPlanningContext,
+  type ResolvedCalendarSlot,
   type ResolvedCampaignWindow,
 } from '../_shared/calendar-coordination.ts'
 
@@ -64,9 +65,23 @@ interface PipelineCResults {
   calendar_event?: CalendarEvent | null
   campaign_window?: ResolvedCampaignWindow | null
   campaign_constraints?: CampaignConstraintOutput | null
+  campaign_schedule?: CampaignScheduleItem[] | null
   planning_horizon_days?: number
   calendar_windows_considered?: number
   resolved_slots?: number
+}
+
+interface CampaignScheduleItem {
+  slot_id: string
+  date: string
+  channel: string
+  role: string
+  content_type: string
+  visual_need: string
+  title_seed: string
+  rationale: string
+  countdown_label?: string | null
+  plan_item_id?: string | null
 }
 
 interface CampaignBrief {
@@ -80,6 +95,7 @@ interface CampaignBrief {
   call_to_action: string
   content_needed: string[]
   expected_signups: number
+  proposed_schedule?: CampaignScheduleItem[]
 }
 
 interface CampaignConstraintOutput {
@@ -189,6 +205,7 @@ Deno.serve(async (req) => {
     calendar_event: context.calendarEvent ?? null,
     campaign_window: null,
     campaign_constraints: null,
+    campaign_schedule: null,
     planning_horizon_days: 0,
     calendar_windows_considered: 0,
     resolved_slots: 0,
@@ -244,7 +261,11 @@ Deno.serve(async (req) => {
       defaultChannels: structuredConfig?.campaignDefaults?.default_channels ?? undefined,
     })
     results.campaign_window = campaignWindow
-    const planningContext = await loadCampaignCalendarPlanningContext(supabase, context.orgId, context.today)
+    const planningHorizonDays = derivePlanningHorizonDays(context.today, campaignWindow.window_end)
+    const planningContext = await loadCampaignCalendarPlanningContext(supabase, context.orgId, context.today, {
+      horizonDays: planningHorizonDays,
+      defaultChannels: structuredConfig?.campaignDefaults?.default_channels ?? undefined,
+    })
     results.planning_horizon_days = planningContext.planning_horizon_days
     results.calendar_windows_considered = planningContext.windows.length
     results.resolved_slots = planningContext.slots.length
@@ -285,6 +306,14 @@ Deno.serve(async (req) => {
     )
 
     results.campaign_name = campaignBrief.name
+    const proposedSchedule = buildCampaignScheduleProposal({
+      brief: campaignBrief,
+      event,
+      campaignWindow,
+      slots: planningContext.campaign_slots,
+      today: context.today,
+    })
+    campaignBrief.proposed_schedule = proposedSchedule
 
     const { data: inboxRow } = await supabase
       .from('human_inbox')
@@ -294,6 +323,7 @@ Deno.serve(async (req) => {
         priority: 'urgent',
         payload: {
           campaign_brief: campaignBrief,
+          proposed_schedule: proposedSchedule,
           campaign_constraints: deriveCampaignConstraintOutput(campaignWindow, { campaignBrief }),
           event_label: event.label,
           event_date: event.event_date,
@@ -315,6 +345,7 @@ Deno.serve(async (req) => {
     results.campaign_brief_sent = true
     results.campaign_name = campaignBrief.name
     results.campaign_brief = campaignBrief
+    results.campaign_schedule = proposedSchedule
     results.campaign_brief_inbox_id = inboxRow?.id ?? null
     results.campaign_constraints = deriveCampaignConstraintOutput(campaignWindow, { campaignBrief }) as CampaignConstraintOutput | null
     console.log(`Campaign brief sent to CEO inbox: "${campaignBrief.name}"`)
@@ -435,6 +466,7 @@ async function resumePipelineCRun(params: { supabase: any; anthropic: ReturnType
     calendar_event: stored.calendar_event ?? context.calendarEvent ?? null,
     campaign_window: stored.campaign_window ?? null,
     campaign_constraints: stored.campaign_constraints ?? null,
+    campaign_schedule: Array.isArray(stored.campaign_schedule) ? stored.campaign_schedule : null,
     planning_horizon_days: stored.planning_horizon_days ?? 0,
     calendar_windows_considered: stored.calendar_windows_considered ?? 0,
     resolved_slots: stored.resolved_slots ?? 0,
@@ -465,7 +497,8 @@ async function resumePipelineCRun(params: { supabase: any; anthropic: ReturnType
       return new Response(JSON.stringify({ ok: true, cancelled: true, run_id: runId, ...results }), { headers: { 'Content-Type': 'application/json' } })
     }
 
-    const campaignBrief = results.campaign_brief
+    const approvedPayload = (briefRow.payload ?? {}) as Record<string, any>
+    const campaignBrief = normalizeCampaignBrief(approvedPayload.campaign_brief ?? results.campaign_brief)
     const event = results.calendar_event
     if (!campaignBrief || !event) throw new Error('Pipeline C resume is missing stored campaign brief or calendar event context')
     const campaignWindow = results.campaign_window ?? resolveCampaignWindow(event)
@@ -473,6 +506,24 @@ async function resumePipelineCRun(params: { supabase: any; anthropic: ReturnType
       ?? (deriveCampaignConstraintOutput(campaignWindow, { campaignBrief }) as CampaignConstraintOutput | null)
     results.campaign_window = campaignWindow
     results.campaign_constraints = campaignConstraints
+    const campaignSchedule = normalizeCampaignSchedule(
+      approvedPayload.proposed_schedule
+        ?? campaignBrief.proposed_schedule
+        ?? results.campaign_schedule
+        ?? [],
+    )
+    const resolvedSchedule = campaignSchedule.length
+      ? campaignSchedule
+      : buildCampaignScheduleProposal({
+          brief: campaignBrief,
+          event,
+          campaignWindow,
+          slots: [],
+          today: context.today,
+        })
+    campaignBrief.proposed_schedule = resolvedSchedule
+    results.campaign_brief = campaignBrief
+    results.campaign_schedule = resolvedSchedule
 
     // ── STAGE 2: marketer approval gate ───────────────────────────────
     // If copy assets have already been created, this is the second resume.
@@ -542,9 +593,18 @@ async function resumePipelineCRun(params: { supabase: any; anthropic: ReturnType
 
     console.log('Starting parallel asset creation...')
 
+    const committedSchedule = await commitCampaignPlanItems(
+      supabase,
+      context.orgId,
+      runId,
+      briefInboxId,
+      event,
+      resolvedSchedule,
+    )
+
     const [copyAssets, designBrief] = await Promise.all([
-      runPlatformCopyAdapters(anthropic, campaignBrief, event, config.brand_voice, canonicalCopy),
-      runGroundedDesignBriefAgent(anthropic, campaignBrief, event, config.brand_visual ?? {}, config.markdown_design_spec ?? null, config.social_handles ?? {}, config.primary_cta_url ?? null)
+      runScheduledPlatformCopyAdapters(anthropic, campaignBrief, event, config.brand_voice, canonicalCopy, committedSchedule),
+      runGroundedDesignBriefAgent(anthropic, campaignBrief, event, config.brand_visual ?? {}, config.markdown_design_spec ?? null, config.social_handles ?? {}, config.primary_cta_url ?? null, committedSchedule)
     ])
 
     results.copy_assets_created = copyAssets.length
@@ -555,7 +615,9 @@ async function resumePipelineCRun(params: { supabase: any; anthropic: ReturnType
 
     for (let i = 0; i < copyAssets.length; i++) {
       const asset = copyAssets[i]
-      await supabase
+      const scheduleItem = asset.schedule_item as CampaignScheduleItem | undefined
+      const scheduledAt = scheduleItem ? buildScheduledAtForPlanItem(scheduleItem) : schedules[i]
+      const { data: insertedContent, error: copyInsertError } = await supabase
         .from('content_registry')
         .insert({
           org_id: context.orgId,
@@ -566,18 +628,40 @@ async function resumePipelineCRun(params: { supabase: any; anthropic: ReturnType
           is_campaign_post: true,
           campaign_name: campaignBrief.name,
           pipeline_run_id: runId,
-          scheduled_at: schedules[i],
+          scheduled_at: scheduledAt,
           created_by: 'pipeline-c-campaign',
           metadata: {
             owner_pipeline: 'pipeline-c-campaign',
             purpose: 'campaign',
-            content_type: asset.type ?? 'campaign',
+            content_type: asset.type ?? scheduleItem?.content_type ?? 'campaign',
             cta_text: campaignConstraints?.allowed_ctas?.[0] ?? campaignBrief.call_to_action,
             window_ref: campaignWindow.window_id,
             campaign_ref: campaignWindow.event_id,
+            campaign_plan_item_id: scheduleItem?.plan_item_id ?? null,
+            slot_id: scheduleItem?.slot_id ?? null,
+            campaign_role: scheduleItem?.role ?? null,
+            visual_need: scheduleItem?.visual_need ?? null,
             campaign_constraints: campaignConstraints,
           },
         })
+        .select('id')
+        .single()
+
+      if (copyInsertError) {
+        throw new Error(`Failed to insert campaign copy asset: ${copyInsertError.message}`)
+      }
+
+      if (scheduleItem?.plan_item_id && insertedContent?.id) {
+        await supabase
+          .from('campaign_plan_items')
+          .update({
+            status: 'draft_created',
+            content_registry_id: insertedContent.id,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', scheduleItem.plan_item_id)
+          .eq('org_id', context.orgId)
+      }
     }
 
     const { error: briefInsertError } = await supabase.from('content_registry').insert({
@@ -595,6 +679,7 @@ async function resumePipelineCRun(params: { supabase: any; anthropic: ReturnType
         content_type: 'design_brief',
         window_ref: campaignWindow.window_id,
         campaign_ref: campaignWindow.event_id,
+        campaign_schedule: committedSchedule,
       },
     })
 
@@ -896,6 +981,84 @@ Write the copy now.`
   return results.filter((a): a is NonNullable<typeof a> => a !== null)
 }
 
+async function runScheduledPlatformCopyAdapters(
+  anthropic: ReturnType<typeof createAnthropicClient>,
+  brief: CampaignBrief,
+  event: CalendarEvent,
+  brandVoice: any,
+  canonical: { headline: string; core_body: string; exact_cta: string; key_fact: string },
+  schedulePlan: CampaignScheduleItem[] = [],
+): Promise<any[]> {
+  const contentPlan = schedulePlan.length
+    ? schedulePlan
+    : buildLegacyCampaignScheduleFromBrief(brief, event)
+
+  const results = await Promise.all(
+    contentPlan.map(async (item) => {
+      try {
+        const response = await generateTextWithAnthropic(anthropic, {
+          task: 'platform_copywriter',
+          maxTokens: 220,
+          system: `${buildSystemPrompt(brandVoice)}
+
+Write ONLY the post copy - no JSON, no quotes around it, no preamble.
+
+You MUST include these campaign elements verbatim - do not paraphrase or reinterpret them:
+- Opening headline: "${canonical.headline}"
+- Call to action: "${canonical.exact_cta}"
+- Key fact: "${canonical.key_fact}"
+
+Adapt the surrounding format, length, and tone for the scheduled platform, role, and content type only.`,
+          messages: [{
+            role: 'user',
+            content: `Campaign: ${brief.name}
+Core message: ${canonical.core_body}
+Target: ${event.universities.join(', ')} audience segments
+Event date: ${event.event_date}
+Scheduled item:
+- Date: ${item.date}
+- Platform: ${item.channel}
+- Role: ${item.role}
+- Content type: ${item.content_type}
+- Title seed: ${item.title_seed}
+- Rationale: ${item.rationale}
+${item.countdown_label ? `- Countdown label: ${item.countdown_label}` : ''}
+Instructions: ${buildPlatformInstruction(item.channel, item.role, item.content_type)}
+
+Write the copy now.`,
+          }],
+        })
+
+        const body = response.content[0].type === 'text'
+          ? response.content[0].text.trim()
+          : ''
+
+        let subject_line: string | undefined
+        let postBody = body
+
+        if (item.channel === 'email' && body.startsWith('Subject:')) {
+          const lines = body.split('\n')
+          subject_line = lines[0].replace('Subject:', '').trim()
+          postBody = lines.slice(1).join('\n').trim()
+        }
+
+        return {
+          platform: item.channel,
+          body: postBody,
+          subject_line,
+          type: item.content_type || 'campaign',
+          schedule_item: item,
+        }
+      } catch (err) {
+        console.error(`Copy writer failed for ${item.channel}:`, err instanceof Error ? err.message : String(err))
+        return null
+      }
+    })
+  )
+
+  return results.filter((asset): asset is NonNullable<typeof asset> => asset !== null)
+}
+
 // ── design brief agent ────────────────────────────────────────────────
 // Injects structured brand_visual context so designers / Canva AI cannot
 // hallucinate palette, fonts, or layout. creative_override_allowed loosens
@@ -995,7 +1158,8 @@ async function runGroundedDesignBriefAgent(
   brandVisual: any,
   markdownDesignSpec: string | null,
   socialHandles: any,
-  primaryCtaUrl: string | null
+  primaryCtaUrl: string | null,
+  schedulePlan: CampaignScheduleItem[] = [],
 ): Promise<string> {
   const brandRules = buildBrandVisualRules(
     {
@@ -1022,14 +1186,17 @@ async function runGroundedDesignBriefAgent(
     ? '\nCREATIVE FREEDOM: Palette deviation permitted within the accent color family. All other brand rules apply.'
     : '\nCREATIVE FREEDOM: Full brand lock. No palette, typography, or style deviation permitted.'
 
+  const scheduleBlock = formatCampaignScheduleForPrompt(schedulePlan)
+
   const response = await generateTextWithAnthropic(anthropic, {
     task: 'design_brief_writer',
-    maxTokens: 500,
+    maxTokens: 800,
     system: `Write a concise design brief for a campaign visual asset.
 Plain text only. No markdown, no asterisks, no bold, no headers. Use plain bullet points with a dash (-). Under 250 words.
 You MUST include: exact brand colors, font names, logo file location, exact social handles, exact CTA URL, and platform dimensions exactly as specified.
 Do not substitute, invent, or omit any of these values.
 Never invent placeholder footer text, domains, or links such as "reallygreatsite.com" or "example.com".
+If a campaign schedule is provided, describe the visual set by date and role so the user can generate matching campaign visuals externally.
 If a value is missing, explicitly say to omit it rather than guessing.`,
     messages: [{
       role: 'user',
@@ -1037,6 +1204,8 @@ If a value is missing, explicitly say to omit it rather than guessing.`,
 Key message: ${brief.key_message}
 Platforms: ${brief.platforms.join(', ')}
 Target: ${brief.target_audience} at ${event.universities.join(', ')}
+Campaign schedule:
+${scheduleBlock}
 BRAND VISUAL IDENTITY
 ${brandVisualBlock || 'No visual brand kit is configured. Omit any unconstrained brand element instead of inventing one.'}
 ${platformDimensionsBlock}
@@ -1208,6 +1377,356 @@ function addDays(dateStr: string, days: number): string {
   const d = new Date(dateStr)
   d.setDate(d.getDate() + days)
   return d.toISOString().split('T')[0]
+}
+
+function asNonEmptyString(value: unknown, fallback = ''): string {
+  return typeof value === 'string' && value.trim() ? value.trim() : fallback
+}
+
+function asStringArray(value: unknown, fallback: string[] = []): string[] {
+  if (!Array.isArray(value)) return fallback
+  return value
+    .map((item) => asNonEmptyString(item))
+    .filter(Boolean)
+}
+
+function asFiniteNumber(value: unknown, fallback = 0): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value)
+    if (Number.isFinite(parsed)) return parsed
+  }
+  return fallback
+}
+
+function isIsoDate(value: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(new Date(`${value}T00:00:00.000Z`).getTime())
+}
+
+function diffDaysInclusive(start: string, end: string): number {
+  const startMs = new Date(`${start}T00:00:00.000Z`).getTime()
+  const endMs = new Date(`${end}T00:00:00.000Z`).getTime()
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return 1
+  return Math.max(1, Math.round((endMs - startMs) / 86400000) + 1)
+}
+
+function derivePlanningHorizonDays(today: string, windowEnd: string): number {
+  return Math.min(45, Math.max(7, diffDaysInclusive(today, windowEnd)))
+}
+
+function normalizeChannel(value: unknown): string {
+  const channel = asNonEmptyString(value).toLowerCase()
+  const definition = (INTEGRATION_REGISTRY as Record<string, any>)[channel]
+  return definition?.cadence_policy ? definition.id : ''
+}
+
+function normalizeChannels(values: unknown, fallback: string[] = []): string[] {
+  const normalized = asStringArray(values)
+    .map(normalizeChannel)
+    .filter(Boolean)
+  const fallbackChannels = fallback
+    .map(normalizeChannel)
+    .filter(Boolean)
+  return [...new Set(normalized.length ? normalized : fallbackChannels)]
+}
+
+function normalizeCampaignBrief(value: unknown): CampaignBrief | null {
+  if (!value || typeof value !== 'object') return null
+  const row = value as Record<string, unknown>
+  const platforms = normalizeChannels(row.platforms, ['facebook', 'whatsapp', 'youtube', 'email'])
+
+  return {
+    name: asNonEmptyString(row.name, 'Campaign'),
+    goal: asNonEmptyString(row.goal, 'Create campaign awareness and conversion.'),
+    target_audience: asNonEmptyString(row.target_audience, 'Configured target audience'),
+    universities: asStringArray(row.universities),
+    duration_days: Math.max(1, Math.round(asFiniteNumber(row.duration_days, 1))),
+    platforms,
+    key_message: asNonEmptyString(row.key_message, ''),
+    call_to_action: asNonEmptyString(row.call_to_action, ''),
+    content_needed: asStringArray(row.content_needed),
+    expected_signups: Math.max(0, Math.round(asFiniteNumber(row.expected_signups, 0))),
+    proposed_schedule: normalizeCampaignSchedule(row.proposed_schedule),
+  }
+}
+
+function normalizeCampaignSchedule(value: unknown): CampaignScheduleItem[] {
+  if (!Array.isArray(value)) return []
+  const usedSlotIds = new Set<string>()
+
+  return value
+    .map((item, index) => {
+      if (!item || typeof item !== 'object') return null
+      const row = item as Record<string, unknown>
+      const date = asNonEmptyString(row.date)
+      const channel = normalizeChannel(row.channel)
+      if (!isIsoDate(date) || !channel) return null
+
+      const baseSlotId = asNonEmptyString(row.slot_id, `${date}:${channel}:campaign:manual`)
+      const slot_id = usedSlotIds.has(baseSlotId) ? `${baseSlotId}:${index + 1}` : baseSlotId
+      usedSlotIds.add(slot_id)
+
+      return {
+        slot_id,
+        date,
+        channel,
+        role: asNonEmptyString(row.role, 'campaign post'),
+        content_type: asNonEmptyString(row.content_type, 'campaign'),
+        visual_need: asNonEmptyString(row.visual_need, 'text_only'),
+        title_seed: asNonEmptyString(row.title_seed, 'Campaign post'),
+        rationale: asNonEmptyString(row.rationale, 'Planned campaign content.'),
+        countdown_label: asNonEmptyString(row.countdown_label) || null,
+        plan_item_id: asNonEmptyString(row.plan_item_id) || null,
+      }
+    })
+    .filter((item): item is CampaignScheduleItem => item !== null)
+    .slice(0, 12)
+}
+
+function buildCampaignScheduleProposal(params: {
+  brief: CampaignBrief
+  event: CalendarEvent
+  campaignWindow: ResolvedCampaignWindow
+  slots: ResolvedCalendarSlot[]
+  today: string
+}): CampaignScheduleItem[] {
+  const { brief, event, campaignWindow, slots, today } = params
+  const channels = normalizeChannels(
+    brief.platforms,
+    campaignWindow.constraints.channels_in_scope.length
+      ? campaignWindow.constraints.channels_in_scope
+      : ['facebook', 'whatsapp', 'youtube', 'email'],
+  )
+  const endDate = campaignWindow.window_end || event.event_date
+  const campaignSlots = slots
+    .filter((slot) =>
+      slot.purpose === 'campaign' &&
+      slot.owner_pipeline === 'pipeline-c-campaign' &&
+      slot.campaign_ref === campaignWindow.event_id &&
+      slot.date >= today &&
+      slot.date <= endDate &&
+      channels.includes(slot.channel) &&
+      slot.current_posts < slot.max_posts
+    )
+
+  const candidateSlots = campaignSlots.length
+    ? campaignSlots
+    : buildVirtualCampaignSlots(today, endDate, channels, campaignWindow)
+
+  if (candidateSlots.length === 0) return []
+
+  const duration = Math.max(1, Math.round(brief.duration_days || diffDaysInclusive(today, endDate)))
+  const desiredCount = Math.min(
+    8,
+    candidateSlots.length,
+    duration <= 2 ? Math.min(candidateSlots.length, Math.max(1, channels.length)) : Math.max(3, Math.ceil(duration / 2)),
+  )
+  const templates = [
+    { role: 'campaign kickoff', content_type: 'announcement', visual_need: 'static', rationale: 'Introduce the campaign and make the event visible.' },
+    { role: 'value education', content_type: 'value', visual_need: 'carousel', rationale: 'Teach something useful before asking for action.' },
+    { role: 'trust builder', content_type: 'proof', visual_need: 'static', rationale: 'Build confidence with a human, proof, or credibility angle.' },
+    { role: 'countdown reminder', content_type: 'countdown', visual_need: 'static', rationale: 'Create urgency as the event gets closer.' },
+    { role: 'conversion prompt', content_type: 'conversion', visual_need: 'static', rationale: 'Ask clearly for the next action.' },
+    { role: 'last call', content_type: 'reminder', visual_need: 'static', rationale: 'Give the audience one final clear reminder.' },
+  ]
+
+  const chosenSlots = spreadSlots(candidateSlots, desiredCount)
+  return normalizeCampaignSchedule(chosenSlots.map((slot, index) => {
+    const template = templates[Math.min(index, templates.length - 1)]
+    const daysUntilEvent = Math.max(0, diffDaysInclusive(slot.date, event.event_date) - 1)
+    const countdownLabel = template.content_type === 'countdown' || daysUntilEvent <= 3
+      ? `${daysUntilEvent} day${daysUntilEvent === 1 ? '' : 's'} to ${event.label}`
+      : null
+
+    return {
+      slot_id: slot.slot_id,
+      date: slot.date,
+      channel: slot.channel,
+      role: template.role,
+      content_type: template.content_type,
+      visual_need: template.visual_need,
+      title_seed: `${brief.name}: ${template.role}`,
+      rationale: template.rationale,
+      countdown_label: countdownLabel,
+    }
+  }))
+}
+
+function buildVirtualCampaignSlots(
+  startDate: string,
+  endDate: string,
+  channels: string[],
+  campaignWindow: ResolvedCampaignWindow,
+): ResolvedCalendarSlot[] {
+  const horizon = Math.min(31, diffDaysInclusive(startDate, endDate))
+  const slots: ResolvedCalendarSlot[] = []
+  for (let offset = 0; offset < horizon; offset += 1) {
+    const date = addDays(startDate, offset)
+    for (const channel of channels) {
+      slots.push({
+        slot_id: `${date}:${channel}:campaign:${campaignWindow.event_id}`,
+        date,
+        channel,
+        purpose: 'campaign',
+        owner_pipeline: 'pipeline-c-campaign',
+        max_posts: 1,
+        current_posts: 0,
+        allowed_ctas: campaignWindow.constraints.allowed_ctas,
+        allowed_content_types: campaignWindow.constraints.content_types_required,
+        window_ref: campaignWindow.window_id,
+        campaign_ref: campaignWindow.event_id,
+      })
+    }
+  }
+  return slots
+}
+
+function spreadSlots(slots: ResolvedCalendarSlot[], count: number): ResolvedCalendarSlot[] {
+  if (count <= 0) return []
+  if (count >= slots.length) return slots
+  const selected: ResolvedCalendarSlot[] = []
+  const used = new Set<string>()
+
+  for (let i = 0; i < count; i += 1) {
+    let index = Math.round(((slots.length - 1) * i) / Math.max(1, count - 1))
+    while (used.has(slots[index].slot_id) && index < slots.length - 1) index += 1
+    if (used.has(slots[index].slot_id)) continue
+    selected.push(slots[index])
+    used.add(slots[index].slot_id)
+  }
+
+  return selected
+}
+
+function buildLegacyCampaignScheduleFromBrief(brief: CampaignBrief, event: CalendarEvent): CampaignScheduleItem[] {
+  const channels = normalizeChannels(brief.platforms, ['facebook', 'whatsapp', 'youtube', 'email'])
+  return channels.slice(0, 6).map((channel, index) => ({
+    slot_id: `${event.event_date}:${channel}:campaign:${event.id}:legacy:${index + 1}`,
+    date: event.event_date,
+    channel,
+    role: index === 0 ? 'campaign kickoff' : 'campaign support',
+    content_type: index === 0 ? 'announcement' : 'campaign',
+    visual_need: channel === 'email' ? 'text_only' : 'static',
+    title_seed: `${brief.name}: ${index === 0 ? 'campaign kickoff' : 'campaign support'}`,
+    rationale: 'Fallback campaign item created because no approved schedule was available.',
+    countdown_label: null,
+  }))
+}
+
+function buildPlatformInstruction(channel: string, role: string, contentType: string): string {
+  const platformInstructions: Record<string, string> = {
+    facebook: '2-3 sentences, emoji ok, clear hook, end with the CTA or primary link if one is available',
+    instagram: 'caption-first, visual-friendly, strong opening line, concise body, approved hashtags only',
+    linkedin: 'professional and insight-led, 1-2 short paragraphs, no hype, end with a clear next step',
+    whatsapp: 'under 200 characters, conversational, one clear call to action',
+    youtube: 'short community post, ask a question to drive comments',
+    email: 'start first line with Subject: then write email body, warm and helpful',
+  }
+  const roleInstruction = contentType === 'countdown' || role.toLowerCase().includes('countdown')
+    ? 'Make the countdown or urgency explicit without sounding spammy.'
+    : contentType === 'conversion' || role.toLowerCase().includes('conversion')
+      ? 'Make the next action direct and easy to understand.'
+      : contentType === 'value' || role.toLowerCase().includes('education')
+        ? 'Lead with practical value before mentioning the offer.'
+        : role.toLowerCase().includes('trust')
+          ? 'Use proof, reassurance, or human context to build confidence.'
+          : 'Keep the campaign message focused and specific.'
+
+  return `${platformInstructions[channel] ?? 'write a concise platform-ready post'}. ${roleInstruction}`
+}
+
+function formatCampaignScheduleForPrompt(schedulePlan: CampaignScheduleItem[]): string {
+  if (!schedulePlan.length) return 'No campaign schedule approved yet. Write one general visual brief.'
+  return schedulePlan.map((item, index) =>
+    `${index + 1}. ${item.date} - ${item.channel} - ${item.role} - ${item.content_type} - visual: ${item.visual_need}${item.countdown_label ? ` - ${item.countdown_label}` : ''}`
+  ).join('\n')
+}
+
+function buildScheduledAtForPlanItem(item: CampaignScheduleItem): string {
+  const policy = (INTEGRATION_REGISTRY as Record<string, any>)[item.channel]?.cadence_policy
+  const [prefHour, prefMin] = policy?.preferred_time_utc
+    ? policy.preferred_time_utc.split(':').map(Number)
+    : [9, 0]
+  const target = new Date(`${item.date}T00:00:00.000Z`)
+  target.setUTCHours(Number.isFinite(prefHour) ? prefHour : 9, Number.isFinite(prefMin) ? prefMin : 0, 0, 0)
+  const targetMs = target.getTime()
+  const safeMs = targetMs <= Date.now() ? nextQuarterHourSlot(Date.now(), 30) : targetMs
+  return new Date(safeMs).toISOString()
+}
+
+async function commitCampaignPlanItems(
+  supabase: any,
+  orgId: string,
+  runId: string,
+  inboxItemId: string,
+  event: CalendarEvent,
+  schedule: CampaignScheduleItem[],
+): Promise<CampaignScheduleItem[]> {
+  const { data: existing, error: existingError } = await supabase
+    .from('campaign_plan_items')
+    .select('*')
+    .eq('org_id', orgId)
+    .eq('pipeline_run_id', runId)
+    .order('scheduled_for', { ascending: true })
+    .order('created_at', { ascending: true })
+
+  if (existingError) {
+    throw new Error(`Failed to load existing campaign plan items: ${existingError.message}`)
+  }
+
+  if (Array.isArray(existing) && existing.length > 0) {
+    return existing.map(mapCampaignPlanRowToScheduleItem)
+  }
+
+  const normalized = normalizeCampaignSchedule(schedule)
+  if (!normalized.length) return []
+
+  const rows = normalized.map((item) => ({
+    org_id: orgId,
+    calendar_event_id: event.id,
+    pipeline_run_id: runId,
+    inbox_item_id: inboxItemId,
+    slot_id: item.slot_id,
+    scheduled_for: item.date,
+    channel: item.channel,
+    role: item.role,
+    content_type: item.content_type,
+    visual_need: item.visual_need,
+    title_seed: item.title_seed,
+    rationale: item.rationale,
+    countdown_label: item.countdown_label,
+    status: 'committed',
+    metadata: {
+      event_label: event.label,
+      event_date: event.event_date,
+    },
+  }))
+
+  const { data, error } = await supabase
+    .from('campaign_plan_items')
+    .insert(rows)
+    .select('*')
+
+  if (error) {
+    throw new Error(`Failed to commit campaign plan items: ${error.message}`)
+  }
+
+  return (data ?? []).map(mapCampaignPlanRowToScheduleItem)
+}
+
+function mapCampaignPlanRowToScheduleItem(row: any): CampaignScheduleItem {
+  return {
+    slot_id: asNonEmptyString(row.slot_id),
+    date: asNonEmptyString(row.scheduled_for),
+    channel: normalizeChannel(row.channel),
+    role: asNonEmptyString(row.role, 'campaign post'),
+    content_type: asNonEmptyString(row.content_type, 'campaign'),
+    visual_need: asNonEmptyString(row.visual_need, 'text_only'),
+    title_seed: asNonEmptyString(row.title_seed, 'Campaign post'),
+    rationale: asNonEmptyString(row.rationale, 'Planned campaign content.'),
+    countdown_label: asNonEmptyString(row.countdown_label) || null,
+    plan_item_id: asNonEmptyString(row.id) || null,
+  }
 }
 
 // ── M11F cadence engine ───────────────────────────────────────────────

@@ -54,6 +54,7 @@ export interface InboxItem {
   createdAt: string;
   linkedObjectId?: string;
   linkedObjectType?: string;
+  payload?: Record<string, any>;
 }
 
 export interface ContentDraft {
