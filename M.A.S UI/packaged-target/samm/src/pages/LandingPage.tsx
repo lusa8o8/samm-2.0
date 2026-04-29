@@ -23,7 +23,7 @@ const workflowCards = [
 
 const integrationLabels = ["Facebook", "Instagram", "LinkedIn", "WhatsApp", "YouTube", "Email"] as const;
 
-export default function Landing() {
+export default function LandingPage() {
   return (
     <PublicPageFrame>
       <PublicNav />

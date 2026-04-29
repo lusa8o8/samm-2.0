@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://www.getsamm.app/sitemap.xml
+Sitemap: https://getsamm.app/sitemap.xml

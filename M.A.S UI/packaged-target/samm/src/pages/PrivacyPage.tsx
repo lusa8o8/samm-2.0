@@ -44,7 +44,7 @@ const sections = [
   },
 ] as const;
 
-export default function Privacy() {
+export default function PrivacyPage() {
   return (
     <LegalPageLayout
       title="Privacy Policy"

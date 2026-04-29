@@ -39,7 +39,7 @@ const sections = [
   },
 ] as const;
 
-export default function Terms() {
+export default function TermsPage() {
   return (
     <LegalPageLayout
       title="Terms of Service"

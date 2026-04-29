@@ -1,9 +1,10 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Link, Redirect, useLocation } from "wouter";
-import { AlertCircle, LockKeyhole, Mail } from "lucide-react";
+import { AlertCircle, ArrowRight, LockKeyhole, Mail } from "lucide-react";
 import type { Session } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PublicPageFrame, PublicWordmark } from "@/components/public/brand-kit";
 import { getActiveSession, signIn, supabase } from "../../../../src/lib/supabase";
 
 export default function LoginPage() {
@@ -58,70 +59,106 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[linear-gradient(180deg,#f6f7fb_0%,#eef2f8_100%)] px-6 py-10 text-foreground">
-      <div className="w-full max-w-md rounded-[28px] border border-border/80 bg-card/95 p-8 shadow-[0_24px_80px_rgba(15,23,42,0.08)]">
-        <div className="mb-8">
-          <p className="text-[11px] font-semibold lowercase tracking-[0.24em] text-muted-foreground">samm</p>
-          <h1 className="mt-4 text-3xl font-semibold tracking-tight text-foreground">sign in to the workspace</h1>
-          <p className="mt-3 text-sm leading-6 text-muted-foreground">
-            Access is onboarding-only for now. Sign in here if your workspace is already active, or join the waitlist
-            for manual review.
-          </p>
+    <PublicPageFrame>
+      <main className="mx-auto flex min-h-screen max-w-7xl items-center justify-center px-4 py-8 sm:px-6 lg:px-8">
+        <div className="grid w-full max-w-5xl overflow-hidden rounded-[2rem] border border-black/8 bg-white shadow-[0_28px_100px_rgba(15,23,42,0.12)] lg:grid-cols-[0.9fr_1.1fr]">
+          <aside className="hidden bg-[#0b0b0c] p-8 text-white lg:flex lg:flex-col lg:justify-between">
+            <div>
+              <PublicWordmark inverted />
+              <h1 className="mt-12 max-w-md text-5xl font-semibold leading-[1.04] tracking-tight text-[#f5f3ef]">
+                access your marketing workspace
+              </h1>
+              <p className="mt-6 max-w-md text-sm leading-7 text-white/72">
+                Sign in only if your workspace has already been activated. New teams should request access first.
+              </p>
+            </div>
+            <div className="rounded-[1.4rem] border border-white/10 bg-white/[0.04] p-5 text-sm leading-6 text-white/72">
+              Human approval stays in the workflow. samm helps coordinate the work; your team keeps control.
+            </div>
+          </aside>
+
+          <section className="bg-[#fcfbf8] px-6 py-8 sm:px-10 lg:px-12">
+            <div className="mx-auto max-w-md">
+              <div className="mb-8 flex items-center justify-between">
+                <Link href="/" className="text-sm text-muted-foreground underline underline-offset-4 hover:opacity-70">
+                  Homepage
+                </Link>
+                <PublicWordmark />
+              </div>
+
+              <h1 className="text-4xl font-semibold tracking-tight text-[#0b0b0c]">sign in to the workspace</h1>
+              <p className="mt-4 text-sm leading-7 text-muted-foreground">
+                Access is currently onboarding-only. Sign in if your workspace has already been activated.
+              </p>
+
+              <form className="mt-8 space-y-4" onSubmit={handleSubmit}>
+                <label className="block space-y-2">
+                  <span className="text-sm font-medium text-foreground">Email</span>
+                  <div className="relative">
+                    <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      className="h-11 rounded-xl border-black/10 bg-white pl-10"
+                      type="email"
+                      autoComplete="email"
+                      value={email}
+                      onChange={(event) => setEmail(event.target.value)}
+                      placeholder="ops@company.com"
+                      required
+                    />
+                  </div>
+                </label>
+
+                <label className="block space-y-2">
+                  <span className="text-sm font-medium text-foreground">Password</span>
+                  <div className="relative">
+                    <LockKeyhole className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      className="h-11 rounded-xl border-black/10 bg-white pl-10"
+                      type="password"
+                      autoComplete="current-password"
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                      placeholder="Enter your password"
+                      required
+                    />
+                  </div>
+                </label>
+
+                {error ? (
+                  <div className="flex items-start gap-3 rounded-2xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span>{error}</span>
+                  </div>
+                ) : null}
+
+                <Button className="h-11 w-full rounded-xl" type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? "Signing in..." : "Sign in"}
+                </Button>
+              </form>
+
+              <div className="mt-5 rounded-[1.2rem] border border-black/8 bg-white px-4 py-4 text-sm text-muted-foreground">
+                Need access for your team?{" "}
+                <Link href="/waitlist" className="font-medium text-[#0b0b0c] underline underline-offset-4 hover:opacity-70">
+                  Request access
+                </Link>
+                <ArrowRight className="ml-1 inline h-3.5 w-3.5" />
+              </div>
+
+              <div className="mt-6 flex items-center gap-4 text-xs text-muted-foreground">
+                <Link href="/privacy" className="underline underline-offset-4 transition-opacity hover:opacity-70">
+                  Privacy
+                </Link>
+                <Link href="/terms" className="underline underline-offset-4 transition-opacity hover:opacity-70">
+                  Terms
+                </Link>
+                <Link href="/data-deletion" className="underline underline-offset-4 transition-opacity hover:opacity-70">
+                  Data deletion
+                </Link>
+              </div>
+            </div>
+          </section>
         </div>
-
-        <form className="space-y-4" onSubmit={handleSubmit}>
-          <label className="block space-y-2">
-            <span className="text-sm font-medium text-foreground">Email</span>
-            <div className="relative">
-              <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                className="h-11 rounded-xl border-border bg-background pl-10"
-                type="email"
-                autoComplete="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                placeholder="ops@company.com"
-                required
-              />
-            </div>
-          </label>
-
-          <label className="block space-y-2">
-            <span className="text-sm font-medium text-foreground">Password</span>
-            <div className="relative">
-              <LockKeyhole className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                className="h-11 rounded-xl border-border bg-background pl-10"
-                type="password"
-                autoComplete="current-password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                placeholder="Enter your password"
-                required
-              />
-            </div>
-          </label>
-
-          {error ? (
-            <div className="flex items-start gap-3 rounded-2xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>{error}</span>
-            </div>
-          ) : null}
-
-          <Button className="h-11 w-full rounded-xl" type="submit" disabled={isSubmitting}>
-            {isSubmitting ? "Signing in..." : "Sign in"}
-          </Button>
-        </form>
-
-        <div className="mt-5 rounded-2xl border border-border/80 bg-background px-4 py-4 text-sm text-muted-foreground">
-          Need access for your team?{" "}
-          <Link href="/waitlist" className="font-medium text-foreground underline underline-offset-4 hover:opacity-70">
-            Join the waitlist
-          </Link>
-          .
-        </div>
-      </div>
-    </div>
+      </main>
+    </PublicPageFrame>
   );
 }

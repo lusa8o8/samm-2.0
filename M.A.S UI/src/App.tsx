@@ -11,6 +11,7 @@ import Landing from "@/pages/landing";
 import Waitlist from "@/pages/waitlist";
 import Privacy from "@/pages/privacy";
 import Terms from "@/pages/terms";
+import DataDeletion from "@/pages/data-deletion";
 import { getActiveSession, supabase } from "@/lib/supabase";
 import { useGetOrgConfig } from "@/lib/api";
 
@@ -34,6 +35,7 @@ function PublicRouter() {
       <Route path="/waitlist" component={Waitlist} />
       <Route path="/privacy" component={Privacy} />
       <Route path="/terms" component={Terms} />
+      <Route path="/data-deletion" component={DataDeletion} />
       <Route component={Landing} />
     </Switch>
   );

@@ -13,8 +13,12 @@ import CalendarPage from "@/pages/CalendarPage";
 import OperationsPage from "@/pages/OperationsPage";
 import CRMPage from "@/pages/CRMPage";
 import SalesPage from "@/pages/SalesPage";
+import LandingPage from "@/pages/LandingPage";
 import LoginPage from "@/pages/LoginPage";
 import WaitlistPage from "@/pages/WaitlistPage";
+import PrivacyPage from "@/pages/PrivacyPage";
+import TermsPage from "@/pages/TermsPage";
+import DataDeletionPage from "@/pages/DataDeletionPage";
 import NotFoundPage from "@/pages/NotFoundPage";
 import { getActiveSession, supabase } from "../../../src/lib/supabase";
 
@@ -23,10 +27,14 @@ const queryClient = new QueryClient();
 function PublicRouter() {
   return (
     <Switch>
+      <Route path="/" component={LandingPage} />
       <Route path="/login" component={LoginPage} />
       <Route path="/waitlist" component={WaitlistPage} />
+      <Route path="/privacy" component={PrivacyPage} />
+      <Route path="/terms" component={TermsPage} />
+      <Route path="/data-deletion" component={DataDeletionPage} />
       <Route>
-        <Redirect to="/login" />
+        <Redirect to="/" />
       </Route>
     </Switch>
   );
