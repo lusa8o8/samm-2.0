@@ -93,7 +93,7 @@ Decide whether to answer directly or prepare an action. Return JSON only with th
 {"message": string, "suggestions": string[], "action": null | ActionObject}
 
 ActionObject is one of:
-- {"type":"run_pipeline","pipeline":"pipeline-a-engagement"|"pipeline-b-weekly"|"pipeline-c-campaign"|"coordinator","needs_confirmation": boolean, "title": string, "description": string}
+- {"type":"run_pipeline","pipeline":"pipeline-a-engagement"|"pipeline-c-campaign"|"coordinator","needs_confirmation": boolean, "title": string, "description": string}
 - {"type":"write_post","topic": string, "platforms": string[]|null, "event_ref": string|null, "title": string, "description": string}
 - {"type":"create_one_time_post","topic": string, "post_title"?: string|null, "scheduled_for": "YYYY-MM-DD"|null, "platforms": string[]|null, "event_ref": string|null, "asset_need": "none"|"static"|"carousel"|"video"|"design_brief", "title": string, "description": string}
 - {"type":"regenerate_asset_brief","draft_group_id": string, "content_id"?: string|null, "asset_need"?: "none"|"static"|"carousel"|"video"|"design_brief", "title": string, "description": string}

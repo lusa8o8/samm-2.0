@@ -4,7 +4,7 @@ import type { PipelineId, PipelineRun, RunStatus } from "../types";
 const PIPELINE_DESCRIPTIONS: Record<string, string> = {
   coordinator: "Orchestrates all pipelines and schedules.",
   pipeline_a: "Processes engagement and escalations.",
-  pipeline_b: "Fills open baseline/support content slots.",
+  pipeline_b: "Retired baseline slot filler. Historical runs only.",
   pipeline_c: "Generates and sends campaign briefs.",
   pipeline_d: "Drafts one-off posts on request.",
 };
@@ -148,7 +148,7 @@ function formatHealthRow(key: string, row?: Record<string, any>): OperationsPipe
     status,
     lastRun: row?.started_at ?? row?.created_at ?? null,
     duration: formatDuration(row ? calculateDurationSeconds(row) : null),
-    canTrigger: key === "pipeline_a" || key === "pipeline_b" || key === "pipeline_c",
+    canTrigger: key === "pipeline_a" || key === "pipeline_c",
   };
 }
 
@@ -219,7 +219,7 @@ export async function getOperationsOverview(): Promise<OperationsOverview> {
   const health = [
     formatHealthRow("coordinator", latestByPipeline.coordinator),
     formatHealthRow("pipeline_a", latestByPipeline.pipeline_a),
-    formatHealthRow("pipeline_b", latestByPipeline.pipeline_b),
+    ...(latestByPipeline.pipeline_b ? [formatHealthRow("pipeline_b", latestByPipeline.pipeline_b)] : []),
     formatHealthRow("pipeline_c", latestByPipeline.pipeline_c),
     formatHealthRow("pipeline_d", pipelineDHealthRow),
   ];
@@ -234,9 +234,8 @@ export async function triggerOperationsPipeline(pipelineId: PipelineId) {
     throw new Error("Your session expired. Please sign in again.");
   }
 
-  const pipelineMap: Partial<Record<PipelineId, "a" | "b" | "c">> = {
+  const pipelineMap: Partial<Record<PipelineId, "a" | "c">> = {
     A: "a",
-    B: "b",
     C: "c",
   };
 
@@ -245,7 +244,6 @@ export async function triggerOperationsPipeline(pipelineId: PipelineId) {
 
   const messageMap = {
     a: "run pipeline a",
-    b: "run pipeline b",
     c: "run pipeline c",
   };
 

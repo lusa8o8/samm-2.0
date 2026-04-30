@@ -52,7 +52,7 @@ Deno.serve(async (req) => {
       pipeline_config: {
         pipeline_a_enabled: true,
         pipeline_a_run_time: '08:00',
-        pipeline_b_enabled: true,
+        pipeline_b_enabled: false,
         pipeline_b_run_day: 'monday',
         pipeline_b_run_time: '09:00',
         pipeline_c_enabled: true,

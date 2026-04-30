@@ -23,11 +23,10 @@ declare const EdgeRuntime: { waitUntil: (promise: Promise<unknown>) => void }
 const PIPELINE_TARGETS: Record<string, string> = {
   coordinator: 'coordinator',
   'pipeline-a-engagement': 'pipeline-a-engagement',
-  'pipeline-b-weekly': 'pipeline-b-weekly',
   'pipeline-c-campaign': 'pipeline-c-campaign',
   'pipeline-d-post': 'pipeline-d-post',
 }
-const WORKER_PIPELINE_TARGETS = new Set<string>(['pipeline-b-weekly', 'pipeline-c-campaign'])
+const WORKER_PIPELINE_TARGETS = new Set<string>(['pipeline-c-campaign'])
 
 const STALE_RUN_MINUTES = 10
 
@@ -210,14 +209,6 @@ export function inferPipelineTarget(text: string): PipelineTarget | null {
       id: 'pipeline-a-engagement',
       title: 'Run Pipeline A - Engagement',
       description: 'This will process the latest engagement queue and flag escalations.',
-    }
-  }
-
-  if (normalized.includes('weekly') || normalized.includes('pipeline b') || normalized.includes('pipeline-b') || normalized.includes('content pipeline')) {
-    return {
-      id: 'pipeline-b-weekly',
-      title: 'Fill baseline content slots',
-      description: 'This will draft baseline/support content for currently open calendar slots and queue approvals.',
     }
   }
 
