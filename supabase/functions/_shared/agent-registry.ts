@@ -23,8 +23,8 @@ export const AGENT_REGISTRY = {
     purpose: 'Drafts bounded platform replies from classified engagement context.',
     allowed_tools: ['write_reply'],
     required_inputs: ['classified_comment', 'brand_voice'],
-    produced_outputs: ['reply_text'],
-    supports_human_gate_handoff: false,
+    produced_outputs: ['reply_text', 'human_review_item'],
+    supports_human_gate_handoff: true,
     enabled_by_capability: 'engagement_enabled',
   },
   poll_poster: {

@@ -1,6 +1,5 @@
 import { getAgentDefinition } from '../_shared/agent-registry.ts'
 import { getIntegrationDefinition } from '../_shared/integration-registry.ts'
-import { areAmbassadorsEnabled } from '../_shared/org-capabilities.ts'
 import {
   executePipelineSteps,
   runPipelineExecution,
@@ -32,11 +31,12 @@ interface ClassifiedComment extends Comment {
 interface PipelineContext {
   orgId: string
   today: string
+  useMockComments: boolean
 }
 
 interface PipelineAState {
   comments_processed: number
-  replies_sent: number
+  reply_drafts_created: number
   escalations: number
   boosts_suggested: number
   spam_ignored: number
@@ -126,12 +126,37 @@ function getMockComments(): Comment[] {
 function createInitialResults(): PipelineAState {
   return {
     comments_processed: 0,
-    replies_sent: 0,
+    reply_drafts_created: 0,
     escalations: 0,
     boosts_suggested: 0,
     spam_ignored: 0,
     errors: [],
   }
+}
+
+function hasConnectorCredentials(connection: any) {
+  if (!connection || typeof connection !== 'object') return false
+  if (connection.connected === true) return true
+  return Boolean(connection.access_token || connection.page_id || connection.account_id || connection.channel_id)
+}
+
+async function fetchEngagementComments(context: PipelineAEngineContext): Promise<Comment[]> {
+  if (context.context.useMockComments) {
+    console.log('Using explicit mock engagement comments for Pipeline A test run')
+    return getMockComments()
+  }
+
+  const connections = context.config?.platform_connections ?? {}
+  const connectedPlatforms = ['facebook', 'whatsapp', 'youtube']
+    .filter((platform) => hasConnectorCredentials(connections[platform]))
+
+  if (connectedPlatforms.length === 0) {
+    console.log('No live engagement connectors configured; Pipeline A has no comments to process')
+    return []
+  }
+
+  console.log(`Live engagement connectors detected (${connectedPlatforms.join(', ')}), but comment adapters are not wired yet`)
+  return []
 }
 
 function createPipelineASteps(): PipelineExecutableStep<PipelineAState, PipelineAEngineContext>[] {
@@ -140,8 +165,8 @@ function createPipelineASteps(): PipelineExecutableStep<PipelineAState, Pipeline
       kind: 'task',
       id: 'fetch-comments',
       run: async ({ context }) => {
-        context.comments = getMockComments()
-        console.log(`Fetched ${context.comments.length} comments from mock feed`)
+        context.comments = await fetchEngagementComments(context)
+        console.log(`Fetched ${context.comments.length} comments for engagement review`)
       },
     },
     {
@@ -151,30 +176,6 @@ function createPipelineASteps(): PipelineExecutableStep<PipelineAState, Pipeline
       runItem: async ({ state, context, item }) => {
         await processComment(item as Comment, state, context)
       },
-    },
-    {
-      kind: 'parallel',
-      id: 'engagement-followups',
-      steps: [
-        {
-          kind: 'task',
-          id: 'post-daily-poll',
-          run: async ({ context }) => {
-            await postDailyPoll(context.supabase, context.anthropic, context.context, context.brandVoice)
-          },
-        },
-        {
-          kind: 'task',
-          id: 'check-ambassadors',
-          run: async ({ context }) => {
-            if (!areAmbassadorsEnabled(context.config)) {
-              console.log('Ambassadors module disabled; skipping ambassador checks')
-              return
-            }
-            await checkAmbassadors(context.supabase, context.context, context.config.kpi_targets)
-          },
-        },
-      ],
     },
   ]
 }
@@ -200,6 +201,7 @@ Deno.serve(async (req) => {
   const context: PipelineContext = {
     orgId,
     today: payload?.today ?? new Date().toISOString().split('T')[0],
+    useMockComments: payload?.use_mock_comments === true || payload?.useMockComments === true,
   }
 
   const config = await getOrgConfig(supabase, context.orgId)
@@ -260,18 +262,27 @@ async function processComment(
 
     if (classified.intent === 'routine') {
       const reply = await draftReply(engineContext.anthropic, classified, engineContext.brandVoice)
-      const { error: routineError } = await engineContext.supabase.from('content_registry').insert({
+      const { error: routineError } = await engineContext.supabase.from('human_inbox').insert({
         org_id: engineContext.context.orgId,
-        platform: comment.platform,
-        body: reply,
-        status: 'published',
-        published_at: new Date().toISOString(),
-        created_by: 'pipeline-a-engagement',
-        metadata: { intent: 'routine', original_comment: comment.text, author: comment.author },
+        item_type: 'suggestion',
+        priority: 'normal',
+        payload: {
+          type: 'Reply suggestion',
+          platform: comment.platform,
+          author: comment.author,
+          comment_text: comment.text,
+          post_id: comment.post_id,
+          reasoning: classified.reasoning,
+          suggested_response: reply,
+          suggestion: reply,
+          title: `Reply suggestion for ${comment.author}`,
+        },
+        created_by_pipeline: 'pipeline-a-engagement',
+        created_by_agent: getAgentDefinition('reply_writer').id,
       })
-      if (routineError) throw new Error(`Failed to insert routine reply: ${routineError.message}`)
-      results.replies_sent += 1
-      console.log(`  -> Reply drafted: "${reply.slice(0, 60)}..."`)
+      if (routineError) throw new Error(`Failed to queue routine reply suggestion: ${routineError.message}`)
+      results.reply_drafts_created += 1
+      console.log(`  -> Reply queued for human review: "${reply.slice(0, 60)}..."`)
     }
 
     if (classified.intent === 'complaint') {
@@ -287,46 +298,44 @@ async function processComment(
           post_id: comment.post_id,
           reasoning: classified.reasoning,
           suggested_response: suggestedResponse,
+          suggestion: suggestedResponse,
+          title: `Escalated reply needed for ${comment.author}`,
         },
         created_by_pipeline: 'pipeline-a-engagement',
-        created_by_agent: getAgentDefinition('classifier').id,
+        created_by_agent: getAgentDefinition('reply_writer').id,
       })
       if (inboxError) throw new Error(`Failed to insert escalation: ${inboxError.message}`)
       results.escalations += 1
+      results.reply_drafts_created += 1
       console.log('  -> Escalated to human inbox (complaint)')
     }
 
     if (classified.intent === 'boost') {
+      const reply = await draftReply(engineContext.anthropic, classified, engineContext.brandVoice)
       const { error: boostInboxError } = await engineContext.supabase.from('human_inbox').insert({
         org_id: engineContext.context.orgId,
         item_type: 'suggestion',
-        priority: 'fyi',
+        priority: 'normal',
         payload: {
+          type: 'Boost opportunity',
           platform: comment.platform,
           author: comment.author,
           comment_text: comment.text,
           reasoning: classified.reasoning,
+          suggested_response: reply,
+          title: `Boost opportunity from ${comment.author}`,
+          preview: 'This comment has high engagement potential - consider pinning it or responding publicly.',
+          rationale: classified.reasoning,
           suggestion: 'This comment has high engagement potential — consider pinning or responding publicly',
         },
         created_by_pipeline: 'pipeline-a-engagement',
-        created_by_agent: getAgentDefinition('classifier').id,
+        created_by_agent: getAgentDefinition('reply_writer').id,
       })
       if (boostInboxError) throw new Error(`Failed to insert boost suggestion: ${boostInboxError.message}`)
 
-      const reply = await draftReply(engineContext.anthropic, classified, engineContext.brandVoice)
-      const { error: contentError } = await engineContext.supabase.from('content_registry').insert({
-        org_id: engineContext.context.orgId,
-        platform: comment.platform,
-        body: reply,
-        status: 'published',
-        published_at: new Date().toISOString(),
-        created_by: 'pipeline-a-engagement',
-        metadata: { intent: 'boost', original_comment: comment.text, author: comment.author },
-      })
-      if (contentError) throw new Error(`Failed to insert boost reply: ${contentError.message}`)
       results.boosts_suggested += 1
-      results.replies_sent += 1
-      console.log('  -> Boost suggested + reply drafted')
+      results.reply_drafts_created += 1
+      console.log('  -> Boost suggestion queued for human review')
     }
   } catch (commentErr) {
     results.errors.push(`${comment.id}: ${(commentErr as Error).message}`)
@@ -429,94 +438,3 @@ Write the reply:`,
   const reply = response.content[0].type === 'text' ? response.content[0].text.trim() : `Hi there, thanks for reaching out ??? please DM us for more details.`
   return reply
 }
-
-async function postDailyPoll(
-  supabase: any,
-  anthropic: ReturnType<typeof createAnthropicClient>,
-  context: PipelineContext,
-  brandVoice: any,
-) {
-  void anthropic
-
-  const brandLabel = brandVoice?.full_name ?? brandVoice?.name ?? 'this brand'
-  const pollText = `What would you like to see more of from ${brandLabel} this week? A) Product tips B) Behind-the-scenes updates C) Special offers`
-
-  for (const platform of [getIntegrationDefinition('facebook').id, getIntegrationDefinition('whatsapp').id] as const) {
-    await supabase.from('content_registry').insert({
-      org_id: context.orgId,
-      platform,
-      body: pollText,
-      status: 'published',
-      published_at: new Date().toISOString(),
-      created_by: 'pipeline-a-engagement',
-    })
-  }
-
-  console.log(`Daily poll posted: "${pollText.slice(0, 60)}..."`)
-}
-
-async function checkAmbassadors(
-  supabase: any,
-  context: PipelineContext,
-  kpiTargets: any,
-) {
-  const checkinDays = kpiTargets.comment_response_hours
-    ? Math.ceil(kpiTargets.comment_response_hours / 24) * 7
-    : 7
-
-  const cutoffDate = new Date()
-  cutoffDate.setDate(cutoffDate.getDate() - checkinDays)
-
-  const { data: overdueAmbassadors } = await supabase
-    .from('ambassador_registry')
-    .select('*')
-    .eq('org_id', context.orgId)
-    .eq('status', 'active')
-    .or(`last_checkin.is.null,last_checkin.lte.${cutoffDate.toISOString()}`)
-
-  if (!overdueAmbassadors || overdueAmbassadors.length === 0) {
-    console.log('All ambassadors up to date')
-    return
-  }
-
-  console.log(`${overdueAmbassadors.length} ambassadors due for check-in`)
-
-  for (const ambassador of overdueAmbassadors) {
-    console.log(`  -> Check-in ping sent to ${ambassador.name} (mock)`)
-
-    const fourteenDaysAgo = new Date()
-    fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14)
-
-    const lastCheckin = ambassador.last_checkin
-      ? new Date(ambassador.last_checkin)
-      : null
-
-    if (!lastCheckin || lastCheckin < fourteenDaysAgo) {
-      await supabase
-        .from('ambassador_registry')
-        .update({
-          status: 'flagged',
-          flagged_reason: 'No check-in for 14+ days',
-          flagged_at: new Date().toISOString(),
-        })
-        .eq('id', ambassador.id)
-
-      await supabase.from('human_inbox').insert({
-        org_id: context.orgId,
-        item_type: 'ambassador_flag',
-        priority: 'normal',
-        payload: {
-          ambassador_id: ambassador.id,
-          name: ambassador.name,
-          university: ambassador.university,
-          reason: 'No check-in for 14+ days',
-          last_checkin: ambassador.last_checkin,
-          suggestion: 'Consider removing if unresponsive for another week',
-        },
-        created_by_pipeline: 'pipeline-a-engagement',
-        created_by_agent: getAgentDefinition('ambassador_checker').id,
-      })
-    }
-  }
-}
-
