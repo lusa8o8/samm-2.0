@@ -1,7 +1,7 @@
 export type WorkspacePipelineId = "A" | "B" | "C" | "D" | "publish";
 export type WorkspaceContentStatus = "draft" | "scheduled" | "published" | "failed";
 export type WorkspaceApprovalStatus = "pending" | "approved" | "rejected";
-export type WorkspaceChannel = "linkedin" | "twitter" | "instagram" | "email" | "facebook" | "whatsapp" | "youtube";
+export type WorkspaceChannel = "linkedin" | "twitter" | "instagram" | "email" | "facebook" | "whatsapp" | "youtube" | "blog";
 
 export type AssetReadinessState = "assets_ready" | "partial_assets" | "assets_needed";
 export type DayOwnershipMode = "campaign_exclusive" | "campaign_dominant" | "mixed" | "open" | "baseline";

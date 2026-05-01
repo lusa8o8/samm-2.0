@@ -1,4 +1,4 @@
-import { Mail, Linkedin } from "lucide-react";
+import { FileText, Mail, Linkedin } from "lucide-react";
 import { SiFacebook, SiInstagram, SiWhatsapp, SiX, SiYoutube } from "react-icons/si";
 import { cn } from "@/lib/utils";
 import type { WorkspaceChannel } from "@/components/workspace/calendar-studio/types";
@@ -14,6 +14,7 @@ const channelColors: Record<WorkspaceChannel, string> = {
   twitter: "text-[#1DA1F2]",
   instagram: "text-[#E1306C]",
   email: "text-slate-500",
+  blog: "text-slate-700",
   facebook: "text-[#1877F2]",
   whatsapp: "text-[#25D366]",
   youtube: "text-[#FF0000]",
@@ -37,6 +38,8 @@ export function ChannelIcon({ channel, size = 14, className }: ChannelIconProps)
       return <SiYoutube size={size} className={cn(colorClass, className)} />;
     case "email":
       return <Mail size={size} className={cn("text-slate-500", className)} />;
+    case "blog":
+      return <FileText size={size} className={cn(colorClass, className)} />;
     default:
       return null;
   }

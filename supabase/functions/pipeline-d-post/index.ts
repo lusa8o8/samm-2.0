@@ -35,6 +35,7 @@ const PLATFORM_DIMENSIONS: Record<string, string> = {
   whatsapp: '1080x1920',
   youtube: '1080x1920',
   email: '1200x628',
+  blog: '1200x630',
 }
 
 type CanonicalCopy = {
@@ -604,15 +605,17 @@ async function runPlatformAdapters(
     [getIntegrationDefinition('whatsapp').id]: 'under 200 characters, conversational, one clear call to action',
     [getIntegrationDefinition('youtube').id]: 'short community post, ask a question to drive comments',
     [getIntegrationDefinition('email').id]: 'start first line with Subject: then write email body, warm and helpful',
+    [getIntegrationDefinition('blog').id]: '500-700 word article with a clear title, short intro, 2-4 practical sections, concise conclusion, and CTA; avoid hype and do not invent facts',
   }
 
   const requests = platforms
     .filter((platform) => PLATFORM_INSTRUCTIONS[platform])
     .map(async (platform) => {
       try {
+        const isBlog = platform === getIntegrationDefinition('blog').id
         const response = await generateTextWithAnthropic(anthropic, {
           task: 'one_off_writer',
-          maxTokens: 200,
+          maxTokens: isBlog ? 900 : 200,
           system: `${buildSystemPrompt(brandVoice)}
 
 Write ONLY the post copy - no JSON, no quotes, no preamble.

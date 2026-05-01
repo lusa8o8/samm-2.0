@@ -133,6 +133,23 @@ export const INTEGRATION_REGISTRY = {
       max_posts_per_campaign: 1,
     },
   },
+  blog: {
+    id: 'blog',
+    label: 'Blog',
+    kind: 'content',
+    capabilities: ['publish_post', 'fetch_metrics'],
+    mocked: true,
+    metrics_provider: 'manual',
+    enabled_by_capability: 'blog_enabled',
+    // Long-form editorial lane. Opt-in only; not part of the default campaign mix.
+    cadence_policy: {
+      launch_blast: false,
+      sustaining_interval_days: 14,
+      preferred_days: ['tuesday'],
+      preferred_time_utc: '09:00',
+      max_posts_per_campaign: 1,
+    },
+  },
   studyhub: {
     id: 'studyhub',
     label: 'Custom App',

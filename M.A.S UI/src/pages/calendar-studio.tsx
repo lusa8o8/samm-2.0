@@ -72,7 +72,7 @@ type OneTimePostFormData = {
   scheduled_for: string;
   title: string;
   topic: string;
-  platform: "all" | "facebook" | "instagram" | "linkedin" | "whatsapp" | "youtube" | "email";
+  platform: "all" | "facebook" | "instagram" | "linkedin" | "whatsapp" | "youtube" | "email" | "blog";
   asset_need: "none" | "static" | "carousel" | "video";
   event_ref: string | null;
   campaign_name: string | null;
@@ -416,6 +416,7 @@ function OneTimePostForm({
               <SelectItem value="whatsapp">WhatsApp</SelectItem>
               <SelectItem value="youtube">YouTube</SelectItem>
               <SelectItem value="email">Email</SelectItem>
+              <SelectItem value="blog">Blog</SelectItem>
             </SelectContent>
           </Select>
         </div>

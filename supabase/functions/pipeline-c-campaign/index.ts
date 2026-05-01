@@ -1020,12 +1020,20 @@ async function runPlatformCopyAdapters(
     })
   }
 
+  if (requestedPlatforms.has(getIntegrationDefinition('blog').id)) {
+    platforms.push({
+      platform: getIntegrationDefinition('blog').id,
+      instruction: '500-700 word campaign article with a clear title, short intro, 2-4 useful sections, concise conclusion, and CTA; avoid hype and do not invent facts',
+    })
+  }
+
   const results = await Promise.all(
     platforms.map(async (p, index) => {
       try {
+        const isBlog = p.platform === getIntegrationDefinition('blog').id
         const response = await generateTextWithAnthropic(anthropic, {
           task: 'platform_copywriter',
-          maxTokens: 200,
+          maxTokens: isBlog ? 900 : 200,
           system: `${buildSystemPrompt(brandVoice)}
 
 Write ONLY the post copy — no JSON, no quotes around it, no preamble.
@@ -1093,9 +1101,10 @@ async function runScheduledPlatformCopyAdapters(
   const results = await Promise.all(
     contentPlan.map(async (item) => {
       try {
+        const isBlog = item.channel === getIntegrationDefinition('blog').id || item.content_type === 'blog'
         const response = await generateTextWithAnthropic(anthropic, {
           task: 'platform_copywriter',
-          maxTokens: 220,
+          maxTokens: isBlog ? 900 : 220,
           system: `${buildSystemPrompt(brandVoice)}
 
 Write ONLY the post copy - no JSON, no quotes around it, no preamble.
@@ -1294,6 +1303,7 @@ You MUST include: exact brand colors, font names, logo file location, exact soci
 Do not substitute, invent, or omit any of these values.
 Never invent placeholder footer text, domains, or links such as "reallygreatsite.com" or "example.com".
 If a campaign schedule is provided, describe the visual set by date and role so the user can generate matching campaign visuals externally.
+If a schedule row has channel blog or visual_need text_only, treat it as copy-only/editorial support and do not request a visual asset for that row.
 If a value is missing, explicitly say to omit it rather than guessing.`,
     messages: [{
       role: 'user',
@@ -1623,8 +1633,9 @@ function buildCampaignScheduleProposal(params: {
   const chosenSlots = spreadSlots(candidateSlots, desiredCount)
   return normalizeCampaignSchedule(chosenSlots.map((slot, index) => {
     const template = templates[Math.min(index, templates.length - 1)]
+    const isBlog = slot.channel === getIntegrationDefinition('blog').id
     const daysUntilEvent = Math.max(0, diffDaysInclusive(slot.date, event.event_date) - 1)
-    const countdownLabel = template.content_type === 'countdown' || daysUntilEvent <= 3
+    const countdownLabel = !isBlog && (template.content_type === 'countdown' || daysUntilEvent <= 3)
       ? `${daysUntilEvent} day${daysUntilEvent === 1 ? '' : 's'} to ${event.label}`
       : null
 
@@ -1632,11 +1643,11 @@ function buildCampaignScheduleProposal(params: {
       slot_id: slot.slot_id,
       date: slot.date,
       channel: slot.channel,
-      role: template.role,
-      content_type: template.content_type,
-      visual_need: template.visual_need,
-      title_seed: `${brief.name}: ${template.role}`,
-      rationale: template.rationale,
+      role: isBlog ? 'long-form blog article' : template.role,
+      content_type: isBlog ? 'blog' : template.content_type,
+      visual_need: isBlog ? 'text_only' : template.visual_need,
+      title_seed: isBlog ? `${brief.name}: long-form blog article` : `${brief.name}: ${template.role}`,
+      rationale: isBlog ? 'Create a longer-form source asset that can anchor or support the campaign.' : template.rationale,
       countdown_label: countdownLabel,
     }
   }))
@@ -1690,17 +1701,24 @@ function spreadSlots(slots: ResolvedCalendarSlot[], count: number): ResolvedCale
 
 function buildLegacyCampaignScheduleFromBrief(brief: CampaignBrief, event: CalendarEvent): CampaignScheduleItem[] {
   const channels = normalizeChannels(brief.platforms, ['facebook', 'whatsapp', 'youtube', 'email'])
-  return channels.slice(0, 6).map((channel, index) => ({
-    slot_id: `${event.event_date}:${channel}:campaign:${event.id}:legacy:${index + 1}`,
-    date: event.event_date,
-    channel,
-    role: index === 0 ? 'campaign kickoff' : 'campaign support',
-    content_type: index === 0 ? 'announcement' : 'campaign',
-    visual_need: channel === 'email' ? 'text_only' : 'static',
-    title_seed: `${brief.name}: ${index === 0 ? 'campaign kickoff' : 'campaign support'}`,
-    rationale: 'Fallback campaign item created because no approved schedule was available.',
-    countdown_label: null,
-  }))
+  return channels.slice(0, 6).map((channel, index) => {
+    const isBlog = channel === getIntegrationDefinition('blog').id
+    const role = isBlog ? 'long-form blog article' : index === 0 ? 'campaign kickoff' : 'campaign support'
+
+    return {
+      slot_id: `${event.event_date}:${channel}:campaign:${event.id}:legacy:${index + 1}`,
+      date: event.event_date,
+      channel,
+      role,
+      content_type: isBlog ? 'blog' : index === 0 ? 'announcement' : 'campaign',
+      visual_need: channel === 'email' || isBlog ? 'text_only' : 'static',
+      title_seed: `${brief.name}: ${role}`,
+      rationale: isBlog
+        ? 'Fallback editorial campaign item created because no approved schedule was available.'
+        : 'Fallback campaign item created because no approved schedule was available.',
+      countdown_label: null,
+    }
+  })
 }
 
 function buildPlatformInstruction(channel: string, role: string, contentType: string): string {
@@ -1711,6 +1729,7 @@ function buildPlatformInstruction(channel: string, role: string, contentType: st
     whatsapp: 'under 200 characters, conversational, one clear call to action',
     youtube: 'short community post, ask a question to drive comments',
     email: 'start first line with Subject: then write email body, warm and helpful',
+    blog: '500-700 word article with a clear title, short intro, 2-4 useful sections, concise conclusion, and CTA; avoid hype and do not invent facts',
   }
   const roleInstruction = contentType === 'countdown' || role.toLowerCase().includes('countdown')
     ? 'Make the countdown or urgency explicit without sounding spammy.'

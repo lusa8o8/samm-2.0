@@ -66,6 +66,7 @@ const PLATFORM_LABELS: Record<string, string> = {
   whatsapp: "WhatsApp",
   youtube: "YouTube",
   email: "Email",
+  blog: "Blog",
   linkedin: "LinkedIn",
   instagram: "Instagram",
   twitter: "X",

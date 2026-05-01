@@ -214,6 +214,8 @@ function normalizeChannel(value?: string | null): WorkspaceChannel | null {
       return "facebook";
     case "email":
       return "email";
+    case "blog":
+      return "blog";
     case "instagram":
       return "instagram";
     case "linkedin":

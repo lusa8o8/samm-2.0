@@ -48,6 +48,7 @@ const PLATFORM_ICONS: Record<string, React.ElementType> = {
   whatsapp: SiWhatsapp,
   youtube: SiYoutube,
   email: Mail,
+  blog: FileText,
   studyhub: Clock,
 };
 
@@ -57,6 +58,8 @@ const PLATFORM_COLORS: Record<string, string> = {
   linkedin: "text-[#0A66C2]",
   whatsapp: "text-[#25D366]",
   youtube: "text-[#FF0000]",
+  email: "text-slate-600",
+  blog: "text-slate-700",
 };
 
 const PLATFORM_LABELS: Record<string, string> = {
@@ -66,6 +69,7 @@ const PLATFORM_LABELS: Record<string, string> = {
   whatsapp: "WhatsApp",
   youtube: "YouTube",
   email: "Email",
+  blog: "Blog",
   studyhub: "StudyHub",
   design_brief: "Design Brief",
 };

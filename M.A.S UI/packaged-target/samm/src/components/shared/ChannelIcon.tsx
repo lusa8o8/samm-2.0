@@ -14,6 +14,7 @@ const channelColors: Record<Channel, string> = {
   twitter: 'text-[#1DA1F2]',
   instagram: 'text-[#E1306C]',
   email: 'text-slate-500',
+  blog: 'text-slate-700',
   facebook: 'text-[#1877F2]',
   whatsapp: 'text-[#25D366]',
   youtube: 'text-[#FF0000]',
@@ -30,6 +31,7 @@ export function ChannelIcon({ channel, size = 14, className }: ChannelIconProps)
     case 'facebook': return <SiFacebook size={size} className={cn(colorClass, className)} />;
     case 'whatsapp': return <SiWhatsapp size={size} className={cn(colorClass, className)} />;
     case 'youtube': return <SiYoutube size={size} className={cn(colorClass, className)} />;
+    case 'blog': return <FileText size={size} className={cn(colorClass, className)} />;
     case 'design_brief': return <FileText size={size} className={cn(colorClass, className)} />;
     case 'email': return <Mail size={size} className={cn('text-slate-500', className)} />;
     default: return null;

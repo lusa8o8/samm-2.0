@@ -23,7 +23,7 @@ export type RunStatus = 'running' | 'waiting_human' | 'failed' | 'completed' | '
 export type ContentStatus = 'draft' | 'scheduled' | 'published' | 'failed' | 'rejected';
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'actioned';
 export type Priority = 'high' | 'medium' | 'low';
-export type Channel = 'linkedin' | 'twitter' | 'instagram' | 'email' | 'facebook' | 'whatsapp' | 'youtube' | 'design_brief';
+export type Channel = 'linkedin' | 'twitter' | 'instagram' | 'email' | 'facebook' | 'whatsapp' | 'youtube' | 'blog' | 'design_brief';
 export type ContentType = 'post' | 'story' | 'article' | 'email' | 'reel';
 export type EventType = 'campaign_launch' | 'product_release' | 'webinar' | 'holiday' | 'promotion';
 

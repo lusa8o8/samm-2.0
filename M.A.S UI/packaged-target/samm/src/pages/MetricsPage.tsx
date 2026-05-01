@@ -10,6 +10,7 @@ const channelLabels: Record<Channel, string> = {
   twitter: 'X (Twitter)',
   instagram: 'Instagram',
   email: 'Email',
+  blog: 'Blog',
   facebook: 'Facebook',
   whatsapp: 'WhatsApp',
   youtube: 'YouTube',
