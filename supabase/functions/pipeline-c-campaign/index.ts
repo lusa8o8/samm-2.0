@@ -261,6 +261,46 @@ Deno.serve(async (req) => {
       defaultChannels: structuredConfig?.campaignDefaults?.default_channels ?? undefined,
     })
     results.campaign_window = campaignWindow
+
+    const existingCampaignBrief = await findExistingCampaignBrief(supabase, context.orgId, event)
+    if (existingCampaignBrief) {
+      const payload = (existingCampaignBrief.payload ?? {}) as Record<string, any>
+      const storedBrief = normalizeCampaignBrief(payload.campaign_brief)
+      const storedSchedule = normalizeCampaignSchedule(
+        payload.proposed_schedule
+          ?? storedBrief?.proposed_schedule
+          ?? [],
+      )
+
+      if (storedBrief) storedBrief.proposed_schedule = storedSchedule
+      results.campaign_brief_sent = true
+      results.campaign_name = storedBrief?.name ?? asNonEmptyString(payload.event_label, event.label)
+      results.campaign_brief = storedBrief
+      results.campaign_schedule = storedSchedule
+      results.campaign_brief_inbox_id = asNonEmptyString(existingCampaignBrief.id) || null
+      results.campaign_constraints = payload.campaign_constraints
+        ?? (deriveCampaignConstraintOutput(campaignWindow, { campaignBrief: storedBrief ?? undefined }) as CampaignConstraintOutput | null)
+
+      await updatePipelineCRun(
+        supabase,
+        runId,
+        PIPELINE_RUN_STATUS.WAITING_HUMAN,
+        results,
+      )
+
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          waiting_human: true,
+          duplicate_prevented: true,
+          existing_campaign_brief_id: existingCampaignBrief.id,
+          run_id: runId,
+          ...results,
+        }),
+        { headers: { 'Content-Type': 'application/json' } },
+      )
+    }
+
     const planningHorizonDays = derivePlanningHorizonDays(context.today, campaignWindow.window_end)
     const planningContext = await loadCampaignCalendarPlanningContext(supabase, context.orgId, context.today, {
       horizonDays: planningHorizonDays,
@@ -315,7 +355,7 @@ Deno.serve(async (req) => {
     })
     campaignBrief.proposed_schedule = proposedSchedule
 
-    const { data: inboxRow } = await supabase
+    const { data: inboxRow, error: inboxInsertError } = await supabase
       .from('human_inbox')
       .insert({
         org_id: context.orgId,
@@ -325,6 +365,8 @@ Deno.serve(async (req) => {
           campaign_brief: campaignBrief,
           proposed_schedule: proposedSchedule,
           campaign_constraints: deriveCampaignConstraintOutput(campaignWindow, { campaignBrief }),
+          event_id: event.id,
+          calendar_event_id: event.id,
           event_label: event.label,
           event_date: event.event_date,
           universities: event.universities,
@@ -341,6 +383,10 @@ Deno.serve(async (req) => {
       })
       .select('id')
       .single()
+
+    if (inboxInsertError) {
+      throw new Error(`Failed to create Pipeline C campaign brief inbox item: ${inboxInsertError.message}`)
+    }
 
     results.campaign_brief_sent = true
     results.campaign_name = campaignBrief.name
@@ -438,6 +484,34 @@ async function updatePipelineCRun(supabase: any, runId: string | null, status: s
   })
 }
 
+async function findExistingCampaignBrief(supabase: any, orgId: string, event: CalendarEvent) {
+  const { data, error } = await supabase
+    .from('human_inbox')
+    .select('id, status, payload, created_at')
+    .eq('org_id', orgId)
+    .eq('item_type', 'campaign_brief')
+    .eq('created_by_pipeline', 'pipeline-c-campaign')
+    .order('created_at', { ascending: false })
+    .limit(50)
+
+  if (error) throw new Error(`Failed to check existing campaign briefs: ${error.message}`)
+
+  return (data ?? []).find((row: any) => {
+    if (row.status === 'rejected' || row.status === 'cancelled') return false
+    const payload = (row.payload ?? {}) as Record<string, unknown>
+    const eventId = asNonEmptyString(payload.event_id) || asNonEmptyString(payload.calendar_event_id)
+    if (eventId && eventId === event.id) return true
+
+    const eventDate = asNonEmptyString(payload.event_date)
+    const eventLabel = normalizeComparableText(payload.event_label)
+    return eventDate === event.event_date && eventLabel === normalizeComparableText(event.label)
+  }) ?? null
+}
+
+function normalizeComparableText(value: unknown): string {
+  return String(value ?? '').trim().replace(/\s+/g, ' ').toLowerCase()
+}
+
 async function resumePipelineCRun(params: { supabase: any; anthropic: ReturnType<typeof createAnthropicClient>; context: PipelineContext; config: any; runId: string }) {
   const { supabase, anthropic, context, config, runId } = params
   const run = await loadPipelineCRun(supabase, context.orgId, runId)
@@ -512,15 +586,10 @@ async function resumePipelineCRun(params: { supabase: any; anthropic: ReturnType
         ?? results.campaign_schedule
         ?? [],
     )
-    const resolvedSchedule = campaignSchedule.length
-      ? campaignSchedule
-      : buildCampaignScheduleProposal({
-          brief: campaignBrief,
-          event,
-          campaignWindow,
-          slots: [],
-          today: context.today,
-        })
+    if (!campaignSchedule.length) {
+      throw new Error('Pipeline C campaign brief has no approved schedule items. Add at least one campaign schedule row before approving the brief.')
+    }
+    const resolvedSchedule = campaignSchedule
     campaignBrief.proposed_schedule = resolvedSchedule
     results.campaign_brief = campaignBrief
     results.campaign_schedule = resolvedSchedule
@@ -586,6 +655,34 @@ async function resumePipelineCRun(params: { supabase: any; anthropic: ReturnType
       return new Response(JSON.stringify({ ok: true, resumed: true, run_id: runId, ...results }), { headers: { 'Content-Type': 'application/json' } })
     }
 
+    const { data: existingContentRows, error: existingContentError } = await supabase
+      .from('content_registry')
+      .select('id, status, platform')
+      .eq('pipeline_run_id', runId)
+      .eq('org_id', context.orgId)
+
+    if (existingContentError) {
+      throw new Error(`Failed to check existing Pipeline C content: ${existingContentError.message}`)
+    }
+
+    const existingCopyRows = (existingContentRows ?? []).filter((r: any) => r.platform !== 'design_brief')
+    if (existingCopyRows.length > 0) {
+      results.copy_assets_created = existingCopyRows.length
+      results.design_brief_sent = (existingContentRows ?? []).some((r: any) => r.platform === 'design_brief')
+      await updatePipelineCRun(supabase, runId, PIPELINE_RUN_STATUS.WAITING_HUMAN, results)
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          waiting_human: true,
+          marketer_gate: true,
+          duplicate_generation_prevented: true,
+          run_id: runId,
+          ...results,
+        }),
+        { headers: { 'Content-Type': 'application/json' } },
+      )
+    }
+
     // ── STAGE 1: CEO brief approved — create copy assets and pause ────
     console.log('Writing canonical campaign message...')
     const canonicalCopy = await runCanonicalCopyWriter(anthropic, campaignBrief, event, config.brand_voice)
@@ -609,14 +706,13 @@ async function resumePipelineCRun(params: { supabase: any; anthropic: ReturnType
 
     results.copy_assets_created = copyAssets.length
 
-    // Build the full schedule once before inserting — cadence engine assigns
-    // platform-aware scheduled_at for launch blast + sustaining posts.
-    const schedules = buildCadenceSchedule(copyAssets, context.today, event.event_date)
-
     for (let i = 0; i < copyAssets.length; i++) {
       const asset = copyAssets[i]
-      const scheduleItem = asset.schedule_item as CampaignScheduleItem | undefined
-      const scheduledAt = scheduleItem ? buildScheduledAtForPlanItem(scheduleItem) : schedules[i]
+      const scheduleItem = (asset.schedule_item as CampaignScheduleItem | undefined) ?? committedSchedule[i]
+      if (!scheduleItem) {
+        throw new Error(`Pipeline C copy asset ${i + 1} has no approved campaign schedule item`)
+      }
+      const scheduledAt = buildScheduledAtForPlanItem(scheduleItem)
       const { data: insertedContent, error: copyInsertError } = await supabase
         .from('content_registry')
         .insert({

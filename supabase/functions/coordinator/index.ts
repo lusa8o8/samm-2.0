@@ -109,21 +109,31 @@ Deno.serve(async (req) => {
     // It remains available as an explicit baseline/open-slot drafting action.
 
     // ── 5. fire pipeline_c for any calendar events due today ──────────
+    let calendarEventsTriggered = 0
     if (config.pipeline_config.pipeline_c.enabled) {
       for (const event of dueToday) {
+        let shouldMarkTriggered = event.pipeline_trigger !== 'pipeline_c'
+
         if (event.pipeline_trigger === 'pipeline_c') {
-          await invokePipeline(supabase, 'pipeline-c-campaign', {
+          const pipelineResult = await invokePipeline(supabase, 'pipeline-c-campaign', {
             ...context,
             calendarEvent: event
           })
+          shouldMarkTriggered = pipelineResult.ok
         }
-        await supabase
-          .from('academic_calendar')
-          .update({
-            triggered: true,
-            triggered_at: new Date().toISOString()
-          })
-          .eq('id', event.id)
+
+        if (shouldMarkTriggered) {
+          await supabase
+            .from('academic_calendar')
+            .update({
+              triggered: true,
+              triggered_at: new Date().toISOString()
+            })
+            .eq('id', event.id)
+          calendarEventsTriggered += 1
+        } else {
+          console.error(`Skipped triggered flag for calendar event ${event.id}; Pipeline C did not complete handoff.`)
+        }
       }
     }
 
@@ -132,8 +142,8 @@ Deno.serve(async (req) => {
     ].reduce((a, b) => a + b, 0)
 
     await finishRun(supabase, runId, 'success', {
-      pipelines_fired: dueToday.length + automaticPipelinesFired,
-      calendar_events_triggered: dueToday.length,
+      pipelines_fired: calendarEventsTriggered + automaticPipelinesFired,
+      calendar_events_triggered: calendarEventsTriggered,
       events: dueToday.map((e: CalendarEvent) => e.label)
     })
 
@@ -142,7 +152,7 @@ Deno.serve(async (req) => {
         ok: true,
         today,
         pipeline_b_auto_run: false,
-        calendar_events_triggered: dueToday.length,
+        calendar_events_triggered: calendarEventsTriggered,
         events: dueToday.map((e: CalendarEvent) => e.label)
       }),
       { headers: { 'Content-Type': 'application/json' } }
@@ -163,12 +173,22 @@ async function invokePipeline(
   supabase: any,
   fnName: string,
   context: unknown
-) {
-  const { error } = await supabase.functions.invoke(fnName, { body: context })
+): Promise<{ ok: boolean; data?: unknown; error?: string }> {
+  const { data, error } = await supabase.functions.invoke(fnName, { body: context })
   if (error) {
     console.error(`Failed to invoke ${fnName}:`, error.message)
-    // don't throw — one pipeline failing shouldn't stop the others
+    return { ok: false, error: error.message }
   }
+
+  if (data && typeof data === 'object' && (data as Record<string, unknown>).ok === false) {
+    const message = typeof (data as Record<string, unknown>).error === 'string'
+      ? String((data as Record<string, unknown>).error)
+      : `${fnName} returned ok:false`
+    console.error(`Failed to invoke ${fnName}:`, message)
+    return { ok: false, data, error: message }
+  }
+
+  return { ok: true, data }
 }
 
 async function startRun(
