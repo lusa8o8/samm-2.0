@@ -22,6 +22,7 @@ import {
   normalizeAssetNeed,
   type AssetNeed,
 } from '../_shared/asset-brief-contract.ts'
+import { resolveCampaignPrepLeadDays } from '../_shared/calendar-coordination.ts'
 import { ensureDashboardMemoryContext } from '../_shared/samm-memory.ts'
 
 type ChatRole = 'user' | 'coordinator'
@@ -934,6 +935,7 @@ Deno.serve(async (req) => {
         return jsonResponse({ message: 'Cancelled.', suggestions })
       }
 
+      const prepLeadDays = resolveCampaignPrepLeadDays(action.event_type ?? 'other', action.label)
       const calendarPayload = {
         org_id: orgId,
         label: action.label,
@@ -941,7 +943,7 @@ Deno.serve(async (req) => {
         event_type: action.event_type ?? 'other',
         universities: action.universities ?? [],
         triggered: false,
-        lead_days: 21,
+        lead_days: prepLeadDays,
         pipeline_trigger: 'pipeline_c',
       }
 

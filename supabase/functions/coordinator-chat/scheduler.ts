@@ -15,6 +15,7 @@ import {
 import {
   evaluatePipelineAdmission,
   loadCampaignCalendarPlanningContext,
+  resolveCampaignPrepLeadDays,
 } from '../_shared/calendar-coordination.ts'
 
 // EdgeRuntime is a Supabase Edge Runtime global — not in standard Deno types.
@@ -468,7 +469,7 @@ async function schedulePipelineRun(
       event_type: eventContext.event_type,
       event_end_date: null,
       universities: eventContext.universities,
-      lead_days: 21,
+      lead_days: resolveCampaignPrepLeadDays(eventContext.event_type, eventContext.label),
     }
   }
 

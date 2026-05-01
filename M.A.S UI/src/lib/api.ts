@@ -5,6 +5,33 @@ import { getAccessToken, getOrgId, supabase } from "@/lib/supabase";
 type QueryHookOptions = { query?: Record<string, any> };
 type MutationHookOptions = { mutation?: Record<string, any> };
 
+const DEFAULT_CAMPAIGN_PREP_LEAD_DAYS = 7;
+
+function resolveCampaignPrepLeadDays(eventType?: string | null, label?: string | null) {
+  const text = `${eventType ?? ""} ${label ?? ""}`.toLowerCase();
+
+  if (text.includes("one_time") || text.includes("one-time") || text.includes("one time")) return 0;
+  if (
+    text.includes("graduation") ||
+    text.includes("exam") ||
+    text.includes("deadline") ||
+    text.includes("major")
+  ) {
+    return 21;
+  }
+  if (
+    text.includes("launch") ||
+    text.includes("promotion") ||
+    text.includes("promo") ||
+    text.includes("seasonal") ||
+    text.includes("holiday")
+  ) {
+    return 14;
+  }
+
+  return DEFAULT_CAMPAIGN_PREP_LEAD_DAYS;
+}
+
 type InboxFilter = {
   status?: string;
   priority?: string;
@@ -1762,7 +1789,7 @@ export function useCreateCalendarEvent(options?: MutationHookOptions) {
         support_content_allowed: data.support_content_allowed ?? false,
         org_id: getOrgId(),
         triggered: false,
-        lead_days: 21,
+        lead_days: resolveCampaignPrepLeadDays(data.event_type, data.label),
         pipeline_trigger: "pipeline_c",
       };
 

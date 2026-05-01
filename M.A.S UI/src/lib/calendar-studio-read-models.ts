@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
 import {
-  addDays as addCalendarDays,
   differenceInCalendarDays,
   eachDayOfInterval,
   endOfMonth,
@@ -145,7 +144,6 @@ type NormalizedContentRow = {
 };
 
 const WEEKDAY_LABELS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
-const DEFAULT_LEAD_DAYS = 21;
 
 function getCalendarStudioSourceQueryKey() {
   return ["calendar-studio", "source", getOrgId()];
@@ -306,8 +304,9 @@ function resolveStudioWindow(row: CalendarStudioCalendarRow): ResolvedStudioWind
   const eventDate = safeString(row.event_date);
   if (!eventId || !eventDate) return null;
 
-  const leadDays = safeNumber(row.lead_days) ?? DEFAULT_LEAD_DAYS;
-  const windowStart = format(addCalendarDays(parseISO(eventDate), -leadDays), "yyyy-MM-dd");
+  // lead_days is only a backend prep trigger. Calendar Studio should show
+  // the actual campaign/event range, not every prep day before it.
+  const windowStart = eventDate;
   const windowEnd = safeString(row.event_end_date) ?? eventDate;
   const supportContentAllowed = Boolean(row.support_content_allowed);
   const ownerPipeline = normalizePipelineId(row.owner_pipeline ?? row.pipeline_trigger ?? null);

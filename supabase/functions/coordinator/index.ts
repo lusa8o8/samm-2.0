@@ -3,6 +3,7 @@ import {
   linkCoordinatorTaskToPipelineRun,
   syncCoordinatorTaskFromRun,
 } from '../_shared/samm-memory.ts'
+import { resolveCampaignPrepLeadDays } from '../_shared/calendar-coordination.ts'
 // supabase/functions/coordinator/index.ts
 // ─────────────────────────────────────────────────────────────────────
 // Coordinator — runs daily at 07:00
@@ -23,7 +24,7 @@ interface CalendarEvent {
   event_end_date: string | null
   label: string
   universities: string[]
-  lead_days: number
+  lead_days: number | null
   pipeline_trigger: 'pipeline_b' | 'pipeline_c'
 }
 
@@ -79,7 +80,10 @@ Deno.serve(async (req) => {
     if (calErr) throw calErr
 
     const dueToday = (calendarEvents ?? []).filter((e: CalendarEvent) => {
-      const triggerOn = subtractDays(e.event_date, e.lead_days)
+      const leadDays = typeof e.lead_days === 'number'
+        ? e.lead_days
+        : resolveCampaignPrepLeadDays(e.event_type, e.label)
+      const triggerOn = subtractDays(e.event_date, leadDays)
       return triggerOn <= today
     })
 

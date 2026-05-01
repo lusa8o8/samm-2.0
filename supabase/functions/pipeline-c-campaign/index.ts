@@ -27,6 +27,7 @@ import { buildBrandVisualRules, renderBrandVisualRules } from '../_shared/brand-
 import {
   deriveCampaignConstraintOutput,
   resolveCampaignWindow,
+  resolveCampaignPrepLeadDays,
   loadCampaignCalendarPlanningContext,
   type ResolvedCalendarSlot,
   type ResolvedCampaignWindow,
@@ -1463,7 +1464,7 @@ async function getNextCalendarEvent(supabase: any, orgId: string, today: string)
     event_end_date: nextWindow.event_end_date ?? null,
     label: nextWindow.label,
     universities: nextWindow.universities ?? [],
-    lead_days: nextWindow.lead_days ?? 21,
+    lead_days: nextWindow.lead_days ?? resolveCampaignPrepLeadDays(nextWindow.event_type, nextWindow.label),
     creative_override_allowed: Boolean(nextEvent?.creative_override_allowed ?? false),
   }
 }
@@ -1594,20 +1595,13 @@ function buildCampaignScheduleProposal(params: {
       : ['facebook', 'whatsapp', 'youtube', 'email'],
   )
   const endDate = campaignWindow.window_end || event.event_date
-  const campaignSlots = slots
-    .filter((slot) =>
-      slot.purpose === 'campaign' &&
-      slot.owner_pipeline === 'pipeline-c-campaign' &&
-      slot.campaign_ref === campaignWindow.event_id &&
-      slot.date >= today &&
-      slot.date <= endDate &&
-      channels.includes(slot.channel) &&
-      slot.current_posts < slot.max_posts
-    )
-
-  const candidateSlots = campaignSlots.length
-    ? campaignSlots
-    : buildVirtualCampaignSlots(today, endDate, channels, campaignWindow)
+  const occupiedSlotIds = new Set(
+    slots
+      .filter((slot) => slot.campaign_ref === campaignWindow.event_id && slot.current_posts >= slot.max_posts)
+      .map((slot) => slot.slot_id),
+  )
+  const candidateSlots = buildVirtualCampaignSlots(today, endDate, channels, campaignWindow)
+    .filter((slot) => !occupiedSlotIds.has(slot.slot_id))
 
   if (candidateSlots.length === 0) return []
 

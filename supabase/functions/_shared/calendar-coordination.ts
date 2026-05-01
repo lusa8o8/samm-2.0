@@ -1,4 +1,5 @@
 export const DEFAULT_PLANNING_HORIZON_DAYS = 7
+export const DEFAULT_CAMPAIGN_PREP_LEAD_DAYS = 7
 export const DEFAULT_SLOT_CHANNELS = ['facebook', 'whatsapp', 'youtube', 'email'] as const
 export const DEFAULT_SUPPORT_CONTENT_TYPES = ['reminder', 'reinforcement', 'faq', 'testimonial', 'countdown'] as const
 
@@ -62,6 +63,26 @@ export interface ResolvedCampaignWindow {
   universities: string[]
 }
 
+export interface CampaignPlanItemRow {
+  id: string
+  org_id: string
+  calendar_event_id?: string | null
+  pipeline_run_id?: string | null
+  inbox_item_id?: string | null
+  slot_id: string
+  scheduled_for: string
+  channel: string
+  role: string
+  content_type: string
+  visual_need: string
+  title_seed?: string | null
+  rationale?: string | null
+  countdown_label?: string | null
+  status: string
+  content_registry_id?: string | null
+  metadata?: Record<string, unknown> | null
+}
+
 export interface ResolvedCalendarSlot {
   slot_id: string
   date: string
@@ -82,6 +103,7 @@ export interface CalendarPlanningContext {
   horizon_end: string
   events: CampaignCalendarEventRow[]
   windows: ResolvedCampaignWindow[]
+  campaign_plan_items: CampaignPlanItemRow[]
   slots: ResolvedCalendarSlot[]
   active_windows: ResolvedCampaignWindow[]
   baseline_slots: ResolvedCalendarSlot[]
@@ -182,6 +204,31 @@ function normalizeOwnerPipeline(event: CampaignCalendarEventRow) {
   return 'pipeline-c-campaign'
 }
 
+export function resolveCampaignPrepLeadDays(eventType?: string | null, label?: string | null) {
+  const text = `${eventType ?? ''} ${label ?? ''}`.toLowerCase()
+
+  if (text.includes('one_time') || text.includes('one-time') || text.includes('one time')) return 0
+  if (
+    text.includes('graduation') ||
+    text.includes('exam') ||
+    text.includes('deadline') ||
+    text.includes('major')
+  ) {
+    return 21
+  }
+  if (
+    text.includes('launch') ||
+    text.includes('promotion') ||
+    text.includes('promo') ||
+    text.includes('seasonal') ||
+    text.includes('holiday')
+  ) {
+    return 14
+  }
+
+  return DEFAULT_CAMPAIGN_PREP_LEAD_DAYS
+}
+
 function derivePriority(event: CampaignCalendarEventRow) {
   const explicit = asNumber(event.priority, null)
   if (explicit !== null) return explicit
@@ -198,7 +245,8 @@ export function resolveCampaignWindow(
     defaultChannels?: string[]
   },
 ): ResolvedCampaignWindow {
-  const leadDays = asNumber(event.lead_days, 21) ?? 21
+  const fallbackLeadDays = resolveCampaignPrepLeadDays(event.event_type, event.label)
+  const leadDays = asNumber(event.lead_days, fallbackLeadDays) ?? fallbackLeadDays
   const defaultChannels = options?.defaultChannels?.length
     ? options.defaultChannels
     : [...DEFAULT_SLOT_CHANNELS]
@@ -208,7 +256,9 @@ export function resolveCampaignWindow(
     event.support_content_allowed,
     asBoolean(event.creative_override_allowed, false),
   )
-  const windowStart = addDays(event.event_date, -leadDays)
+  // lead_days is a prep trigger for Pipeline C. It must not turn every prep day
+  // into campaign-owned content space; approved campaign_plan_items drive those dates.
+  const windowStart = event.event_date
   const windowEnd = event.event_end_date ?? event.event_date
 
   return {
@@ -279,6 +329,7 @@ function deriveSupportGapDays(window: ResolvedCampaignWindow) {
 
 export function resolveCalendarSlots(params: {
   windows: ResolvedCampaignWindow[]
+  campaignPlanItems?: CampaignPlanItemRow[]
   startDate: string
   horizonDays?: number
   defaultChannels?: string[]
@@ -368,7 +419,52 @@ export function resolveCalendarSlots(params: {
     supportSlotsUsedByWindow.set(winningWindow.window_id, supportUsed + 1)
   }
 
-  return slots
+  const plannedCampaignSlots = resolveCampaignPlanSlots(
+    params.campaignPlanItems ?? [],
+    params.windows,
+    params.startDate,
+    addDays(params.startDate, horizonDays - 1),
+  )
+
+  return [...slots, ...plannedCampaignSlots]
+}
+
+function normalizeDateOnly(value: string | null | undefined) {
+  if (!value) return null
+  return String(value).split('T')[0]
+}
+
+function resolveCampaignPlanSlots(
+  planItems: CampaignPlanItemRow[],
+  windows: ResolvedCampaignWindow[],
+  startDate: string,
+  endDate: string,
+): ResolvedCalendarSlot[] {
+  return planItems
+    .filter((item) => {
+      const date = normalizeDateOnly(item.scheduled_for)
+      return Boolean(date && date >= startDate && date <= endDate)
+    })
+    .map((item) => {
+      const date = normalizeDateOnly(item.scheduled_for) ?? startDate
+      const window = item.calendar_event_id
+        ? windows.find((candidate) => candidate.event_id === item.calendar_event_id) ?? null
+        : null
+
+      return {
+        slot_id: item.slot_id || `campaign-plan:${item.id}`,
+        date,
+        channel: item.channel,
+        purpose: 'campaign',
+        owner_pipeline: 'pipeline-c-campaign',
+        max_posts: window?.constraints.max_posts_per_day ?? 1,
+        current_posts: 0,
+        allowed_ctas: window?.constraints.allowed_ctas ?? [],
+        allowed_content_types: item.content_type ? [item.content_type] : [],
+        window_ref: window?.window_id ?? null,
+        campaign_ref: item.calendar_event_id ?? null,
+      } satisfies ResolvedCalendarSlot
+    })
 }
 
 export async function loadCampaignCalendarPlanningContext(
@@ -389,26 +485,49 @@ export async function loadCampaignCalendarPlanningContext(
   const queryStart = addDays(startDate, -32)
   const queryEnd = addDays(horizonEnd, 60)
 
-  const { data, error } = await supabase
+  const [{ data, error }, { data: planRows, error: planError }] = await Promise.all([
+    supabase
     .from('academic_calendar')
     .select('*')
     .eq('org_id', orgId)
     .gte('event_date', queryStart)
     .lte('event_date', queryEnd)
-    .order('event_date', { ascending: true })
+      .order('event_date', { ascending: true }),
+    supabase
+      .from('campaign_plan_items')
+      .select('*')
+      .eq('org_id', orgId)
+      .gte('scheduled_for', startDate)
+      .lte('scheduled_for', horizonEnd)
+      .in('status', ['committed', 'draft_created', 'approved', 'scheduled'])
+      .order('scheduled_for', { ascending: true }),
+  ])
 
   if (error) {
     throw new Error(`Failed to load campaign calendar: ${error.message}`)
   }
 
+  if (planError) {
+    throw new Error(`Failed to load campaign plan items: ${planError.message}`)
+  }
+
   const events = (data ?? []) as CampaignCalendarEventRow[]
-  const windows = events
+  const campaignPlanItems = (planRows ?? []) as CampaignPlanItemRow[]
+  const allWindows = events
     .map((event) => resolveCampaignWindow(event, { defaultChannels }))
-    .filter((window) => windowTouchesHorizon(window, startDate, horizonEnd))
+    .sort(compareWindows)
+  const plannedEventIds = new Set(
+    campaignPlanItems
+      .map((item) => item.calendar_event_id)
+      .filter((id): id is string => typeof id === 'string' && id.length > 0),
+  )
+  const windows = allWindows
+    .filter((window) => windowTouchesHorizon(window, startDate, horizonEnd) || plannedEventIds.has(window.event_id))
     .sort(compareWindows)
 
   const slots = resolveCalendarSlots({
     windows,
+    campaignPlanItems,
     startDate,
     horizonDays,
     defaultChannels,
@@ -420,6 +539,7 @@ export async function loadCampaignCalendarPlanningContext(
     horizon_end: horizonEnd,
     events,
     windows,
+    campaign_plan_items: campaignPlanItems,
     slots,
     active_windows: windows.filter((window) => window.window_start <= startDate && window.window_end >= startDate),
     baseline_slots: slots.filter((slot) => slot.purpose === 'baseline'),
