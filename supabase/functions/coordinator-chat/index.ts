@@ -24,6 +24,12 @@ import {
 } from '../_shared/asset-brief-contract.ts'
 import { resolveCampaignPrepLeadDays } from '../_shared/calendar-coordination.ts'
 import { ensureDashboardMemoryContext } from '../_shared/samm-memory.ts'
+import {
+  buildStructuredConfigSummary,
+  loadStructuredConfigSnapshot,
+  type StructuredConfigSnapshot,
+} from '../_shared/structured-config.ts'
+import { renderSkillDirectory } from '../_shared/skill-registry.ts'
 
 type ChatRole = 'user' | 'coordinator'
 
@@ -123,6 +129,29 @@ Handle these jobs well:
 - Route explicit execution requests into the correct action object.
 - Acknowledge existing drafts, pending approvals, scheduled content, and published content before proposing new work for the same post.
 
+## Skill Routing
+
+Use skills as specialist instruction packs. Skills shape the reasoning and required information; pipelines perform execution only when an action object is valid.
+
+${renderSkillDirectory()}
+
+Routing rules:
+- Use the matching skill internally before answering complex campaign, calendar, copy, asset, brand, QA, setup, blog, or seasonality questions.
+- Do not pretend a skill performed a backend action. If execution is needed, return the correct action object or explain the next manual step in Planning mode.
+- Skills may reference pipeline handoffs, but they do not replace Pipeline C or Pipeline D.
+- Keep the coordinator lean: route, ground, ask only what is missing, and produce the next useful step.
+
+## Deterministic Context Before Questions
+
+The prompt includes workspace.structured_config with known_context and missing_context.
+
+- Always inspect known_context before asking for business setup facts.
+- Do not ask the user for configured offers, ICP/audience categories, default channels, seasonality, approval policy, discount policy, or outreach policy when those values are already present in known_context.
+- Only ask about fields marked missing in missing_context, or decisions the user must make for this specific request, such as goal, event date, campaign angle, preferred offer from a known list, or whether to override defaults.
+- If a required setup area is missing, say exactly what is missing and use universal-config-guide behavior to help the user supply it.
+- When known_context has several valid options, ask the user to choose among those options instead of asking open-ended setup questions.
+- If structured_config has an error, acknowledge that setup context could not be loaded and ask only the minimum safe question.
+
 ## Planning Philosophy
 
 samm is conservative by default. It should help users make clear marketing decisions before creating more content.
@@ -130,7 +159,7 @@ samm is conservative by default. It should help users make clear marketing decis
 - Do not guess missing audience, offer, channel, date, asset, or campaign intent.
 - Ask concise clarification questions when those gaps affect the plan.
 - Prefer fewer, better-timed posts over high-volume generation.
-- Use the content balance heuristic: value/education, connection/proof, and promotion/conversion.
+- Use content-calendar and campaign-planning skill logic for content balance, campaign shape, cadence, and teaching moments.
 - Warn when the calendar is becoming noisy, repetitive, or too dense for a channel.
 - Recommend repurposing strong ideas before inventing unrelated new posts.
 - Explain tradeoffs in plain language so non-marketers learn by using the product.
@@ -223,6 +252,77 @@ function summarizeMetrics(rows: any[]) {
     engagement: row.engagement_rate ?? row.engagement ?? 0,
     signups: row.signups ?? 0,
   }))
+}
+
+function summarizeStructuredConfig(config: StructuredConfigSnapshot, today: string) {
+  let compactSummary: any = null
+  try {
+    compactSummary = JSON.parse(buildStructuredConfigSummary(config, today))
+  } catch (_) {
+    compactSummary = null
+  }
+
+  return {
+    known_context: {
+      compact_summary: compactSummary,
+      audience_options: config.icpCategories.slice(0, 8).map((item) => ({
+        id: item.id,
+        name: item.name,
+        description: item.description ?? null,
+        default_channels: item.default_channels ?? [],
+        cta_style: item.default_cta_style ?? null,
+      })),
+      offer_options: config.offerCatalog.slice(0, 8).map((item) => ({
+        id: item.id,
+        name: item.name,
+        type: item.type ?? null,
+        category: item.category ?? null,
+        price: item.base_price ?? null,
+        currency: item.currency ?? null,
+        default_cta: item.default_cta ?? null,
+      })),
+      active_seasonality_profiles: config.seasonalityProfiles.slice(0, 4).map((item) => ({
+        id: item.id,
+        name: item.name,
+        description: item.description ?? null,
+        periods_count: Array.isArray(item.seasonality_periods) ? item.seasonality_periods.length : 0,
+      })),
+      campaign_defaults: config.campaignDefaults ?? null,
+      approval_policy: config.approvalPolicy ?? null,
+      outreach_policies: config.outreachPolicies.slice(0, 4).map((item) => ({
+        id: item.id,
+        name: item.name,
+        channel_rules: item.channel_rules ?? null,
+        min_icp_fit_score: item.min_icp_fit_score ?? null,
+      })),
+      discount_policies: config.discountPolicies.slice(0, 4).map((item) => ({
+        id: item.id,
+        name: item.name,
+        max_discount_percent: item.max_discount_percent ?? null,
+        approval_required: item.approval_required ?? null,
+      })),
+    },
+    missing_context: {
+      audience_options: config.icpCategories.length === 0,
+      offer_options: config.offerCatalog.length === 0,
+      seasonality_profiles: config.seasonalityProfiles.length === 0,
+      campaign_defaults: !config.campaignDefaults,
+      approval_policy: !config.approvalPolicy,
+      outreach_policies: config.outreachPolicies.length === 0,
+      discount_policies: config.discountPolicies.length === 0,
+    },
+    error: null,
+  }
+}
+
+function buildStructuredConfigUnavailableContext(error: unknown) {
+  return {
+    known_context: null,
+    missing_context: {
+      structured_config: true,
+    },
+    error: getErrorMessage(error),
+  }
 }
 
 function summarizeEvents(rows: any[]) {
@@ -817,12 +917,16 @@ Deno.serve(async (req) => {
     })
 
     const orgConfig = orgConfigResult.data
-      const metrics = summarizeMetrics(metricsResult.data ?? [])
-      const recentRuns = summarizeRuns(activeRuns)
-      const upcomingEvents = summarizeEvents(eventsResult.data ?? [])
-      const upcomingOneTimePosts = summarizeOneTimePosts(oneTimePostsResult.data ?? []).slice(0, 5)
-      const pendingInbox = summarizeInbox(inboxResult.data ?? [])
-      const pendingCount = inboxCountResult.count ?? 0
+    const metrics = summarizeMetrics(metricsResult.data ?? [])
+    const recentRuns = summarizeRuns(activeRuns)
+    const upcomingEvents = summarizeEvents(eventsResult.data ?? [])
+    const upcomingOneTimePosts = summarizeOneTimePosts(oneTimePostsResult.data ?? []).slice(0, 5)
+    const pendingInbox = summarizeInbox(inboxResult.data ?? [])
+    const pendingCount = inboxCountResult.count ?? 0
+
+    const structuredConfigContext = await loadStructuredConfigSnapshot(supabase, orgId)
+      .then((snapshot) => summarizeStructuredConfig(snapshot, today))
+      .catch((error) => buildStructuredConfigUnavailableContext(error))
 
     const explicitSchedulerResult = await resolveExplicitSchedulerRequest({
       supabase,
@@ -895,6 +999,7 @@ Deno.serve(async (req) => {
           upcoming_events: upcomingEvents,
           upcoming_one_time_posts: upcomingOneTimePosts,
           latest_metrics: metrics,
+          structured_config: structuredConfigContext,
         },
         conversation: [...history.slice(-8), { role: 'user', content: message }],
         instruction: buildCoordinatorInstruction(mode, today),
