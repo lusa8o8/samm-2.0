@@ -23,6 +23,7 @@ import NotFoundPage from "@/pages/NotFoundPage";
 import { getActiveSession, supabase } from "../../../src/lib/supabase";
 
 const queryClient = new QueryClient();
+const metricsEnabled = import.meta.env.VITE_ENABLE_METRICS === "true";
 
 function PublicRouter() {
   return (
@@ -48,7 +49,7 @@ function PrivateRouter() {
         <Route path="/samm" component={SammPage} />
         <Route path="/inbox" component={InboxPage} />
         <Route path="/content" component={ContentPage} />
-        <Route path="/metrics" component={MetricsPage} />
+        <Route path="/metrics">{metricsEnabled ? <MetricsPage /> : <Redirect to="/calendar" />}</Route>
         <Route path="/calendar" component={CalendarPage} />
         <Route path="/operations" component={OperationsPage} />
         <Route path="/crm" component={CRMPage} />

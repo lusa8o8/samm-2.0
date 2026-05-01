@@ -14,6 +14,8 @@ import { signOut } from "@/lib/supabase";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 
+const metricsEnabled = import.meta.env.VITE_ENABLE_METRICS === "true";
+
 const navItems = [
   { href: "/samm", label: "samm", icon: Sparkles },
   { href: "/inbox", label: "Inbox", icon: Bell },
@@ -46,7 +48,11 @@ export function WorkspaceSidebar({ onNavigate }: WorkspaceSidebarProps) {
     { enabled?: boolean }
   >;
   const ambassadorsEnabled = moduleSettings.ambassadors?.enabled !== false;
-  const visibleNavItems = navItems.filter((item) => item.href !== "/ambassadors" || ambassadorsEnabled);
+  const visibleNavItems = navItems.filter((item) => {
+    if (item.href === "/ambassadors") return ambassadorsEnabled;
+    if (item.href === "/metrics") return metricsEnabled;
+    return true;
+  });
 
   return (
     <div className="flex h-full flex-col">

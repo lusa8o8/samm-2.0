@@ -1,11 +1,13 @@
 import { useState, useCallback } from 'react';
 import type { Module, ModuleId } from '../types';
 
+const metricsEnabled = import.meta.env.VITE_ENABLE_METRICS === 'true';
+
 const defaultModules: Module[] = [
   { id: 'samm', label: 'samm', icon: 'Cpu', enabled: true },
   { id: 'inbox', label: 'Inbox', icon: 'Inbox', enabled: true },
   { id: 'content', label: 'Content', icon: 'FileText', enabled: true },
-  { id: 'metrics', label: 'Metrics', icon: 'BarChart2', enabled: true },
+  { id: 'metrics', label: 'Metrics', icon: 'BarChart2', enabled: metricsEnabled },
   { id: 'calendar', label: 'Calendar', icon: 'Calendar', enabled: true },
   { id: 'operations', label: 'Operations', icon: 'Settings', enabled: true },
   { id: 'crm', label: 'CRM', icon: 'Users', enabled: false, optional: true },

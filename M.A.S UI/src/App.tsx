@@ -26,6 +26,7 @@ import AgentSettings from "@/pages/agent/settings";
 import AgentManual from "@/pages/agent/manual";
 
 const queryClient = new QueryClient();
+const metricsEnabled = import.meta.env.VITE_ENABLE_METRICS === "true";
 
 function PublicRouter() {
   return (
@@ -55,7 +56,7 @@ function Router() {
         <Route path="/samm" component={AgentChat} />
         <Route path="/inbox" component={Inbox} />
         <Route path="/content" component={Content} />
-        <Route path="/metrics" component={Metrics} />
+        <Route path="/metrics">{metricsEnabled ? <Metrics /> : <Redirect to="/calendar" />}</Route>
         <Route path="/ambassadors">{ambassadorsEnabled ? <Ambassadors /> : <Redirect to="/operations/settings" />}</Route>
         <Route path="/calendar" component={Calendar} />
         <Route path="/agent">
