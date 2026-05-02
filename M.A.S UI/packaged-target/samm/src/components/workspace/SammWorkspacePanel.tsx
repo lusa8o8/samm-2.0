@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { format } from 'date-fns';
-import { Activity, AlertTriangle, Calendar, PlayCircle, Send, Sparkles } from 'lucide-react';
+import { Activity, AlertTriangle, PlayCircle, Send, Sparkles } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { cn } from '@/lib/utils';
 import { StatusChip } from '../shared/StatusChip';
@@ -50,17 +50,11 @@ function WatchStrip({ ctx }: { ctx: WorkspaceContext }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   const items = [
-    ...ctx.activeRuns.map((run) => ({
-      icon: <Activity size={12} className="text-blue-500 flex-shrink-0" />,
-      label: run.pipelineName,
-      value: run.stepName,
-      status: 'running' as const,
-    })),
     ...(ctx.pendingApprovals > 0
       ? [
           {
             icon: <AlertTriangle size={12} className="text-amber-500 flex-shrink-0" />,
-            label: 'Approvals pending',
+            label: 'Approvals need review',
             value: `${ctx.pendingApprovals} items need review`,
             status: 'waiting_human' as const,
           },
@@ -72,20 +66,13 @@ function WatchStrip({ ctx }: { ctx: WorkspaceContext }) {
       value: run.stepName,
       status: 'failed' as const,
     })),
-    ...(ctx.nextCalendarEvent
-      ? [
-          {
-            icon: <Calendar size={12} className="text-purple-500 flex-shrink-0" />,
-            label: ctx.nextCalendarEvent.name,
-            value: `Starts ${format(new Date(ctx.nextCalendarEvent.startDate), 'MMM d')}`,
-            status: 'scheduled' as const,
-          },
-        ]
-      : []),
   ];
 
   const failureCount = ctx.recentFailures.length;
-  const runningCount = ctx.activeRuns.length;
+
+  if (items.length === 0) {
+    return null;
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -102,12 +89,6 @@ function WatchStrip({ ctx }: { ctx: WorkspaceContext }) {
     <div ref={containerRef} className="fixed right-4 bottom-24 z-20 flex flex-col items-end gap-2">
       {open && (
         <div className="mb-1 flex flex-col items-end gap-1.5" style={{ animation: 'stackIn 180ms cubic-bezier(0.16,1,0.3,1)' }}>
-          {ctx.currentFocus && (
-            <div className="flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-3 py-1.5 backdrop-blur-sm shadow-sm">
-              <SammLogo className="h-[11px] w-[11px] flex-shrink-0" />
-              <span className="whitespace-nowrap text-[11px] font-medium text-primary">{ctx.currentFocus}</span>
-            </div>
-          )}
           {items.map((item, index) => (
             <div key={index} className="flex items-center gap-1.5 rounded-full border border-border/70 bg-card/90 px-3 py-1.5 backdrop-blur-sm shadow-sm">
               {item.icon}
@@ -139,9 +120,6 @@ function WatchStrip({ ctx }: { ctx: WorkspaceContext }) {
           />
         )}
 
-        {!open && runningCount > 0 && (
-          <span className="pointer-events-none absolute inset-0 animate-ping rounded-full bg-primary/20" />
-        )}
       </button>
 
       <style>{`
