@@ -139,6 +139,16 @@ function getStatusIcon(status: ChatStatus) {
   }
 }
 
+function shouldShowChatStatus(part: Extract<WorkspaceMessagePart, { type: "status" }>) {
+  // Routine pipeline state is operational noise in chat. Keep only failures visible here;
+  // Operations remains the source of truth for live run details.
+  return part.status === "failed";
+}
+
+function getChatStatusLabel(part: Extract<WorkspaceMessagePart, { type: "status" }>) {
+  return part.label.toLowerCase().includes("pipeline") ? "Action needs attention" : part.label;
+}
+
 export default function AgentChat() {
   const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_MESSAGES);
   const [mode, setMode] = useState<ConversationMode>("planning");
@@ -230,11 +240,11 @@ export default function AgentChat() {
         "I reviewed the current workspace state and prepared the next step.";
       const nextParts: WorkspaceMessagePart[] = [{ type: "text", text: nextContent }];
 
-      if (response.invoked_action) {
+      if (response.invoked_action?.status === "failed") {
         nextParts.push({
           type: "status",
-          label: `${response.invoked_action.pipeline.toUpperCase()} ${response.invoked_action.status}`,
-          status: response.invoked_action.status === "completed" ? "success" : response.invoked_action.status,
+          label: "Action needs attention",
+          status: "failed",
         });
       }
 
@@ -421,6 +431,7 @@ export default function AgentChat() {
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       {msg.parts
                         .filter((part): part is Extract<WorkspaceMessagePart, { type: "status" }> => part.type === "status")
+                        .filter(shouldShowChatStatus)
                         .map((part, index) => {
                           const StatusIcon = getStatusIcon(part.status);
                           return (
@@ -434,7 +445,7 @@ export default function AgentChat() {
                               onClick={() => msg.inspectorPayload && openInspector(msg.inspectorPayload)}
                             >
                               <StatusIcon className="h-3.5 w-3.5" />
-                              <span>{part.label}</span>
+                              <span>{getChatStatusLabel(part)}</span>
                             </button>
                           );
                         })}
