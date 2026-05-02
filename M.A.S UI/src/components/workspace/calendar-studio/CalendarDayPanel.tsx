@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { format } from "date-fns";
 import { AlertTriangle, CalendarDays, Lock, Plus, Sliders, Trash2, Unlock, Wand2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -8,6 +8,12 @@ import { ChannelIcon } from "@/components/workspace/shared/ChannelIcon";
 import { CampaignPill, campaignColorClasses } from "@/components/workspace/shared/OwnershipChip";
 import { StatusChip } from "@/components/workspace/shared/StatusChip";
 import { useCalendarStudioWorkflow } from "@/components/layout";
+import {
+  buildCampaignFormForDate,
+  buildOneTimePostFormForDay,
+  ManualEntryPanel,
+  type ManualEntryType,
+} from "@/components/workspace/calendar-studio/ManualEntryPanel";
 
 interface Props {
   data: CalendarDayPanelViewData;
@@ -46,6 +52,89 @@ export function CalendarDayPanel({ data }: Props) {
   const dateObj = new Date(data.date);
   const workflow = useCalendarStudioWorkflow();
   const hasDeleteTargets = Boolean(data.campaignDeleteCandidate || data.oneTimeDeleteCandidates.length > 0);
+  const defaultManualEntryType: ManualEntryType = context ? "one_time" : "campaign";
+  const [isAddingManually, setIsAddingManually] = useState(false);
+  const [manualEntryType, setManualEntryType] = useState<ManualEntryType>(defaultManualEntryType);
+  const [manualCampaignForm, setManualCampaignForm] = useState(() => buildCampaignFormForDate(data.date));
+  const [manualOneTimeForm, setManualOneTimeForm] = useState(() =>
+    buildOneTimePostFormForDay({
+      date: data.date,
+      campaignId: context?.id,
+      campaignName: context?.name,
+    }),
+  );
+  const [submittingEntryType, setSubmittingEntryType] = useState<ManualEntryType | null>(null);
+
+  const resetManualEntryState = () => {
+    setManualEntryType(defaultManualEntryType);
+    setManualCampaignForm(buildCampaignFormForDate(data.date));
+    setManualOneTimeForm(
+      buildOneTimePostFormForDay({
+        date: data.date,
+        campaignId: context?.id,
+        campaignName: context?.name,
+      }),
+    );
+    setSubmittingEntryType(null);
+  };
+
+  useEffect(() => {
+    setIsAddingManually(false);
+    resetManualEntryState();
+  }, [data.date, context?.id, context?.name]);
+
+  const handleStartManualEntry = () => {
+    resetManualEntryState();
+    setIsAddingManually(true);
+  };
+
+  const handleManualCampaignSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!workflow.createManualCampaignWindow) return;
+
+    setSubmittingEntryType("campaign");
+    try {
+      await workflow.createManualCampaignWindow(manualCampaignForm);
+      setIsAddingManually(false);
+    } catch {
+      // The page-level mutation owns the user-facing toast.
+    } finally {
+      setSubmittingEntryType(null);
+    }
+  };
+
+  const handleManualOneTimeSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!workflow.queueManualOneTimePost) return;
+
+    setSubmittingEntryType("one_time");
+    try {
+      await workflow.queueManualOneTimePost(manualOneTimeForm);
+      setIsAddingManually(false);
+    } catch {
+      // The page-level mutation owns the user-facing toast.
+    } finally {
+      setSubmittingEntryType(null);
+    }
+  };
+
+  if (isAddingManually) {
+    return (
+      <ManualEntryPanel
+        entryType={manualEntryType}
+        campaignForm={manualCampaignForm}
+        oneTimeForm={manualOneTimeForm}
+        onEntryTypeChange={setManualEntryType}
+        onCampaignFormChange={setManualCampaignForm}
+        onOneTimeFormChange={setManualOneTimeForm}
+        onCampaignSubmit={handleManualCampaignSubmit}
+        onOneTimeSubmit={handleManualOneTimeSubmit}
+        isCampaignPending={submittingEntryType === "campaign"}
+        isOneTimePending={submittingEntryType === "one_time"}
+        onCancel={() => setIsAddingManually(false)}
+      />
+    );
+  }
 
   return (
     <div className="space-y-5">
@@ -221,7 +310,7 @@ export function CalendarDayPanel({ data }: Props) {
         </button>
         <button
           type="button"
-          onClick={() => workflow.addManualForDay?.(data)}
+          onClick={handleStartManualEntry}
           className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-border bg-muted px-3 py-1.5 text-[11px] font-medium leading-none text-foreground transition-colors hover:bg-muted/80"
         >
           <Plus size={12} /> Add manually

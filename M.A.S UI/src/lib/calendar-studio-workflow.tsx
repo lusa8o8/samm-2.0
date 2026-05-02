@@ -5,13 +5,18 @@ import type {
   CampaignPanelViewData,
   MonthlyPlanningSessionViewData,
 } from "@/components/workspace/calendar-studio/types";
+import type {
+  EventFormData,
+  OneTimePostFormData,
+} from "@/components/workspace/calendar-studio/ManualEntryPanel";
 
 export interface CalendarStudioWorkflowActions {
   reviewPlanningSession?: (data: MonthlyPlanningSessionViewData) => void;
   commitPlanningSession?: (data: MonthlyPlanningSessionViewData) => void;
   addCampaignOrKeyDate?: (data: MonthlyPlanningSessionViewData) => void;
   createDraftsForDay?: (data: CalendarDayPanelViewData) => void;
-  addManualForDay?: (data: CalendarDayPanelViewData) => void;
+  createManualCampaignWindow?: (data: EventFormData) => Promise<void> | void;
+  queueManualOneTimePost?: (data: OneTimePostFormData) => Promise<void> | void;
   editRulesForDay?: (data: CalendarDayPanelViewData) => void;
   deleteWindowForDay?: (data: CalendarDayPanelViewData) => void;
   createDraftsForCampaign?: (data: CampaignPanelViewData) => void;
@@ -44,7 +49,8 @@ export function CalendarStudioWorkflowProvider({ children }: { children: ReactNo
       commitPlanningSession: (data) => actionsRef.current.commitPlanningSession?.(data),
       addCampaignOrKeyDate: (data) => actionsRef.current.addCampaignOrKeyDate?.(data),
       createDraftsForDay: (data) => actionsRef.current.createDraftsForDay?.(data),
-      addManualForDay: (data) => actionsRef.current.addManualForDay?.(data),
+      createManualCampaignWindow: (data) => actionsRef.current.createManualCampaignWindow?.(data),
+      queueManualOneTimePost: (data) => actionsRef.current.queueManualOneTimePost?.(data),
       editRulesForDay: (data) => actionsRef.current.editRulesForDay?.(data),
       deleteWindowForDay: (data) => actionsRef.current.deleteWindowForDay?.(data),
       createDraftsForCampaign: (data) => actionsRef.current.createDraftsForCampaign?.(data),
