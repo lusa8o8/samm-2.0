@@ -235,6 +235,7 @@ export function SammWorkspacePanel({
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const { openInspector } = useInspector();
   const [location] = useLocation();
 
@@ -246,6 +247,14 @@ export function SammWorkspacePanel({
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  useEffect(() => {
+    const textarea = inputRef.current;
+    if (!textarea) return;
+
+    textarea.style.height = '0px';
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 144)}px`;
+  }, [input]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -417,9 +426,11 @@ export function SammWorkspacePanel({
       )}
 
       <div className={cn(embedded ? 'px-5 pb-5' : 'px-4 pb-5 sm:px-6 sm:pb-6')}>
-        <div className="flex items-center gap-2 overflow-hidden rounded-2xl border border-border/60 bg-card/80 px-3 py-2.5 shadow-lg shadow-black/5 backdrop-blur-md transition-all duration-200 focus-within:border-primary/40 focus-within:shadow-primary/10 sm:gap-3 sm:px-4 sm:py-3">
-          <input
-            className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none"
+        <div className="flex items-end gap-2 overflow-hidden rounded-2xl border border-border/60 bg-card/80 px-3 py-2.5 shadow-lg shadow-black/5 backdrop-blur-md transition-all duration-200 focus-within:border-primary/40 focus-within:shadow-primary/10 sm:gap-3 sm:px-4 sm:py-3">
+          <textarea
+            ref={inputRef}
+            rows={1}
+            className="max-h-36 min-h-[24px] min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-0.5 text-sm leading-5 text-foreground placeholder:text-muted-foreground/60 focus:outline-none"
             placeholder={
               mode === 'planning'
                 ? 'Ask samm to help plan the month, define a campaign, or explain the why...'
@@ -427,7 +438,12 @@ export function SammWorkspacePanel({
             }
             value={input}
             onChange={(event) => setInput(event.target.value)}
-            onKeyDown={(event) => event.key === 'Enter' && !event.shiftKey && handleSend()}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                void handleSend();
+              }
+            }}
             data-testid="samm-input"
           />
           <button
