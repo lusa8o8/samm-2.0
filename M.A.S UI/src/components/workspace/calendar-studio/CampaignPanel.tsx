@@ -9,7 +9,6 @@ import {
   Sliders,
   Tag,
   Target,
-  Unlock,
   Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -82,17 +81,12 @@ export function CampaignPanel({ data }: Props) {
         </p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <CampaignPill name={`Owner: Pipeline ${data.ownerPipeline}`} color={data.color} size="sm" />
-          <span
-            className={cn(
-              "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium",
-              data.exclusivity === "exclusive"
-                ? "border-purple-200 bg-purple-50 text-purple-700 dark:border-purple-900 dark:bg-purple-950/30 dark:text-purple-300"
-                : "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300",
-            )}
-          >
-            {data.exclusivity === "exclusive" ? <Lock size={10} /> : <Unlock size={10} />}
-            {data.exclusivity === "exclusive" ? "Exclusive window" : "Allows support content"}
-          </span>
+          {data.exclusivity === "exclusive" ? (
+            <span className="inline-flex items-center gap-1 rounded-full border border-purple-200 bg-purple-50 px-2 py-0.5 text-[10px] font-medium text-purple-700 dark:border-purple-900 dark:bg-purple-950/30 dark:text-purple-300">
+              <Lock size={10} />
+              Exclusive window
+            </span>
+          ) : null}
           <AssetReadinessPill state={data.assetReadiness} size="sm" />
         </div>
       </div>

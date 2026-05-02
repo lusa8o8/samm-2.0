@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { format } from "date-fns";
-import { AlertTriangle, CalendarDays, Lock, Plus, Sliders, Trash2, Unlock, Wand2 } from "lucide-react";
+import { AlertTriangle, CalendarDays, Lock, Plus, Sliders, Trash2, Wand2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { CalendarDayPanelViewData } from "@/components/workspace/calendar-studio/types";
 import { ContentCapacityBar } from "@/components/workspace/shared/ContentCapacityBar";
@@ -158,17 +158,10 @@ export function CalendarDayPanel({ data }: Props) {
               One-time post
             </span>
           ) : null}
-          {context ? (
-            <span
-              className={cn(
-                "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium",
-                data.supportContentAllowed
-                  ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300"
-                  : "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300",
-              )}
-            >
-              {data.supportContentAllowed ? <Unlock size={10} /> : <Lock size={10} />}
-              {data.supportContentAllowed ? "Support content allowed" : "Exclusive - no support"}
+          {context?.exclusivity === "exclusive" ? (
+            <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-medium text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
+              <Lock size={10} />
+              Exclusive window
             </span>
           ) : null}
         </div>

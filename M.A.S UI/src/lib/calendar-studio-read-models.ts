@@ -276,7 +276,7 @@ function compareWindows(a: ResolvedStudioWindow, b: ResolvedStudioWindow) {
   return a.id.localeCompare(b.id);
 }
 
-function buildMessagingConstraints(row: CalendarStudioCalendarRow, supportContentAllowed: boolean) {
+function buildMessagingConstraints(row: CalendarStudioCalendarRow) {
   const constraints: string[] = [];
   const primaryMessage = safeString(row.primary_message);
   const requiredTypes = safeStringArray(row.content_types_required);
@@ -285,7 +285,6 @@ function buildMessagingConstraints(row: CalendarStudioCalendarRow, supportConten
   if (primaryMessage) constraints.push(primaryMessage);
   if (requiredTypes.length > 0) constraints.push(`Required content types: ${requiredTypes.join(", ")}`);
   if (postingFrequency) constraints.push(`Posting frequency: ${postingFrequency}`);
-  if (!supportContentAllowed) constraints.push("Support content is blocked inside this campaign window.");
 
   return constraints.length > 0 ? constraints : ["No explicit messaging constraints configured."];
 }
@@ -340,7 +339,7 @@ function resolveStudioWindow(row: CalendarStudioCalendarRow): ResolvedStudioWind
     kind: normalizeCampaignKind(row.event_type),
     objective,
     targetAudience,
-    messagingConstraints: buildMessagingConstraints(row, supportContentAllowed),
+    messagingConstraints: buildMessagingConstraints(row),
     ctaRules: buildCtaRules(row),
     planningNotes: safeString(row.planning_notes) ?? undefined,
     row,

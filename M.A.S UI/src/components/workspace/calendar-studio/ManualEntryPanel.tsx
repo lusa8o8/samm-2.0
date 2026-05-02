@@ -176,20 +176,7 @@ export function EventForm({
       </div>
 
       {["seasonal", "promotion", "other"].includes(value.event_type) ? (
-        <div className="space-y-3 rounded-md border border-amber-100 bg-amber-50/50 p-3">
-          <div className="flex items-start gap-3">
-            <Switch
-              checked={value.support_content_allowed}
-              onCheckedChange={(nextValue) => onChange({ ...value, support_content_allowed: nextValue })}
-            />
-            <div>
-              <Label className="text-xs font-semibold text-amber-800">Allow support content</Label>
-              <p className="mt-0.5 text-[11px] leading-snug text-amber-700/80">
-                Lets support-only slots live inside this campaign window while still following the campaign rules.
-              </p>
-            </div>
-          </div>
-
+        <div className="rounded-md border border-amber-100 bg-amber-50/50 p-3">
           <div className="flex items-start gap-3">
             <Switch
               checked={value.creative_override_allowed}
@@ -198,7 +185,7 @@ export function EventForm({
             <div>
               <Label className="text-xs font-semibold text-amber-800">Allow creative deviation</Label>
               <p className="mt-0.5 text-[11px] leading-snug text-amber-700/80">
-                Permits creative deviation inside the campaign window where the underlying planner already allows it.
+                Lets Pipeline C loosen palette strictness for event-specific accents while keeping core brand rules intact.
               </p>
             </div>
           </div>
