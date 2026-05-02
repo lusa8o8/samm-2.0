@@ -7,6 +7,7 @@ export type WorkspaceWidgetType =
   | "calendar_month_grid"
   | "calendar_day_panel"
   | "campaign_panel"
+  | "campaign_window_form_panel"
   | "asset_readiness_panel"
   | "calendar_window"
   | "calendar_slot"

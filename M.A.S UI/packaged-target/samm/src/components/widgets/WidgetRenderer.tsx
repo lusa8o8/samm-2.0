@@ -13,6 +13,7 @@ import { LinkedContentListWidget } from './LinkedContentListWidget';
 import { AssetReadinessPanel } from '@/components/workspace/calendar-studio/AssetReadinessPanel';
 import { CalendarDayPanel } from '@/components/workspace/calendar-studio/CalendarDayPanel';
 import { CalendarMonthGrid } from '@/components/workspace/calendar-studio/CalendarMonthGrid';
+import { CampaignWindowFormPanel } from '@/components/workspace/calendar-studio/CampaignWindowFormPanel';
 import { CampaignPanel } from '@/components/workspace/calendar-studio/CampaignPanel';
 import { MonthlyPlanningSessionWidget } from '@/components/workspace/calendar-studio/MonthlyPlanningSessionWidget';
 
@@ -42,6 +43,8 @@ export function WidgetRenderer({ widget }: WidgetRendererProps) {
       return <CalendarDayPanel data={widget.data as never} />;
     case 'campaign_panel':
       return <CampaignPanel data={widget.data as never} />;
+    case 'campaign_window_form_panel':
+      return <CampaignWindowFormPanel data={widget.data as never} />;
     case 'asset_readiness_panel':
       return <AssetReadinessPanel data={widget.data as never} />;
     case 'lead_card':

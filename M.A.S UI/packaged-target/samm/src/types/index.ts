@@ -211,6 +211,7 @@ export type WidgetType =
   | 'calendar_month_grid'
   | 'calendar_day_panel'
   | 'campaign_panel'
+  | 'campaign_window_form_panel'
   | 'asset_readiness_panel'
   | 'pipeline_run_timeline'
   | 'lead_card'

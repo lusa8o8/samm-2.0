@@ -16,6 +16,8 @@ export interface CalendarStudioWorkflowActions {
   addCampaignOrKeyDate?: (data: MonthlyPlanningSessionViewData) => void;
   createDraftsForDay?: (data: CalendarDayPanelViewData) => void;
   createManualCampaignWindow?: (data: EventFormData) => Promise<void> | void;
+  updateCampaignWindowRules?: (id: string, data: EventFormData) => Promise<void> | void;
+  closeInspectorPanel?: () => void;
   queueManualOneTimePost?: (data: OneTimePostFormData) => Promise<void> | void;
   editRulesForDay?: (data: CalendarDayPanelViewData) => void;
   deleteWindowForDay?: (data: CalendarDayPanelViewData) => void;
@@ -50,6 +52,8 @@ export function CalendarStudioWorkflowProvider({ children }: { children: ReactNo
       addCampaignOrKeyDate: (data) => actionsRef.current.addCampaignOrKeyDate?.(data),
       createDraftsForDay: (data) => actionsRef.current.createDraftsForDay?.(data),
       createManualCampaignWindow: (data) => actionsRef.current.createManualCampaignWindow?.(data),
+      updateCampaignWindowRules: (id, data) => actionsRef.current.updateCampaignWindowRules?.(id, data),
+      closeInspectorPanel: () => actionsRef.current.closeInspectorPanel?.(),
       queueManualOneTimePost: (data) => actionsRef.current.queueManualOneTimePost?.(data),
       editRulesForDay: (data) => actionsRef.current.editRulesForDay?.(data),
       deleteWindowForDay: (data) => actionsRef.current.deleteWindowForDay?.(data),

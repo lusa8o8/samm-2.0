@@ -2,6 +2,7 @@ import type { WorkspaceWidgetDescriptor } from "@/lib/workspace-adapter";
 import { AssetReadinessPanel } from "@/components/workspace/calendar-studio/AssetReadinessPanel";
 import { CalendarDayPanel } from "@/components/workspace/calendar-studio/CalendarDayPanel";
 import { CalendarMonthGrid } from "@/components/workspace/calendar-studio/CalendarMonthGrid";
+import { CampaignWindowFormPanel, type CampaignWindowFormPanelViewData } from "@/components/workspace/calendar-studio/CampaignWindowFormPanel";
 import { CampaignPanel } from "@/components/workspace/calendar-studio/CampaignPanel";
 import { MonthlyPlanningSessionWidget } from "@/components/workspace/calendar-studio/MonthlyPlanningSessionWidget";
 import type {
@@ -40,6 +41,8 @@ export function WorkspaceWidgetRenderer({ widget }: WorkspaceWidgetRendererProps
       return <CalendarDayPanel data={widget.data as CalendarDayPanelViewData} />;
     case "campaign_panel":
       return <CampaignPanel data={widget.data as CampaignPanelViewData} />;
+    case "campaign_window_form_panel":
+      return <CampaignWindowFormPanel data={widget.data as CampaignWindowFormPanelViewData} />;
     case "asset_readiness_panel":
       return <AssetReadinessPanel data={widget.data as AssetReadinessRecordViewData} />;
     default:

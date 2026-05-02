@@ -37,10 +37,11 @@ import {
 import { CalendarMonthGrid } from "@/components/workspace/calendar-studio/CalendarMonthGrid";
 import {
   BLANK_FORM,
-  EventForm,
+  buildCampaignFormForDate,
   type EventFormData,
   type OneTimePostFormData,
 } from "@/components/workspace/calendar-studio/ManualEntryPanel";
+import type { CampaignWindowFormPanelViewData } from "@/components/workspace/calendar-studio/CampaignWindowFormPanel";
 import type {
   AssetReadinessRecordViewData,
   CalendarDayCellViewData,
@@ -174,10 +175,6 @@ export default function CalendarStudioPage() {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
-  const [createOpen, setCreateOpen] = useState(false);
-  const [createForm, setCreateForm] = useState<EventFormData>(BLANK_FORM);
-  const [editWindowId, setEditWindowId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<EventFormData>(BLANK_FORM);
   const [deleteChoices, setDeleteChoices] = useState<DeleteChoice[]>([]);
   const [pendingDeleteTarget, setPendingDeleteTarget] = useState<PendingDeleteTarget | null>(null);
   const monthIso = format(monthDate, "yyyy-MM");
@@ -212,8 +209,6 @@ export default function CalendarStudioPage() {
     mutation: {
       onSuccess: () => {
         invalidateStudio();
-        setCreateOpen(false);
-        setCreateForm(BLANK_FORM);
         toast({
           title: "Calendar window added",
           description: "Calendar Studio has been refreshed with the new event.",
@@ -258,7 +253,6 @@ export default function CalendarStudioPage() {
     mutation: {
       onSuccess: () => {
         invalidateStudio();
-        setEditWindowId(null);
         toast({
           title: "Calendar rules updated",
           description: "The campaign window now reflects the revised rules.",
@@ -282,7 +276,6 @@ export default function CalendarStudioPage() {
         closeInspector();
         setPendingDeleteTarget(null);
         setDeleteChoices([]);
-        setEditWindowId(null);
         toast({
           title: "Campaign window deleted",
           description: `${deletedLabel} has been removed from Calendar Studio.`,
@@ -321,19 +314,35 @@ export default function CalendarStudioPage() {
     },
   });
 
-  const openCreateDialog = useCallback((initial?: Partial<EventFormData>) => {
-    setCreateForm({
-      ...BLANK_FORM,
+  const openCampaignWindowFormPanel = useCallback((initial?: Partial<EventFormData>) => {
+    const form: EventFormData = {
+      ...buildCampaignFormForDate(initial?.event_date ?? BLANK_FORM.event_date),
       ...initial,
       event_end_date: initial?.event_end_date ?? "",
       universities: initial?.universities ?? [],
       creative_override_allowed: initial?.creative_override_allowed ?? false,
       support_content_allowed: initial?.support_content_allowed ?? false,
-    });
-    setCreateOpen(true);
-  }, []);
+    };
 
-  const openEditDialog = useCallback((windowId: string) => {
+    const payload: CampaignWindowFormPanelViewData = {
+      mode: "create",
+      initialValue: form,
+    };
+
+    openInspector(
+      createInspectorPayload(
+        "Add campaign or key date",
+        {
+          type: "campaign_window_form_panel",
+          title: "Add campaign or key date",
+          data: payload,
+        },
+        "Create a committed calendar window.",
+      ),
+    );
+  }, [openInspector]);
+
+  const openEditCampaignWindowPanel = useCallback((windowId: string) => {
     if (!source) return;
     const window = source.windows.find((item) => item.eventId === windowId || item.id === windowId);
     if (!window) {
@@ -345,17 +354,32 @@ export default function CalendarStudioPage() {
       return;
     }
 
-    setEditForm({
-      event_type: window.row.event_type ?? "other",
-      event_date: window.row.event_date ?? BLANK_FORM.event_date,
-      event_end_date: window.row.event_end_date ?? "",
-      label: window.row.label ?? "",
-      universities: window.row.universities ?? [],
-      creative_override_allowed: Boolean(window.row.creative_override_allowed),
-      support_content_allowed: Boolean(window.row.support_content_allowed),
-    });
-    setEditWindowId(window.eventId);
-  }, [source, toast]);
+    const payload: CampaignWindowFormPanelViewData = {
+      mode: "edit",
+      windowId: window.eventId,
+      initialValue: {
+        event_type: window.row.event_type ?? "other",
+        event_date: window.row.event_date ?? BLANK_FORM.event_date,
+        event_end_date: window.row.event_end_date ?? "",
+        label: window.row.label ?? "",
+        universities: window.row.universities ?? [],
+        creative_override_allowed: Boolean(window.row.creative_override_allowed),
+        support_content_allowed: Boolean(window.row.support_content_allowed),
+      },
+    };
+
+    openInspector(
+      createInspectorPayload(
+        "Edit campaign rules",
+        {
+          type: "campaign_window_form_panel",
+          title: "Edit campaign rules",
+          data: payload,
+        },
+        window.label,
+      ),
+    );
+  }, [openInspector, source, toast]);
 
   const requestDeleteTargets = useCallback((day: CalendarDayPanelViewData) => {
     const nextChoices: DeleteChoice[] = [];
@@ -481,7 +505,7 @@ export default function CalendarStudioPage() {
             commitPlanningSession: (data: MonthlyPlanningSessionViewData) => {
               closeInspector();
               if (data.keyCampaigns.length === 0) {
-                openCreateDialog({
+                openCampaignWindowFormPanel({
                   event_type: "other",
                   event_date: `${data.planningMonth}-01`,
                 });
@@ -498,7 +522,7 @@ export default function CalendarStudioPage() {
               });
             },
             addCampaignOrKeyDate: (data: MonthlyPlanningSessionViewData) => {
-              openCreateDialog({
+              openCampaignWindowFormPanel({
                 event_type: "other",
                 event_date: `${data.planningMonth}-01`,
               });
@@ -523,6 +547,16 @@ export default function CalendarStudioPage() {
                 },
               });
             },
+            updateCampaignWindowRules: async (id: string, data: EventFormData) => {
+              await updateMutation.mutateAsync({
+                id,
+                data: {
+                  ...data,
+                  event_end_date: data.event_end_date || null,
+                },
+              });
+            },
+            closeInspectorPanel: closeInspector,
             queueManualOneTimePost: async (data: OneTimePostFormData) => {
               await createOneTimePostMutation.mutateAsync({
                 topic: data.topic.trim(),
@@ -535,11 +569,11 @@ export default function CalendarStudioPage() {
             },
             editRulesForDay: (data: CalendarDayPanelViewData) => {
               if (data.campaignContext?.id) {
-                openEditDialog(data.campaignContext.id);
+                openEditCampaignWindowPanel(data.campaignContext.id);
                 return;
               }
 
-              openCreateDialog({
+              openCampaignWindowFormPanel({
                 event_type: "other",
                 event_date: data.date,
                 event_end_date: data.date,
@@ -570,7 +604,7 @@ export default function CalendarStudioPage() {
               );
             },
             editCampaignRules: (data: CampaignPanelViewData) => {
-              openEditDialog(data.id);
+              openEditCampaignWindowPanel(data.id);
             },
             updateAssetStatus: (data: AssetReadinessRecordViewData, intent?: "mark_ready" | "request_assets" | "update_notes") => {
               const intentCopy =
@@ -594,11 +628,12 @@ export default function CalendarStudioPage() {
       planningSession,
       closeInspector,
       toast,
-      openCreateDialog,
+      openCampaignWindowFormPanel,
       handoffToSamm,
-      openEditDialog,
+      openEditCampaignWindowPanel,
       requestDeleteTargets,
       createMutation,
+      updateMutation,
       createOneTimePostMutation,
     ],
   );
@@ -712,71 +747,6 @@ export default function CalendarStudioPage() {
           <CalendarMonthGrid data={monthGrid} onDayClick={handleDayClick} onCampaignClick={handleCampaignClick} />
         </div>
       </div>
-
-      <Dialog
-        open={createOpen}
-        onOpenChange={(open) => {
-          setCreateOpen(open);
-          if (!open) setCreateForm(BLANK_FORM);
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add campaign or key date</DialogTitle>
-            <DialogDescription>
-              Add a real calendar window that Calendar Studio can treat as committed planning truth.
-            </DialogDescription>
-          </DialogHeader>
-          <EventForm
-            value={createForm}
-            onChange={setCreateForm}
-            onSubmit={(event) => {
-              event.preventDefault();
-              createMutation.mutate({
-                data: {
-                  ...createForm,
-                  event_end_date: createForm.event_end_date || null,
-                },
-              });
-            }}
-            isPending={createMutation.isPending}
-            submitLabel="Save window"
-          />
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={Boolean(editWindowId)}
-        onOpenChange={(open) => {
-          if (!open) setEditWindowId(null);
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit campaign rules</DialogTitle>
-            <DialogDescription>
-              Update the underlying calendar window so future planning and draft creation stay aligned with the real rules.
-            </DialogDescription>
-          </DialogHeader>
-          <EventForm
-            value={editForm}
-            onChange={setEditForm}
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (!editWindowId) return;
-              updateMutation.mutate({
-                id: editWindowId,
-                data: {
-                  ...editForm,
-                  event_end_date: editForm.event_end_date || null,
-                },
-              });
-            }}
-            isPending={updateMutation.isPending}
-            submitLabel="Save changes"
-          />
-        </DialogContent>
-      </Dialog>
 
       <Dialog
         open={deleteChoices.length > 0}
