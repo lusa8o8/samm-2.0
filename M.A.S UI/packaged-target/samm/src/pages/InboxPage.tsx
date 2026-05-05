@@ -4,7 +4,14 @@ import { format } from 'date-fns';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { StatusChip } from '../components/shared/StatusChip';
 import { useInspector } from '../components/shell/WorkspaceShell';
-import { getInboxItems, approveInboxItem, rejectInboxItem, readFunctionError, updateInboxCampaignSchedule } from '../services/liveInboxService';
+import {
+  getInboxItems,
+  approveInboxItem,
+  rejectInboxItem,
+  readFunctionError,
+  updateInboxCampaignSchedule,
+  isActionableInboxStatus,
+} from '../services/liveInboxService';
 import type { InboxItem } from '../types';
 import { cn } from '@/lib/utils';
 
@@ -36,6 +43,8 @@ type CampaignScheduleItem = {
   plan_item_id?: string | null;
 };
 
+type InboxActionState = Extract<InboxItem['status'], 'approved' | 'rejected' | 'actioned'>;
+
 const campaignChannels = ['facebook', 'instagram', 'linkedin', 'whatsapp', 'youtube', 'email'];
 const visualNeeds = ['text_only', 'static', 'carousel', 'video'];
 const contentTypes = ['announcement', 'value', 'proof', 'countdown', 'conversion', 'reminder', 'campaign'];
@@ -44,6 +53,10 @@ function getCampaignSchedule(item: InboxItem): CampaignScheduleItem[] {
   const payload = item.payload ?? {};
   const schedule = payload.proposed_schedule ?? payload.campaign_brief?.proposed_schedule;
   return Array.isArray(schedule) ? schedule : [];
+}
+
+function getEffectiveStatus(item: InboxItem, actionStates: Record<string, InboxActionState>): InboxItem['status'] {
+  return actionStates[item.id] ?? item.status;
 }
 
 function CampaignScheduleEditor({
@@ -227,10 +240,10 @@ function InboxCard({
   onReject: (id: string) => void;
   onInspect: (item: InboxItem) => void;
   onScheduleSaved: () => void;
-  actionState?: 'approved' | 'rejected' | 'actioned';
+  actionState?: InboxActionState;
 }) {
   const effectiveStatus = actionState ?? item.status;
-  const isActionable = effectiveStatus === 'pending' || effectiveStatus === 'new';
+  const isActionable = isActionableInboxStatus(effectiveStatus);
   const statusLabel = effectiveStatus === 'actioned' ? 'seen' : undefined;
 
   return (
@@ -328,7 +341,7 @@ function InboxCard({
 
 export default function InboxPage() {
   const [activeTab, setActiveTab] = useState('all');
-  const [actionStates, setActionStates] = useState<Record<string, 'approved' | 'rejected' | 'actioned'>>({});
+  const [actionStates, setActionStates] = useState<Record<string, InboxActionState>>({});
   const [error, setError] = useState<string | null>(null);
   const { openInspector } = useInspector();
   const queryClient = useQueryClient();
@@ -379,14 +392,14 @@ export default function InboxPage() {
   };
 
   const filtered = items.filter(i => activeTab === 'all' || i.type === activeTab);
-  const pendingCount = items.filter(i => (i.status === 'pending' || i.status === 'new') && !actionStates[i.id]).length;
-  const totalCount = items.length;
+  const actionableItems = items.filter((item) => isActionableInboxStatus(getEffectiveStatus(item, actionStates)));
+  const pendingCount = actionableItems.length;
   const subtitle =
-    totalCount === 0
+    items.length === 0
       ? 'No inbox items right now'
-      : pendingCount === totalCount
-        ? `${totalCount} item${totalCount !== 1 ? 's' : ''} in inbox`
-        : `${totalCount} item${totalCount !== 1 ? 's' : ''} in inbox · ${pendingCount} need your attention`;
+      : pendingCount === 0
+        ? 'No items need your attention'
+        : `${pendingCount} item${pendingCount !== 1 ? 's' : ''} ${pendingCount === 1 ? 'needs' : 'need'} your attention`;
 
   return (
     <div className="flex flex-col h-full">
@@ -406,8 +419,8 @@ export default function InboxPage() {
         <div className="flex gap-1 mt-4">
           {tabs.map(tab => {
             const count = tab.id === 'all'
-              ? items.length
-              : items.filter(i => i.type === tab.id).length;
+              ? pendingCount
+              : actionableItems.filter(i => i.type === tab.id).length;
 
             return (
               <button

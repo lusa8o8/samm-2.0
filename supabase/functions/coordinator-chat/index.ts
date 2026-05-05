@@ -69,6 +69,12 @@ type RegenerateAssetBriefIntent = {
   asset_need?: AssetNeed
 }
 
+type RegenerateContentVariantIntent = {
+  content_id: string
+  platform?: string | null
+  title?: string | null
+}
+
 type OneTimePostSummary = {
   draft_group_id: string | null
   title: string
@@ -104,6 +110,7 @@ ActionObject is one of:
 - {"type":"write_post","topic": string, "platforms": string[]|null, "event_ref": string|null, "title": string, "description": string}
 - {"type":"create_one_time_post","topic": string, "post_title"?: string|null, "scheduled_for": "YYYY-MM-DD"|null, "platforms": string[]|null, "event_ref": string|null, "asset_need": "none"|"static"|"carousel"|"video"|"design_brief", "title": string, "description": string}
 - {"type":"regenerate_asset_brief","draft_group_id": string, "content_id"?: string|null, "asset_need"?: "none"|"static"|"carousel"|"video"|"design_brief", "title": string, "description": string}
+- {"type":"regenerate_content_variant","content_id": string, "platform"?: string|null, "title": string, "description": string}
 - {"type":"create_calendar_event","label": string, "event_date": "YYYY-MM-DD", "event_type": "launch"|"promotion"|"seasonal"|"community"|"deadline"|"other", "universities": string[], "run_pipeline_c": boolean, "needs_confirmation": boolean, "title": string, "description": string}
 - {"type":"edit_calendar_event","event_id": string, "label"?: string, "event_date"?: string, "event_type"?: string, "needs_confirmation": boolean, "title": string, "description": string}
 - {"type":"delete_calendar_event","event_id": string, "label": string, "needs_confirmation": boolean, "title": string, "description": string}
@@ -172,6 +179,7 @@ samm is conservative by default. It should help users make clear marketing decis
   - If the user provides a clear working title or theme, pass it as post_title. Otherwise omit it.
   - Blog is a channel, not an asset type. For standalone blog/article requests, set platforms to ["blog"] and asset_need to "none" unless the user explicitly asks for a hero image, carousel, video, or design brief.
 - Use regenerate_asset_brief when the user wants to regenerate, refresh, or redo the visual brief for an existing one-time post without rewriting the copy. Prefer the most relevant upcoming_one_time_post in context and pass its draft_group_id. Do not use write_post for a visual-only rerender.
+- Use regenerate_content_variant when the user wants to rewrite one existing platform draft without touching the rest of the one-time post set, such as "regenerate Facebook" or "redo the WhatsApp version", and the target content_id is known.
 - Use create_calendar_event when the user asks to schedule, add, or create a calendar event.
   - Infer the date from the user message, for example "next Friday", relative to today ${today}.
   - Preserve the user's event label as closely as possible. Do not rewrite it into a campus, university, or student-themed event unless the user explicitly asked for that.
@@ -197,6 +205,8 @@ samm is conservative by default. It should help users make clear marketing decis
 - Keep suggestions short and actionable.
 - Lead with the current state or the most useful next step.
 - When explaining marketing concepts, teach briefly and keep the explanation practical.
+- Only use the full greeting/introduction for greeting-only turns, such as "hello" or "hello samm".
+- If the user starts with hello/hi/hey/yo and continues with a request, treat the greeting as a salutation only. Do not introduce yourself; answer or route the request.
 
 ## Emoji Use
 
@@ -220,8 +230,77 @@ function safeString(value: unknown) {
   return trimmed.length > 0 ? trimmed : null
 }
 
+function isRetiredCampaignReportingInboxRow(row: any) {
+  if (Deno.env.get('SAMM_ENABLE_CAMPAIGN_REPORTING') === 'true') return false
+
+  const payload = row?.payload && typeof row.payload === 'object' ? row.payload : {}
+  return row?.item_type === 'campaign_report' || payload.type === 'campaign_underperforming'
+}
+
 function normalizeText(value: unknown) {
   return safeString(value)?.toLowerCase().replace(/\s+/g, ' ') ?? ''
+}
+
+function tokenizeForDuplicateGuard(value: unknown) {
+  return normalizeText(value)
+    .replace(/https?:\/\/\S+/g, '')
+    .replace(/#[\w-]+/g, '')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .split(/\s+/)
+    .map((word) => word.trim())
+    .filter((word) => word.length > 3)
+}
+
+function duplicateSimilarity(a: unknown, b: unknown) {
+  const aTokens = new Set(tokenizeForDuplicateGuard(a))
+  const bTokens = new Set(tokenizeForDuplicateGuard(b))
+  if (aTokens.size === 0 || bTokens.size === 0) return 0
+
+  let overlap = 0
+  for (const token of aTokens) {
+    if (bTokens.has(token)) overlap += 1
+  }
+
+  return overlap / Math.max(aTokens.size, bTokens.size)
+}
+
+function hasDuplicateOverrideSignal(message: string | undefined) {
+  return /\b(create anyway|still create|duplicate|follow[- ]?up|part\s*2|sequel|update|new angle|different angle)\b/i.test(message ?? '')
+}
+
+function extractRequestedMonthDay(message: string) {
+  const match = message.match(/\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+(\d{1,2})(?:st|nd|rd|th)?\b/i)
+  if (!match) return null
+  const monthMap: Record<string, string> = {
+    jan: '01',
+    january: '01',
+    feb: '02',
+    february: '02',
+    mar: '03',
+    march: '03',
+    apr: '04',
+    april: '04',
+    may: '05',
+    jun: '06',
+    june: '06',
+    jul: '07',
+    july: '07',
+    aug: '08',
+    august: '08',
+    sep: '09',
+    sept: '09',
+    september: '09',
+    oct: '10',
+    october: '10',
+    nov: '11',
+    november: '11',
+    dec: '12',
+    december: '12',
+  }
+  const month = monthMap[match[1].toLowerCase()]
+  const day = Number(match[2])
+  if (!month || day < 1 || day > 31) return null
+  return `${month}-${String(day).padStart(2, '0')}`
 }
 
 function jsonResponse(body: ChatResponse | { error: string }, status = 200) {
@@ -466,20 +545,37 @@ function pickRelevantOneTimePost(
   const historyText = extractHistoryText(history)
   const combinedContext = `${historyText}\n${normalizedMessage}`
   const postsWithDrafts = upcomingOneTimePosts.filter((post) => countExistingOneTimeDrafts(post) > 0)
+  const requestedMonthDay = extractRequestedMonthDay(message)
+  const sameRequestedDatePosts =
+    requestedMonthDay === null
+      ? postsWithDrafts
+      : postsWithDrafts.filter((post) => post.scheduled_for?.slice(5) === requestedMonthDay)
+  const primaryCandidates = sameRequestedDatePosts.length > 0 ? sameRequestedDatePosts : postsWithDrafts
+  const directContext = requestedMonthDay === null ? combinedContext : normalizedMessage
 
-  const directMatch = postsWithDrafts.find((post) => {
+  const directMatch = primaryCandidates.find((post) => {
     const title = normalizeText(post.title)
-    return title.length > 0 && combinedContext.includes(title)
+    return title.length > 0 && directContext.includes(title)
   })
   if (directMatch) return directMatch
 
-  const datedMatch = postsWithDrafts.find((post) => {
+  const datedMatch = primaryCandidates.find((post) => {
     if (!post.scheduled_for) return false
     const iso = post.scheduled_for.toLowerCase()
     const friendly = post.scheduled_for.replace(/^(\d{4})-(\d{2})-(\d{2})$/, '$2/$3/$1').toLowerCase()
-    return combinedContext.includes(iso) || combinedContext.includes(friendly)
+    const monthDay = post.scheduled_for.slice(5)
+    return directContext.includes(iso) || directContext.includes(friendly) || (requestedMonthDay !== null && requestedMonthDay === monthDay)
   })
   if (datedMatch) return datedMatch
+
+  const topicMatch = primaryCandidates
+    .map((post) => ({
+      post,
+      score: duplicateSimilarity(normalizedMessage, [post.title, post.sample_copy].filter(Boolean).join(' ')),
+    }))
+    .filter((entry) => entry.score >= 0.48)
+    .sort((a, b) => b.score - a.score)[0]?.post
+  if (topicMatch) return topicMatch
 
   if (postsWithDrafts.length === 1 && referencesExistingPost(message)) {
     return postsWithDrafts[0]
@@ -548,6 +644,54 @@ async function buildRegenerateAssetBriefResponse(
   }
 }
 
+function buildExistingOneTimePostNoCreateResponse(post: OneTimePostSummary, requestedTitle: string): ChatResponse {
+  const subtypeLabel = describeOneTimeSubtype(post)
+  const pieces = [
+    post.draft_count > 0 ? `${post.draft_count} draft${post.draft_count === 1 ? '' : 's'}` : null,
+    post.pending_count > 0 ? `${post.pending_count} pending` : null,
+    post.scheduled_count > 0 ? `${post.scheduled_count} scheduled` : null,
+    post.published_count > 0 ? `${post.published_count} published` : null,
+  ].filter((value): value is string => Boolean(value))
+  const stateLabel = pieces.length > 0 ? pieces.join(', ') : `${post.content_count} content item${post.content_count === 1 ? '' : 's'}`
+
+  return {
+    message: `I found an existing one-time post for this request: "${post.title}" on ${post.scheduled_for ?? 'the calendar'} as a ${subtypeLabel} slot, with ${stateLabel} already in place. I did not create another batch for "${requestedTitle}" because it would duplicate existing work. Ask for a follow-up angle or different angle if you want a separate post on the same theme.`,
+    suggestions: ['Open Content Registry', 'Regenerate one variant', 'Create a follow-up angle'],
+    invoked_action: {
+      type: 'run_pipeline',
+      pipeline: 'pipeline-d-post',
+      status: 'cancelled',
+      run_id: null,
+    },
+  }
+}
+
+async function buildRegenerateContentVariantResponse(
+  supabase: any,
+  orgId: string,
+  intent: RegenerateContentVariantIntent,
+  message?: string,
+): Promise<ChatResponse> {
+  const result = await invokePipeline(supabase, 'pipeline-d-post', orgId, {
+    mode: 'regenerate_content_variant',
+    content_id: intent.content_id,
+  })
+
+  const platformLabel = intent.platform ? `${intent.platform} ` : ''
+  return {
+    message:
+      message ||
+      `Regenerated the ${platformLabel}draft variant. The updated copy is back in Content Registry for review.`,
+    suggestions: ['Open Content Registry', 'Review the updated draft', 'Regenerate another variant'],
+    invoked_action: {
+      type: 'run_pipeline',
+      pipeline: 'pipeline-d-post',
+      status: result?.ok === false ? 'failed' : 'completed',
+      run_id: null,
+    },
+  }
+}
+
 function summarizeInbox(rows: any[]) {
   return rows.map((row) => ({
     title: row.payload?.title ?? row.item_type,
@@ -557,9 +701,19 @@ function summarizeInbox(rows: any[]) {
   }))
 }
 
-function isGreeting(message: string) {
-  const normalized = message.toLowerCase().trim()
-  return /^(hi|hello|hey|yo)\b/.test(normalized)
+function stripLeadingGreeting(message: string) {
+  const trimmed = message.trim()
+  let remainder = trimmed.replace(/^(?:hi|hello|hey|yo)\b/i, '').trim()
+  if (remainder === trimmed) return trimmed
+
+  remainder = remainder.replace(/^samm\b/i, '').trim()
+  remainder = remainder.replace(/^[,.!?:;\-–—]+/, '').trim()
+
+  return remainder || trimmed
+}
+
+function isGreetingOnly(message: string) {
+  return /^(?:hi|hello|hey|yo)(?:\s+(?:samm|there))?[\s,.!?:;\-–—]*$/i.test(message.trim())
 }
 
 function isPipelineDCommand(message: string) {
@@ -625,12 +779,78 @@ function buildGreetingResponse(
   }
 }
 
-function buildWritePostResponse(
+async function findDuplicateOneTimePost(
   supabase: any,
   orgId: string,
   intent: PipelineDRequestIntent,
   message?: string,
-): ChatResponse {
+): Promise<OneTimePostSummary | null> {
+  if (hasDuplicateOverrideSignal(message)) return null
+
+  const lookbackStart = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString()
+  const { data, error } = await supabase
+    .from('content_registry')
+    .select('id, platform, subject_line, body, status, scheduled_at, created_at, metadata')
+    .eq('org_id', orgId)
+    .eq('created_by', 'pipeline-d-post')
+    .eq('is_campaign_post', false)
+    .gte('created_at', lookbackStart)
+    .order('created_at', { ascending: false })
+    .limit(160)
+
+  if (error) {
+    console.error('Duplicate guard: failed to load one-time history:', error.message)
+    return null
+  }
+
+  const candidates = summarizeOneTimePosts(data ?? [])
+  const requestedText = [intent.post_title, intent.topic, intent.event_ref].filter(Boolean).join(' ')
+  const requestedDate = safeString(intent.scheduled_for)
+
+  for (const candidate of candidates) {
+    const candidateText = [candidate.title, candidate.event_ref, candidate.sample_copy].filter(Boolean).join(' ')
+    const sameDate = Boolean(requestedDate && candidate.scheduled_for === requestedDate)
+    const titleScore = duplicateSimilarity(intent.post_title ?? intent.topic, candidate.title)
+    const topicScore = duplicateSimilarity(requestedText, candidateText)
+
+    if (sameDate && (titleScore >= 0.62 || topicScore >= 0.5)) return candidate
+    if (titleScore >= 0.78 || topicScore >= 0.68) return candidate
+  }
+
+  return null
+}
+
+function buildDuplicateOneTimePostResponse(intent: PipelineDRequestIntent, duplicate: OneTimePostSummary): ChatResponse {
+  const statePieces = [
+    duplicate.draft_count > 0 ? `${duplicate.draft_count} draft${duplicate.draft_count === 1 ? '' : 's'}` : null,
+    duplicate.pending_count > 0 ? `${duplicate.pending_count} pending` : null,
+    duplicate.scheduled_count > 0 ? `${duplicate.scheduled_count} scheduled` : null,
+    duplicate.published_count > 0 ? `${duplicate.published_count} published` : null,
+  ].filter((value): value is string => Boolean(value))
+  const stateLabel = statePieces.length > 0 ? statePieces.join(', ') : 'content already exists'
+  const dateLabel = duplicate.scheduled_for ? ` on ${duplicate.scheduled_for}` : ''
+
+  return {
+    message: `I found a similar one-time post already in the workspace: "${duplicate.title}"${dateLabel}, with ${stateLabel}. I did not create another batch for "${intent.post_title ?? intent.topic}" because it looks like a repeat. Use a clear follow-up/new-angle request if this is meant to be a separate post.`,
+    suggestions: ['Open Content Registry', 'Regenerate one variant', 'Create a follow-up angle'],
+    invoked_action: {
+      type: 'run_pipeline',
+      pipeline: 'pipeline-d-post',
+      status: 'cancelled',
+      run_id: null,
+    },
+  }
+}
+
+async function buildWritePostResponse(
+  supabase: any,
+  orgId: string,
+  intent: PipelineDRequestIntent,
+  message?: string,
+): Promise<ChatResponse> {
+  const duplicate = await findDuplicateOneTimePost(supabase, orgId, intent, message)
+  if (duplicate) return buildDuplicateOneTimePostResponse(intent, duplicate)
+
   const postBody: Record<string, unknown> = {
     intent: PLANNING_INTENT.ONE_TIME,
     topic: intent.topic,
@@ -688,6 +908,9 @@ async function buildOneTimePostResponse(
   intent: PipelineDRequestIntent,
   message?: string,
 ): Promise<ChatResponse> {
+  const duplicate = await findDuplicateOneTimePost(supabase, orgId, intent, message)
+  if (duplicate) return buildDuplicateOneTimePostResponse(intent, duplicate)
+
   const postBody: Record<string, unknown> = {
     intent: PLANNING_INTENT.ONE_TIME,
     topic: intent.topic,
@@ -772,7 +995,8 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json().catch(() => ({}))
-    const message = String(body?.message ?? '').trim()
+    const rawMessage = String(body?.message ?? '').trim()
+    const message = stripLeadingGreeting(rawMessage)
     const history = Array.isArray(body?.history) ? (body.history as ChatHistoryItem[]) : []
     const mode: ConversationMode = body?.mode === 'planning' ? 'planning' : 'execution'
     const confirmationAction = body?.confirmationAction ? String(body.confirmationAction) : null
@@ -786,7 +1010,7 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: 'Missing org context' }, 400)
     }
 
-    if (!message && !explicitAction) {
+    if (!rawMessage && !explicitAction) {
       return jsonResponse({ error: 'Message is required' }, 400)
     }
 
@@ -880,6 +1104,30 @@ Deno.serve(async (req) => {
       )
     }
 
+    if (explicitAction?.type === 'regenerate_content_variant') {
+      if (mode === 'planning') {
+        return jsonResponse(buildPlanningModeMutationBlockedResponse('regenerate a content variant directly'))
+      }
+
+      const contentId = safeString(explicitAction.content_id)
+      if (!contentId) {
+        return jsonResponse({ error: 'The variant regeneration request needs a content item.' }, 400)
+      }
+
+      return jsonResponse(
+        await buildRegenerateContentVariantResponse(
+          supabase,
+          orgId,
+          {
+            content_id: contentId,
+            platform: safeString(explicitAction.platform),
+            title: safeString(explicitAction.title),
+          },
+          message || safeString(explicitAction.title) || undefined,
+        ),
+      )
+    }
+
     const today = new Date().toISOString().slice(0, 10)
 
     const [orgConfigResult, metricsResult, runsResult, eventsResult, oneTimePostsResult, inboxCountResult, inboxResult] = await Promise.all([
@@ -897,8 +1145,8 @@ Deno.serve(async (req) => {
         .gte('scheduled_at', `${today}T00:00:00`)
         .order('scheduled_at', { ascending: true })
         .limit(40),
-      supabase.from('human_inbox').select('*', { count: 'exact', head: true }).eq('org_id', orgId).eq('status', 'pending'),
-      supabase.from('human_inbox').select('*').eq('org_id', orgId).eq('status', 'pending').order('created_at', { ascending: false }).limit(5),
+      supabase.from('human_inbox').select('id,item_type,status,payload').eq('org_id', orgId).in('status', ['pending', 'new']),
+      supabase.from('human_inbox').select('*').eq('org_id', orgId).in('status', ['pending', 'new']).order('created_at', { ascending: false }).limit(50),
     ])
 
     if (orgConfigResult.error) throw new Error(`Failed to load org config: ${orgConfigResult.error.message}`)
@@ -921,8 +1169,9 @@ Deno.serve(async (req) => {
     const recentRuns = summarizeRuns(activeRuns)
     const upcomingEvents = summarizeEvents(eventsResult.data ?? [])
     const upcomingOneTimePosts = summarizeOneTimePosts(oneTimePostsResult.data ?? []).slice(0, 5)
-    const pendingInbox = summarizeInbox(inboxResult.data ?? [])
-    const pendingCount = inboxCountResult.count ?? 0
+    const filteredInboxRows = (inboxResult.data ?? []).filter((row: any) => !isRetiredCampaignReportingInboxRow(row))
+    const pendingInbox = summarizeInbox(filteredInboxRows.slice(0, 5))
+    const pendingCount = (inboxCountResult.data ?? []).filter((row: any) => !isRetiredCampaignReportingInboxRow(row)).length
 
     const structuredConfigContext = await loadStructuredConfigSnapshot(supabase, orgId)
       .then((snapshot) => summarizeStructuredConfig(snapshot, today))
@@ -949,7 +1198,7 @@ Deno.serve(async (req) => {
       if (mode === 'planning') {
         return jsonResponse(buildPlanningModeMutationBlockedResponse('create drafts directly'))
       }
-      return jsonResponse(buildWritePostResponse(supabase, orgId, normalizedWritePost))
+      return jsonResponse(await buildWritePostResponse(supabase, orgId, normalizedWritePost, message))
     }
 
     if (isPipelineDCommand(message)) {
@@ -983,9 +1232,13 @@ Deno.serve(async (req) => {
           ),
         )
       }
+
+      if (isContentGenerationRequest(message) && !hasDuplicateOverrideSignal(message)) {
+        return jsonResponse(buildExistingOneTimePostNoCreateResponse(relevantOneTimePost, message))
+      }
     }
 
-      if (isGreeting(message)) {
+      if (isGreetingOnly(rawMessage)) {
         return jsonResponse(buildGreetingResponse(orgConfig?.org_name ?? 'this workspace', upcomingEvents, upcomingOneTimePosts, pendingCount, mode))
       }
       const prompt = {
@@ -1162,7 +1415,6 @@ Deno.serve(async (req) => {
             supabase,
             orgId,
             {
-            type: 'write_post',
             topic,
             platforms: Array.isArray(action.platforms) ? action.platforms : null,
             event_ref: action.event_ref ? String(action.event_ref) : null,
@@ -1188,7 +1440,7 @@ Deno.serve(async (req) => {
       }
 
       return jsonResponse(
-        buildWritePostResponse(
+        await buildWritePostResponse(
           supabase,
           orgId,
           {
@@ -1225,6 +1477,30 @@ Deno.serve(async (req) => {
               title: safeString(action.title),
               asset_need: normalizeAssetNeed(action.asset_need),
             },
+          parsed.message,
+        ),
+      )
+    }
+
+    if (action?.type === 'regenerate_content_variant') {
+      if (mode === 'planning') {
+        return jsonResponse(buildPlanningModeMutationBlockedResponse('regenerate a content variant directly'))
+      }
+
+      const contentId = safeString(action.content_id)
+      if (!contentId) {
+        return jsonResponse({ message: "I couldn't identify which content variant to regenerate.", suggestions })
+      }
+
+      return jsonResponse(
+        await buildRegenerateContentVariantResponse(
+          supabase,
+          orgId,
+          {
+            content_id: contentId,
+            platform: safeString(action.platform),
+            title: safeString(action.title),
+          },
           parsed.message,
         ),
       )

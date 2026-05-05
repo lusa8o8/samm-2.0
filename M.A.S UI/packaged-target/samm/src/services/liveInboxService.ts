@@ -3,6 +3,7 @@ import { getAccessToken, getOrgId, supabase } from "../../../../src/lib/supabase
 import type { InboxItem, PipelineId } from "../types";
 
 const COORDINATOR_FUNCTION = "coordinator-ingress";
+const campaignReportingEnabled = import.meta.env.VITE_ENABLE_CAMPAIGN_REPORTING === "true";
 
 type LiveInboxRow = {
   id: string;
@@ -71,6 +72,21 @@ function toStatus(value?: string | null): InboxItem["status"] {
     default:
       return "pending";
   }
+}
+
+export function isActionableInboxStatus(status?: InboxItem["status"] | null) {
+  return status === "pending" || status === "new";
+}
+
+export function getActionableInboxCount(items: Array<Pick<InboxItem, "status">>) {
+  return items.filter((item) => isActionableInboxStatus(item.status)).length;
+}
+
+function isRetiredCampaignReportingRow(row: LiveInboxRow) {
+  if (campaignReportingEnabled) return false;
+
+  const payload = row.payload && typeof row.payload === "object" ? row.payload : {};
+  return row.item_type === "campaign_report" || payload.type === "campaign_underperforming";
 }
 
 function getPreview(payload: Record<string, any>) {
@@ -263,7 +279,9 @@ export async function getInboxItems() {
     .order("created_at", { ascending: false });
 
   if (error) throw error;
-  return (data ?? []).map((row) => mapInboxItem(row as LiveInboxRow));
+  return (data ?? [])
+    .filter((row) => !isRetiredCampaignReportingRow(row as LiveInboxRow))
+    .map((row) => mapInboxItem(row as LiveInboxRow));
 }
 
 export async function approveInboxItem(id: string) {

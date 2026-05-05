@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { format } from 'date-fns';
 import { Activity, AlertTriangle, PlayCircle, Send, Sparkles } from 'lucide-react';
 import { useLocation } from 'wouter';
@@ -30,6 +30,7 @@ const suggestionChipsByMode: Record<SammConversationMode, string[]> = {
 };
 
 const SAMM_LOGO_SRC = '/samm-app-icon.png?v=20260423';
+const SAMM_SCROLL_STORAGE_PREFIX = 'samm.chat.scroll';
 
 function SammLogo({
   className,
@@ -235,18 +236,34 @@ export function SammWorkspacePanel({
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const hasRestoredScrollRef = useRef(false);
+  const shouldStickToBottomRef = useRef(true);
   const { openInspector } = useInspector();
   const [location] = useLocation();
+  const scrollStorageKey = `${SAMM_SCROLL_STORAGE_PREFIX}.${embedded ? 'rail' : 'main'}`;
 
   useEffect(() => {
     getSammMessages().then(setMessages);
     getSammContext().then(setCtx);
   }, []);
 
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  useLayoutEffect(() => {
+    const container = scrollRef.current;
+    if (!container || messages.length === 0) return;
+
+    if (!hasRestoredScrollRef.current) {
+      hasRestoredScrollRef.current = true;
+      const saved = typeof window !== 'undefined' ? Number(window.sessionStorage.getItem(scrollStorageKey)) : NaN;
+      container.scrollTop = Number.isFinite(saved) && saved >= 0 ? saved : container.scrollHeight;
+      return;
+    }
+
+    if (shouldStickToBottomRef.current) {
+      container.scrollTop = container.scrollHeight;
+    }
+  }, [messages, scrollStorageKey]);
 
   useEffect(() => {
     const textarea = inputRef.current;
@@ -273,6 +290,7 @@ export function SammWorkspacePanel({
   const handleSend = async (contentOverride?: string, confirmationAction?: string | null) => {
     const content = (contentOverride ?? input).trim();
     if (!content || loading) return;
+    shouldStickToBottomRef.current = true;
 
     const userMessage: SammMessage = {
       id: `msg-${Date.now()}`,
@@ -360,7 +378,18 @@ export function SammWorkspacePanel({
         </div>
       </div>
 
-      <div className={cn('flex-1 overflow-y-auto space-y-6', embedded ? 'px-5 py-5' : 'px-4 py-6')}>
+      <div
+        ref={scrollRef}
+        className={cn('flex-1 overflow-y-auto space-y-6', embedded ? 'px-5 py-5' : 'px-4 py-6')}
+        onScroll={(event) => {
+          const target = event.currentTarget;
+          const distanceFromBottom = target.scrollHeight - target.scrollTop - target.clientHeight;
+          shouldStickToBottomRef.current = distanceFromBottom < 96;
+          if (typeof window !== 'undefined') {
+            window.sessionStorage.setItem(scrollStorageKey, String(target.scrollTop));
+          }
+        }}
+      >
         {messages.length === 0 && (
           <div className="flex h-full flex-col items-center justify-center gap-4 text-center text-muted-foreground">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">

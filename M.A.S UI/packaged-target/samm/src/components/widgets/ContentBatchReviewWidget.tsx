@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { CheckCircle, XCircle, RefreshCw, Calendar, Tag, Target, Link2 } from 'lucide-react';
+import { CheckCircle, XCircle, RefreshCw, Calendar, Tag, Target, Link2, ImagePlus } from 'lucide-react';
 import { format } from 'date-fns';
-import { getListContentQueryKey, useActionContent, useRetryContent } from '@/lib/api';
+import { useActionContent, useRegenerateContentVariant, useRetryContent, useUploadContentImage } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { ChannelIcon } from '../shared/ChannelIcon';
 import { StatusChip } from '../shared/StatusChip';
@@ -11,6 +11,8 @@ import type { ContentDraft } from '../../types';
 type InspectorContentDraft = ContentDraft & {
   platform?: string | null;
   pipelineRunId?: string | null;
+  mediaUrl?: string | null;
+  canRegenerateVariant?: boolean;
 };
 
 interface Props {
@@ -31,11 +33,16 @@ const channelGradients: Record<string, string> = {
 
 function ContentDraftDetail({ draft }: { draft: InspectorContentDraft }) {
   const queryClient = useQueryClient();
+  const fileRef = useRef<HTMLInputElement | null>(null);
   const [actionState, setActionState] = useState<string | null>(null);
+  const [mediaUrl, setMediaUrl] = useState(draft.mediaUrl ?? null);
   const gradient = channelGradients[draft.channel] ?? 'from-muted/40 to-muted/10';
+  const canManageImage = draft.platform !== 'design_brief' && draft.channel !== 'design_brief';
+  const canRegenerateVariant = draft.canRegenerateVariant && (draft.status === 'draft' || draft.status === 'rejected');
 
   const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: getListContentQueryKey() });
+    queryClient.invalidateQueries({ queryKey: ['content-registry'] });
+    queryClient.refetchQueries({ queryKey: ['content-registry'], type: 'active' });
     queryClient.invalidateQueries({ queryKey: ['inbox-items'] });
     queryClient.invalidateQueries({ queryKey: ['inbox-summary'] });
     queryClient.invalidateQueries({ queryKey: ['pipeline-status'] });
@@ -50,6 +57,19 @@ function ContentDraftDetail({ draft }: { draft: InspectorContentDraft }) {
   const retryMutation = useRetryContent({
     mutation: {
       onSuccess: invalidate,
+    },
+  });
+  const regenerateVariantMutation = useRegenerateContentVariant({
+    mutation: {
+      onSuccess: invalidate,
+    },
+  });
+  const imageMutation = useUploadContentImage({
+    mutation: {
+      onSuccess: (result: { media_url?: string | null }) => {
+        if (result.media_url) setMediaUrl(result.media_url);
+        invalidate();
+      },
     },
   });
 
@@ -78,6 +98,19 @@ function ContentDraftDetail({ draft }: { draft: InspectorContentDraft }) {
     setActionState('retrying');
   };
 
+  const handleRegenerateVariant = async () => {
+    await regenerateVariantMutation.mutateAsync({
+      contentId: draft.id,
+      platform: draft.platform,
+      title: `Regenerate ${draft.channel} variant`,
+      description: `Regenerate only the ${draft.channel} draft for "${draft.title}".`,
+    });
+  };
+
+  const handleImageUpload = (file: File) => {
+    imageMutation.mutate({ id: draft.id, file });
+  };
+
   return (
     <div className="space-y-4">
       <div className={cn('flex flex-col gap-3 rounded-xl border border-border/50 bg-gradient-to-br p-5', gradient)}>
@@ -98,11 +131,47 @@ function ContentDraftDetail({ draft }: { draft: InspectorContentDraft }) {
           </div>
         </div>
 
+        {mediaUrl && (
+          <div className="overflow-hidden rounded-xl border border-border/60 bg-background/70">
+            <img
+              src={mediaUrl}
+              alt=""
+              className="max-h-[320px] w-full object-contain"
+              loading="lazy"
+            />
+          </div>
+        )}
+
         <div>
           <p className="mb-2 text-sm font-semibold text-foreground">{draft.title}</p>
           <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-foreground/80">{draft.preview}</p>
         </div>
       </div>
+
+      {canManageImage && (
+        <div className="flex justify-end">
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) handleImageUpload(file);
+              event.target.value = '';
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={imageMutation.isPending}
+            className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-border bg-card px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-60"
+          >
+            <ImagePlus size={13} />
+            {imageMutation.isPending ? 'Uploading...' : mediaUrl ? 'Replace image' : 'Add image'}
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-2">
         {draft.linkedCampaign && (
@@ -169,6 +238,15 @@ function ContentDraftDetail({ draft }: { draft: InspectorContentDraft }) {
         <div className="flex gap-2 pt-1">
           {draft.status === 'draft' && draft.approvalStatus === 'pending' && (
             <>
+              {canRegenerateVariant && (
+                <button
+                  onClick={() => void handleRegenerateVariant()}
+                  disabled={regenerateVariantMutation.isPending}
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-violet-200 bg-violet-50 py-2 text-sm font-medium text-violet-700 transition-colors hover:bg-violet-100 disabled:opacity-60 dark:border-violet-800 dark:bg-violet-950/30 dark:text-violet-300"
+                >
+                  <RefreshCw size={14} /> {regenerateVariantMutation.isPending ? 'Regenerating...' : 'Regenerate'}
+                </button>
+              )}
               <button
                 onClick={() => void handleApprove()}
                 disabled={actionMutation.isPending}
@@ -192,6 +270,15 @@ function ContentDraftDetail({ draft }: { draft: InspectorContentDraft }) {
               className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-primary/30 bg-primary/10 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/20 disabled:opacity-60"
             >
               <RefreshCw size={14} /> Retry
+            </button>
+          )}
+          {draft.status === 'rejected' && canRegenerateVariant && (
+            <button
+              onClick={() => void handleRegenerateVariant()}
+              disabled={regenerateVariantMutation.isPending}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-violet-200 bg-violet-50 py-2 text-sm font-medium text-violet-700 transition-colors hover:bg-violet-100 disabled:opacity-60 dark:border-violet-800 dark:bg-violet-950/30 dark:text-violet-300"
+            >
+              <RefreshCw size={14} /> {regenerateVariantMutation.isPending ? 'Regenerating...' : 'Regenerate'}
             </button>
           )}
         </div>

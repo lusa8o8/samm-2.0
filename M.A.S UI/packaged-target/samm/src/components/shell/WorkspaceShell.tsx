@@ -4,10 +4,11 @@ import { useLocation } from 'wouter';
 import { Sidebar } from './Sidebar';
 import { InspectorPanel } from './InspectorPanel';
 import { CalendarWorkspaceRail } from './CalendarWorkspaceRail';
+import { DesktopInspectorRail } from './DesktopInspectorRail';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../ui/resizable';
 import { useModules } from '../../store/moduleStore';
 import type { WidgetDescriptor } from '../../types';
-import { getInboxItems } from '../../services/liveInboxService';
+import { getActionableInboxCount, getInboxItems } from '../../services/liveInboxService';
 
 interface WorkspaceShellProps {
   children: React.ReactNode;
@@ -39,6 +40,7 @@ export function WorkspaceShell({ children }: WorkspaceShellProps) {
   const [location] = useLocation();
   const { modules } = useModules();
   const [inspector, setInspector] = useState<InspectorState>({ isOpen: false });
+  const [isDesktopViewport, setIsDesktopViewport] = useState(false);
   const [isDesktopCalendarWorkspace, setIsDesktopCalendarWorkspace] = useState(false);
   const [calendarRailTab, setCalendarRailTab] = useState<'samm' | 'detail'>('samm');
   const [isCalendarRailCollapsed, setIsCalendarRailCollapsed] = useState(false);
@@ -48,8 +50,9 @@ export function WorkspaceShell({ children }: WorkspaceShellProps) {
     staleTime: 30_000,
   });
 
+  const actionableInboxCount = getActionableInboxCount(inboxItems);
   const modulesWithBadges = modules.map((module) =>
-    module.id === 'inbox' ? { ...module, badge: inboxItems.length } : module
+    module.id === 'inbox' ? { ...module, badge: actionableInboxCount } : module
   );
   const enabledModules = modulesWithBadges.filter((module) => module.enabled);
 
@@ -59,6 +62,7 @@ export function WorkspaceShell({ children }: WorkspaceShellProps) {
     const updateLayoutMode = () => {
       const isDesktop = window.innerWidth >= 1280;
       const isCalendarRoute = location.startsWith('/calendar');
+      setIsDesktopViewport(isDesktop);
       setIsDesktopCalendarWorkspace(isDesktop && isCalendarRoute);
     };
 
@@ -87,6 +91,12 @@ export function WorkspaceShell({ children }: WorkspaceShellProps) {
     setInspector({ isOpen: false });
     setCalendarRailTab('samm');
   }, []);
+
+  const shouldUseDesktopInspectorRail =
+    isDesktopViewport &&
+    !isDesktopCalendarWorkspace &&
+    inspector.isOpen &&
+    location.startsWith('/content');
 
   return (
     <InspectorContext.Provider value={{ openInspector, closeInspector, inspector }}>
@@ -129,11 +139,25 @@ export function WorkspaceShell({ children }: WorkspaceShellProps) {
               </ResizablePanel>
             </ResizablePanelGroup>
           )
+        ) : shouldUseDesktopInspectorRail ? (
+          <ResizablePanelGroup direction="horizontal" autoSaveId="content-desktop-inspector" className="min-w-0 flex-1 overflow-hidden">
+            <ResizablePanel defaultSize={60} minSize={42}>
+              <main className="h-full min-w-0 overflow-hidden">{children}</main>
+            </ResizablePanel>
+            <ResizableHandle withHandle />
+            <ResizablePanel defaultSize={40} minSize={28} maxSize={52}>
+              <DesktopInspectorRail
+                title={inspector.title}
+                widget={inspector.widget}
+                onClose={closeInspector}
+              />
+            </ResizablePanel>
+          </ResizablePanelGroup>
         ) : (
           <main className="flex-1 min-w-0 overflow-hidden">{children}</main>
         )}
       </div>
-      {!isDesktopCalendarWorkspace && (
+      {!isDesktopCalendarWorkspace && !shouldUseDesktopInspectorRail && (
         <InspectorPanel
           isOpen={inspector.isOpen}
           title={inspector.title}

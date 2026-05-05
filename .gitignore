@@ -5,8 +5,10 @@ dist/
 M.A.S UI/.env.local
 M.A.S UI/node_modules/
 M.A.S UI/dist/
+M.A.S UI/dist-packaged/
 M.A.S UI/vite-dev.log
 M.A.S UI/vite-dev.err.log
+samm 2.0 UI/
 set-secrets.ps1
 invoke-coordinator.ps1
 invoke-pipeline-a.ps1

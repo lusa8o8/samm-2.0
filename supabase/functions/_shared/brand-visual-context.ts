@@ -48,14 +48,30 @@ export function buildBrandVisualRules(
     must_include?: string[] | null
     must_avoid?: string[] | null
     strict_mode?: boolean | null
+    includeConversionDestinations?: boolean | null
   },
 ): BrandVisualRules | null {
   const visual = (config?.brand_visual ?? {}) as Record<string, unknown>
-  const socialHandles = collectSocialHandles(config?.social_handles ?? null)
-  const landingUrl = cleanString(config?.primary_cta_url)
-    ?? socialHandles?.custom_app_url
-    ?? socialHandles?.studyhub_url
-    ?? null
+  const includeConversionDestinations = extras?.includeConversionDestinations !== false
+  const rawSocialHandles = collectSocialHandles(config?.social_handles ?? null)
+  const socialHandles = rawSocialHandles && !includeConversionDestinations
+    ? Object.fromEntries(
+        Object.entries(rawSocialHandles).filter(([key]) => {
+          const normalizedKey = key.toLowerCase()
+          return !normalizedKey.includes('url') &&
+            !normalizedKey.includes('link') &&
+            !normalizedKey.includes('landing') &&
+            !normalizedKey.includes('checkout') &&
+            !normalizedKey.includes('cta')
+        }),
+      )
+    : rawSocialHandles
+  const landingUrl = includeConversionDestinations
+    ? cleanString(config?.primary_cta_url)
+      ?? rawSocialHandles?.custom_app_url
+      ?? rawSocialHandles?.studyhub_url
+      ?? null
+    : null
 
   const rules: BrandVisualRules = {
     tone: cleanString(extras?.tone),
@@ -74,7 +90,7 @@ export function buildBrandVisualRules(
     image_style: cleanString(visual.visual_style),
     photography_style: cleanString(visual.photography_style),
     layout_preference: cleanString(visual.layout_preference),
-    social_handles: socialHandles,
+    social_handles: socialHandles && Object.keys(socialHandles).length > 0 ? socialHandles : null,
     landing_url: landingUrl,
     design_spec: cleanString(config?.markdown_design_spec),
     strict_mode: extras?.strict_mode ?? true,

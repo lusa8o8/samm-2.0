@@ -24,19 +24,16 @@ import {
   type DraftAssetRequest,
 } from '../_shared/asset-brief-contract.ts'
 import { buildBrandVisualRules, renderBrandVisualRules } from '../_shared/brand-visual-context.ts'
-import { getIntegrationDefinition } from '../_shared/integration-registry.ts'
 import { createAnthropicClient, generateJsonWithAnthropic, generateTextWithAnthropic } from '../_shared/llm-client.ts'
+import {
+  buildPlatformDerivativeInstruction,
+  getPlatformAssetDimensions,
+  getSupportedPlatformDerivativeRule,
+} from '../_shared/platform-derivative-matrix.ts'
+import { buildBrandVoiceSystemPrompt as buildSystemPrompt } from '../_shared/brand-voice-prompt.ts'
+import { renderVisualIntentPolicy, resolveVisualIntentPolicy } from '../_shared/visual-intent-policy.ts'
 
 const DEFAULT_PLATFORMS = ['facebook', 'whatsapp', 'youtube', 'email']
-const PLATFORM_DIMENSIONS: Record<string, string> = {
-  facebook: '1080x1080',
-  instagram: '1080x1350',
-  linkedin: '1200x627',
-  whatsapp: '1080x1920',
-  youtube: '1080x1920',
-  email: '1200x628',
-  blog: '1200x630',
-}
 
 type CanonicalCopy = {
   headline: string
@@ -78,6 +75,34 @@ function safeString(value: unknown): string | null {
   if (typeof value !== 'string') return null
   const trimmed = value.trim()
   return trimmed.length > 0 ? trimmed : null
+}
+
+function normalizeForSimilarity(value: unknown): string {
+  return String(value ?? '')
+    .toLowerCase()
+    .replace(/https?:\/\/\S+/g, '')
+    .replace(/#[\w-]+/g, '')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function isMateriallyDifferentCopy(nextBody: string, previousBody: string | null | undefined): boolean {
+  const next = normalizeForSimilarity(nextBody)
+  const previous = normalizeForSimilarity(previousBody)
+  if (!previous) return true
+  if (!next || next === previous) return false
+
+  const previousWords = new Set(previous.split(' ').filter((word) => word.length > 3))
+  const nextWords = new Set(next.split(' ').filter((word) => word.length > 3))
+  if (previousWords.size === 0 || nextWords.size === 0) return next !== previous
+
+  let overlap = 0
+  for (const word of nextWords) {
+    if (previousWords.has(word)) overlap += 1
+  }
+
+  return overlap / Math.max(previousWords.size, nextWords.size) < 0.82
 }
 
 function getCreatedAtMs(value: unknown): number | null {
@@ -141,24 +166,6 @@ async function getOrgConfig(supabase: any, orgId: string) {
   return data
 }
 
-function buildSystemPrompt(brandVoice: any): string {
-  const hashtagLine = Array.isArray(brandVoice.hashtags) && brandVoice.hashtags.length > 0
-    ? `\nApproved hashtags (use only these - do not invent others): ${brandVoice.hashtags.join(' ')}`
-    : ''
-  const formatLine = brandVoice.post_format_preference
-    ? `\nPost format preference: ${brandVoice.post_format_preference}`
-    : ''
-
-  return `You are the social media voice for ${brandVoice.full_name ?? brandVoice.name ?? 'this organisation'}.
-Target audience: ${brandVoice.target_audience ?? ''}
-Tone: ${brandVoice.tone ?? ''}
-Always: ${(brandVoice.always_say ?? []).join(', ')}
-Never: ${(brandVoice.never_say ?? []).join(', ')}
-Preferred CTA: ${brandVoice.cta_preference ?? brandVoice.preferred_cta ?? ''}
-Good post example: "${brandVoice.example_good_post ?? brandVoice.good_post_example ?? ''}"
-Bad post example: "${brandVoice.example_bad_post ?? brandVoice.bad_post_example ?? ''}"${hashtagLine}${formatLine}`
-}
-
 function normalizeScheduledFor(value: unknown): string | null {
   if (typeof value !== 'string') return null
   const trimmed = value.trim()
@@ -175,7 +182,7 @@ function toScheduledAt(date: string | null): string | null {
 function buildAssetTargets(platforms: string[]): AssetTarget[] {
   return platforms.map((platform) => ({
     platform,
-    dimensions: PLATFORM_DIMENSIONS[platform] ?? null,
+    dimensions: getPlatformAssetDimensions(platform),
   }))
 }
 
@@ -417,6 +424,88 @@ async function loadOneTimeRegenerationContext(
   }
 }
 
+async function regenerateOneTimeContentVariant(
+  supabase: any,
+  anthropic: ReturnType<typeof createAnthropicClient>,
+  orgId: string,
+  contentId: string,
+): Promise<Record<string, unknown>> {
+  const { data: row, error: rowError } = await supabase
+    .from('content_registry')
+    .select('*')
+    .eq('org_id', orgId)
+    .eq('id', contentId)
+    .single()
+
+  if (rowError || !row) {
+    throw new Error(`Failed to load content variant: ${rowError?.message ?? 'not found'}`)
+  }
+
+  const platform = safeString(row.platform)
+  if (!platform || platform === 'design_brief') {
+    throw new Error('Only copy variants can be regenerated.')
+  }
+
+  const context = await loadOneTimeRegenerationContext(supabase, orgId, {
+    contentId,
+    draftGroupId: safeString(row.metadata?.draft_group_id),
+    assetNeedOverride: normalizeAssetNeed(row.metadata?.asset_need ?? null),
+  })
+  const config = await getOrgConfig(supabase, orgId)
+  const brandVoice = config?.brand_voice ?? {}
+  const canonical = buildCanonicalFromExistingRows(context.nonBriefRows, context.workingTitle, brandVoice)
+  const assets = await runPlatformAdapters(
+    anthropic,
+    context.topic,
+    canonical,
+    [platform],
+    context.scheduledFor,
+    brandVoice,
+    {
+      rewriteMode: true,
+      previousCopy: safeString(row.body),
+    },
+  )
+  const regenerated = assets[0]
+
+  if (!regenerated) {
+    throw new Error(`Could not regenerate ${platform} copy.`)
+  }
+
+  if (!isMateriallyDifferentCopy(regenerated.body, row.body)) {
+    throw new Error(`The regenerated ${platform} copy was too similar to the current draft. Try regenerating again.`)
+  }
+
+  const existingMeta = row.metadata && typeof row.metadata === 'object' ? row.metadata : {}
+  const { error: updateError } = await supabase
+    .from('content_registry')
+    .update({
+      body: regenerated.body,
+      subject_line: regenerated.subject_line ?? null,
+      status: 'draft',
+      rejection_note: null,
+      metadata: {
+        ...existingMeta,
+        regenerated_at: new Date().toISOString(),
+        regenerated_reason: 'single_platform_variant',
+      },
+    })
+    .eq('org_id', orgId)
+    .eq('id', contentId)
+
+  if (updateError) {
+    throw new Error(`Failed to update regenerated ${platform} variant: ${updateError.message}`)
+  }
+
+  return {
+    ok: true,
+    regenerated: true,
+    content_id: contentId,
+    platform,
+    draft_group_id: context.draftGroupId,
+  }
+}
+
 function buildCarouselSlides(canonical: CanonicalCopy, topic: string): AssetSlideSpec[] {
   return [
     {
@@ -442,10 +531,10 @@ function buildCarouselSlides(canonical: CanonicalCopy, topic: string): AssetSlid
     },
     {
       slide_number: 4,
-      role: 'cta',
-      headline: canonical.exact_cta,
-      supporting_copy: 'End with a clear instruction or next step.',
-      visual_direction: 'Close with a decisive CTA and clean spacing.',
+      role: 'outro',
+      headline: 'Quick recap',
+      supporting_copy: canonical.key_fact,
+      visual_direction: 'Close with a useful recap or save-worthy takeaway. Do not add CTA, QR code, signup, subscription, pricing, or landing page details.',
     },
   ]
 }
@@ -453,7 +542,7 @@ function buildCarouselSlides(canonical: CanonicalCopy, topic: string): AssetSlid
 function buildVideoStoryboard(
   canonical: CanonicalCopy,
   topic: string,
-  scheduledFor: string | null,
+  _scheduledFor: string | null,
 ): AssetStoryboardFrame[] {
   return [
     {
@@ -472,8 +561,8 @@ function buildVideoStoryboard(
     {
       frame_number: 3,
       timestamp_hint: '7-10s',
-      scene_prompt: 'Close with the clearest possible call to action and a final branded frame.',
-      on_screen_text: `${canonical.exact_cta}${scheduledFor ? ` - ${scheduledFor}` : ''}`,
+      scene_prompt: 'Close with a branded recap frame that reinforces the key takeaway without conversion copy.',
+      on_screen_text: canonical.key_fact,
     },
   ]
 }
@@ -494,6 +583,11 @@ function buildOneTimeAssetSpec(
   const neverSay = Array.isArray(brandVoice.never_say)
     ? brandVoice.never_say.filter((value: unknown): value is string => typeof value === 'string' && value.trim().length > 0)
     : null
+  const visualPolicy = resolveVisualIntentPolicy({
+    contentType: request.asset_need === ASSET_NEED.CAROUSEL ? 'value' : 'awareness',
+    assetNeed: request.asset_need,
+    intent: request.intent,
+  })
 
   return {
     version: 'v1',
@@ -504,7 +598,7 @@ function buildOneTimeAssetSpec(
     objective: request.topic,
     audience: String(brandVoice.target_audience ?? 'the audience defined in brand voice'),
     message: canonical.core_body,
-    cta: canonical.exact_cta,
+    cta: null,
     scheduled_for: request.scheduled_for ?? null,
     event_ref: request.event_ref ?? null,
     campaign_label: request.campaign_label ?? null,
@@ -512,10 +606,10 @@ function buildOneTimeAssetSpec(
     brand_rules: {
       ...(brandRules ?? {}),
       tone: brandRules?.tone ?? brandVoice.tone ?? null,
-      must_include: [canonical.key_fact, canonical.exact_cta].filter(Boolean),
+      must_include: [canonical.key_fact].filter(Boolean),
       must_avoid: neverSay,
     },
-    notes_for_generation: 'Rendering remains external. Produce the asset in Canva, Higgsfield, or another external tool, then return the finished asset to the content workflow.',
+    notes_for_generation: `${renderVisualIntentPolicy(visualPolicy)} Rendering remains external. Produce the asset in Canva, Higgsfield, or another external tool, then return the finished asset to the content workflow.`,
     slides,
     storyboard,
     external_generation: buildDefaultExternalGeneration(request.asset_need),
@@ -523,19 +617,26 @@ function buildOneTimeAssetSpec(
 }
 
 function renderAssetBrief(spec: CanonicalAssetSpec): string {
+  const visualPolicy = resolveVisualIntentPolicy({
+    contentType: spec.asset_need === ASSET_NEED.CAROUSEL ? 'value' : 'awareness',
+    assetNeed: spec.asset_need,
+    intent: spec.intent,
+  })
   const lines = [
     `One-time asset brief (${spec.asset_need})`,
     spec.post_title ? `Title: ${spec.post_title}` : null,
     `Objective: ${spec.objective}`,
     `Audience: ${spec.audience}`,
     `Message: ${spec.message}`,
-    spec.cta ? `CTA: ${spec.cta}` : null,
     spec.scheduled_for ? `Scheduled for: ${spec.scheduled_for}` : null,
     spec.event_ref ? `Related event: ${spec.event_ref}` : null,
     `Targets: ${spec.targets.map((target) => `${target.platform}${target.dimensions ? ` (${target.dimensions})` : ''}`).join(', ')}`,
     '',
     'Brand grounding:',
     ...renderBrandVisualRules(spec.brand_rules),
+    '',
+    'Visual intent policy:',
+    renderVisualIntentPolicy(visualPolicy),
   ]
 
   if (spec.slides?.length) {
@@ -597,22 +698,36 @@ async function runPlatformAdapters(
   platforms: string[],
   scheduledFor: string | null,
   brandVoice: any,
+  options: {
+    rewriteMode?: boolean
+    previousCopy?: string | null
+  } = {},
 ): Promise<Array<{ platform: string; body: string; subject_line?: string }>> {
-  const PLATFORM_INSTRUCTIONS: Record<string, string> = {
-    [getIntegrationDefinition('facebook').id]: '2-3 sentences, emoji ok, end with the CTA or primary link if one is available',
-    [getIntegrationDefinition('instagram').id]: 'caption-first, visual-friendly, strong opening line, concise body, approved hashtags only',
-    [getIntegrationDefinition('linkedin').id]: 'professional and insight-led, 1-2 short paragraphs, no hype, end with a clear next step',
-    [getIntegrationDefinition('whatsapp').id]: 'under 200 characters, conversational, one clear call to action',
-    [getIntegrationDefinition('youtube').id]: 'short community post, ask a question to drive comments',
-    [getIntegrationDefinition('email').id]: 'start first line with Subject: then write email body, warm and helpful',
-    [getIntegrationDefinition('blog').id]: '500-700 word article with a clear title, short intro, 2-4 practical sections, concise conclusion, and CTA; avoid hype and do not invent facts',
-  }
-
   const requests = platforms
-    .filter((platform) => PLATFORM_INSTRUCTIONS[platform])
+    .map((platform) => ({
+      platform,
+      rule: getSupportedPlatformDerivativeRule(platform),
+      instruction: buildPlatformDerivativeInstruction(platform),
+    }))
+    .filter((entry): entry is { platform: string; rule: NonNullable<ReturnType<typeof getSupportedPlatformDerivativeRule>>; instruction: string } =>
+      Boolean(entry.rule && entry.instruction)
+    )
     .map(async (platform) => {
       try {
-        const isBlog = platform === getIntegrationDefinition('blog').id
+        const isBlog = platform.rule.content_shape === 'article'
+        const rewriteSystemInstruction = options.rewriteMode
+          ? `
+This is a single-platform regeneration. Produce a materially different rewrite of the selected draft while preserving the same offer, audience, brand voice, and factual meaning.
+Do not reuse the same opening sentence, sentence order, or paragraph structure from the current draft.`
+          : ''
+        const previousCopyBlock = options.rewriteMode && options.previousCopy
+          ? `
+
+Current draft to replace:
+"""${options.previousCopy}"""
+
+Rewrite it now. Keep it platform-native and do not repeat the same wording.`
+          : ''
         const response = await generateTextWithAnthropic(anthropic, {
           task: 'one_off_writer',
           maxTokens: isBlog ? 900 : 200,
@@ -620,18 +735,20 @@ async function runPlatformAdapters(
 
 Write ONLY the post copy - no JSON, no quotes, no preamble.
 
-You MUST include these elements verbatim:
-- Opening headline: "${canonical.headline}"
-- Call to action: "${canonical.exact_cta}"
-- Key fact: "${canonical.key_fact}"
+Preserve the meaning of these canonical elements, but do not force exact wording if it breaks the platform format:
+- Headline idea: "${canonical.headline}"
+- Call to action idea: "${canonical.exact_cta}"
+- Key fact idea: "${canonical.key_fact}"
 
-Adapt format, length, and tone for the platform only.`,
+Platform-native format wins. Do not copy the email body into social or messaging channels. Each platform must use a distinct structure.
+${rewriteSystemInstruction}`,
           messages: [{
             role: 'user',
             content: `Topic: ${topic}
 ${scheduledFor ? `Scheduled for: ${scheduledFor}\n` : ''}Core message: ${canonical.core_body}
-Platform: ${platform}
-Instructions: ${PLATFORM_INSTRUCTIONS[platform]}
+Platform: ${platform.platform}
+Instructions: ${platform.instruction}
+${previousCopyBlock}
 
 Write the copy now.`,
           }],
@@ -644,15 +761,15 @@ Write the copy now.`,
         let subject_line: string | undefined
         let postBody = body
 
-        if (platform === 'email' && body.startsWith('Subject:')) {
+        if (platform.platform === 'email' && body.startsWith('Subject:')) {
           const lines = body.split('\n')
           subject_line = lines[0].replace('Subject:', '').trim()
           postBody = lines.slice(1).join('\n').trim()
         }
 
-        return { platform, body: postBody, subject_line }
+        return { platform: platform.platform, body: postBody, subject_line }
       } catch (err) {
-        console.error(`Pipeline D adapter failed for ${platform}:`, err instanceof Error ? err.message : String(err))
+        console.error(`Pipeline D adapter failed for ${platform.platform}:`, err instanceof Error ? err.message : String(err))
         return null
       }
     })
@@ -781,11 +898,12 @@ Deno.serve(async (req) => {
 
       const brandRules = buildBrandVisualRules(config, {
         tone: brandVoice.tone ?? null,
-        must_include: [canonical.key_fact, canonical.exact_cta].filter(Boolean),
+        must_include: [canonical.key_fact].filter(Boolean),
         must_avoid: Array.isArray(brandVoice.never_say)
           ? brandVoice.never_say.filter((value: unknown): value is string => typeof value === 'string' && value.trim().length > 0)
           : null,
         strict_mode: true,
+        includeConversionDestinations: false,
       })
 
       const assetSpec = buildOneTimeAssetSpec(request, canonical, brandVoice, brandRules)
@@ -881,6 +999,16 @@ Deno.serve(async (req) => {
       })
     }
 
+    if (mode === 'regenerate_content_variant') {
+      const contentId = safeString(payload?.content_id ?? payload?.contentId)
+      if (!contentId) {
+        return jsonResponse({ ok: false, error: 'content_id is required to regenerate a content variant.' }, 400)
+      }
+
+      const result = await regenerateOneTimeContentVariant(supabase, anthropic, orgId, contentId)
+      return jsonResponse(result)
+    }
+
     if (!topic) {
       return jsonResponse({ ok: false, error: 'topic is required' }, 400)
     }
@@ -914,11 +1042,12 @@ Deno.serve(async (req) => {
     const workingTitle = postTitle || canonical.headline
     const brandRules = buildBrandVisualRules(config, {
       tone: brandVoice.tone ?? null,
-      must_include: [canonical.key_fact, canonical.exact_cta].filter(Boolean),
+      must_include: [canonical.key_fact].filter(Boolean),
       must_avoid: Array.isArray(brandVoice.never_say)
         ? brandVoice.never_say.filter((value: unknown): value is string => typeof value === 'string' && value.trim().length > 0)
         : null,
       strict_mode: true,
+      includeConversionDestinations: false,
     })
 
     const assets = await runPlatformAdapters(anthropic, topic, canonical, platforms, scheduledFor, brandVoice)

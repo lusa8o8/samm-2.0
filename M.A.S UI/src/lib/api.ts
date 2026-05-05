@@ -1012,7 +1012,8 @@ export function useUploadContentImage(options?: MutationHookOptions) {
   return useMutation({
     mutationFn: async ({ id, file }: { id: string; file: File }) => {
       const ext = file.name.split(".").pop() ?? "jpg";
-      const path = `${getOrgId()}/${id}.${ext}`;
+      const safeExt = ext.replace(/[^a-z0-9]/gi, "").toLowerCase() || "jpg";
+      const path = `${getOrgId()}/${id}/${Date.now()}.${safeExt}`;
 
       const { error: uploadError } = await supabase.storage
         .from("content-media")
@@ -2075,7 +2076,15 @@ type RegenerateAssetBriefAction = {
   description?: string;
 };
 
-type CoordinatorActionPayload = CreateOneTimePostAction | RegenerateAssetBriefAction;
+type RegenerateContentVariantAction = {
+  type: "regenerate_content_variant";
+  content_id: string;
+  platform?: string | null;
+  title?: string;
+  description?: string;
+};
+
+type CoordinatorActionPayload = CreateOneTimePostAction | RegenerateAssetBriefAction | RegenerateContentVariantAction;
 
 type CoordinatorChatRequest = {
   message: string;
@@ -2237,6 +2246,41 @@ export function useRegenerateAssetBrief(options?: MutationHookOptions) {
             draft_group_id: draftGroupId,
             content_id: contentId,
             asset_need: assetNeed,
+            title,
+            description,
+          },
+        });
+      } catch (error) {
+        const message = await readFunctionError(error);
+        throw new Error(message);
+      }
+    },
+    ...options?.mutation,
+  });
+}
+
+export function useRegenerateContentVariant(options?: MutationHookOptions) {
+  return useMutation({
+    mutationFn: async ({
+      contentId,
+      platform = null,
+      title = "Regenerate content variant",
+      description = "Regenerate this platform draft without changing the rest of the set.",
+    }: {
+      contentId: string;
+      platform?: string | null;
+      title?: string;
+      description?: string;
+    }) => {
+      try {
+        return await invokeCoordinatorFunction({
+          message: description,
+          mode: "execution",
+          confirmationAction: null,
+          action: {
+            type: "regenerate_content_variant",
+            content_id: contentId,
+            platform,
             title,
             description,
           },

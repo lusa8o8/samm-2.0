@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
   Clock,
@@ -15,6 +15,7 @@ import {
   useBatchApproveContent,
   useEditContent,
   useListContent,
+  useRegenerateContentVariant,
   type OneTimePostAssetNeed,
   useRegenerateAssetBrief,
   useRetryContent,
@@ -51,6 +52,8 @@ type ContentItem = {
 type InspectorContentDraft = ContentDraft & {
   platform?: string | null;
   pipelineRunId?: string | null;
+  mediaUrl?: string | null;
+  canRegenerateVariant?: boolean;
 };
 
 const TABS: { id: TabStatus; label: string }[] = [
@@ -60,6 +63,8 @@ const TABS: { id: TabStatus; label: string }[] = [
   { id: "comments", label: "Comments" },
   { id: "failed", label: "Failed" },
 ];
+
+const CONTENT_STATUS_STORAGE_KEY = "samm.contentRegistry.status";
 
 const PLATFORM_LABELS: Record<string, string> = {
   facebook: "Facebook",
@@ -81,6 +86,16 @@ function textValue(value: unknown) {
   if (typeof value === "string" && value.trim()) return value.trim();
   if (typeof value === "number" || typeof value === "boolean") return String(value);
   return null;
+}
+
+function isTabStatus(value: unknown): value is TabStatus {
+  return typeof value === "string" && TABS.some((tab) => tab.id === value);
+}
+
+function getInitialTabStatus(): TabStatus {
+  if (typeof window === "undefined") return "draft";
+  const stored = window.sessionStorage.getItem(CONTENT_STATUS_STORAGE_KEY);
+  return isTabStatus(stored) ? stored : "draft";
 }
 
 function clipText(value: string, max = 56) {
@@ -154,6 +169,16 @@ function getPreviewTitle(item: ContentItem, preview: string) {
 
 function isOneTimeDesignBrief(item: { platform: string; metadata?: Record<string, unknown> | null }) {
   return item.platform === "design_brief" && item.metadata?.purpose === "one_time";
+}
+
+function canRegenerateContentVariant(item: { platform: string; status: string; metadata?: Record<string, unknown> | null }) {
+  return (
+    item.platform !== "design_brief" &&
+    (item.status === "draft" || item.status === "rejected") &&
+    item.metadata?.purpose === "one_time" &&
+    typeof item.metadata?.draft_group_id === "string" &&
+    item.metadata.draft_group_id.trim().length > 0
+  );
 }
 
 function getDesignBriefTitle(item: ContentItem, preview: string) {
@@ -282,6 +307,8 @@ function toInspectorDraft(item: ContentItem): InspectorContentDraft {
     approvalStatus: getInspectorApprovalStatus(item),
     platform: item.platform,
     pipelineRunId: item.pipeline_run_id,
+    mediaUrl: item.media_url ?? null,
+    canRegenerateVariant: canRegenerateContentVariant(item),
   };
 }
 
@@ -307,6 +334,13 @@ function groupDrafts(items: ContentItem[]) {
   }
 
   return { groups: Array.from(groups.values()), standalone };
+}
+
+function inspectorHasContentItem(data: unknown, itemId: string) {
+  return Array.isArray(data) && data.some((entry) => {
+    if (!entry || typeof entry !== "object") return false;
+    return (entry as { id?: unknown }).id === itemId;
+  });
 }
 
 function ActionButton({
@@ -490,6 +524,7 @@ function ContentCard({
   onApprove,
   onReject,
   onRetry,
+  onRegenerateVariant,
   onEdit,
   onUploadImage,
   onShare,
@@ -499,6 +534,7 @@ function ContentCard({
   onApprove: (item: ContentItem) => void;
   onReject: (item: ContentItem) => void;
   onRetry: (item: ContentItem) => void;
+  onRegenerateVariant: (item: ContentItem) => void;
   onEdit: (item: ContentItem) => void;
   onUploadImage: (item: ContentItem, file: File) => void;
   onShare: (item: ContentItem) => void;
@@ -509,6 +545,7 @@ function ContentCard({
   const isRejected = item.status === "rejected";
   const isFailed = item.status === "failed";
   const supportsRegeneration = isOneTimeDesignBrief(item);
+  const supportsVariantRegeneration = canRegenerateContentVariant(item);
   const preview = stripMarkdownToPreviewText(item.body);
   const previewTitle = getDesignBriefTitle(item, preview);
   const objective = getObjective(item);
@@ -622,6 +659,16 @@ function ContentCard({
                 {item.media_url ? "Replace image" : "Add image"}
               </ActionButton>
             )}
+            {supportsVariantRegeneration && (
+              <ActionButton
+                type="button"
+                className="border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100"
+                onClick={() => onRegenerateVariant(item)}
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                Regenerate
+              </ActionButton>
+            )}
           </>
         )}
 
@@ -685,16 +732,17 @@ function ContentCard({
 }
 
 export default function ContentPage() {
-  const [status, setStatus] = useState<TabStatus>("draft");
+  const [status, setStatus] = useState<TabStatus>(getInitialTabStatus);
   const [sortBy, setSortBy] = useState<SortOption>("newest");
   const [editingItem, setEditingItem] = useState<ContentItem | null>(null);
   const [editorBody, setEditorBody] = useState("");
   const [editorSubject, setEditorSubject] = useState("");
   const queryClient = useQueryClient();
-  const { openInspector } = useInspector();
+  const { openInspector, inspector } = useInspector();
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["content-registry"] });
+    queryClient.refetchQueries({ queryKey: ["content-registry"], type: "active" });
     queryClient.invalidateQueries({ queryKey: ["inbox-items"] });
     queryClient.invalidateQueries({ queryKey: ["inbox-summary"] });
     queryClient.invalidateQueries({ queryKey: ["pipeline-status"] });
@@ -722,6 +770,14 @@ export default function ContentPage() {
   });
   const imageMutation = useUploadContentImage({ mutation: { onSuccess: invalidate } });
   const regenerateBriefMutation = useRegenerateAssetBrief({ mutation: { onSuccess: invalidate } });
+  const regenerateVariantMutation = useRegenerateContentVariant({ mutation: { onSuccess: invalidate } });
+
+  const handleStatusChange = (nextStatus: TabStatus) => {
+    setStatus(nextStatus);
+    if (typeof window !== "undefined") {
+      window.sessionStorage.setItem(CONTENT_STATUS_STORAGE_KEY, nextStatus);
+    }
+  };
 
   const displayItems = useMemo(() => {
     const all = (items ?? []) as ContentItem[];
@@ -735,6 +791,34 @@ export default function ContentPage() {
     () => (status === "draft" ? groupDrafts(displayItems) : { groups: [], standalone: displayItems }),
     [displayItems, status],
   );
+
+  useEffect(() => {
+    if (!inspector.isOpen || inspector.widget?.type !== "content_batch_review") return;
+
+    const inspectorItems = Array.isArray(inspector.widget.data) ? inspector.widget.data : [];
+    const currentDraft = inspectorItems.find((entry) => entry && typeof entry === "object" && typeof (entry as { id?: unknown }).id === "string") as InspectorContentDraft | undefined;
+    if (!currentDraft?.id) return;
+
+    const updatedItem = ((items ?? []) as ContentItem[]).find((item) => item.id === currentDraft.id);
+    if (!updatedItem) return;
+
+    const preview = stripMarkdownToInspectorText(updatedItem.body);
+    if (
+      currentDraft.preview === (preview || "No content preview available.") &&
+      currentDraft.mediaUrl === (updatedItem.media_url ?? null) &&
+      currentDraft.status === getInspectorStatus(updatedItem) &&
+      currentDraft.approvalStatus === getInspectorApprovalStatus(updatedItem)
+    ) {
+      return;
+    }
+
+    const title = updatedItem.subject_line || updatedItem.campaign_name || PLATFORM_LABELS[updatedItem.platform] || "Content";
+    openInspector(title, {
+      type: "content_batch_review",
+      title,
+      data: [toInspectorDraft(updatedItem)],
+    });
+  }, [items, inspector.isOpen, inspector.widget, openInspector]);
 
   const openContentInspector = (item: ContentItem) => {
     const preview = stripMarkdownToInspectorText(item.body);
@@ -793,6 +877,21 @@ export default function ContentPage() {
     retryMutation.mutate({ id: item.id });
   };
 
+  const handleRegenerateVariant = (item: ContentItem) => {
+    if (!canRegenerateContentVariant(item)) return;
+
+    const preview = stripMarkdownToInspectorText(item.body);
+    const title = getPreviewTitle(item, preview);
+    const platformLabel = PLATFORM_LABELS[item.platform] ?? item.platform;
+
+    regenerateVariantMutation.mutate({
+      contentId: item.id,
+      platform: item.platform,
+      title: `Regenerate ${platformLabel} variant`,
+      description: `Regenerate only the ${platformLabel} draft for "${title}".`,
+    });
+  };
+
   const handleSave = () => {
     if (!editingItem) return;
     editMutation.mutate({
@@ -806,7 +905,21 @@ export default function ContentPage() {
   };
 
   const handleImageUpload = (item: ContentItem, file: File) => {
-    imageMutation.mutate({ id: item.id, file });
+    imageMutation.mutate(
+      { id: item.id, file },
+      {
+        onSuccess: (result) => {
+          if (
+            result?.media_url &&
+            inspector.isOpen &&
+            inspector.widget?.type === "content_batch_review" &&
+            inspectorHasContentItem(inspector.widget.data, item.id)
+          ) {
+            openContentInspector({ ...item, media_url: result.media_url });
+          }
+        },
+      },
+    );
   };
 
   const handleShareBrief = async (item: ContentItem) => {
@@ -856,7 +969,7 @@ export default function ContentPage() {
             <button
               key={tab.id}
               type="button"
-              onClick={() => setStatus(tab.id)}
+              onClick={() => handleStatusChange(tab.id)}
               className={cn(
                 "shrink-0 rounded-lg px-3 py-1.5 text-sm transition-colors",
                 status === tab.id
@@ -906,6 +1019,7 @@ export default function ContentPage() {
                       onApprove={handleApprove}
                       onReject={handleReject}
                       onRetry={handleRetry}
+                      onRegenerateVariant={handleRegenerateVariant}
                       onEdit={beginEdit}
                       onUploadImage={handleImageUpload}
                       onShare={handleShareBrief}
@@ -929,6 +1043,7 @@ export default function ContentPage() {
                       onApprove={handleApprove}
                       onReject={handleReject}
                       onRetry={handleRetry}
+                      onRegenerateVariant={handleRegenerateVariant}
                       onEdit={beginEdit}
                       onUploadImage={handleImageUpload}
                       onShare={handleShareBrief}
@@ -948,6 +1063,7 @@ export default function ContentPage() {
                 onApprove={handleApprove}
                 onReject={handleReject}
                 onRetry={handleRetry}
+                onRegenerateVariant={handleRegenerateVariant}
                 onEdit={beginEdit}
                 onUploadImage={handleImageUpload}
                 onShare={handleShareBrief}

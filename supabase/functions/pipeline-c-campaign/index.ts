@@ -32,8 +32,22 @@ import {
   type ResolvedCalendarSlot,
   type ResolvedCampaignWindow,
 } from '../_shared/calendar-coordination.ts'
+import {
+  buildPlatformDerivativeInstruction,
+  getSupportedPlatformDerivativeRule,
+} from '../_shared/platform-derivative-matrix.ts'
+import { buildBrandVoiceSystemPrompt } from '../_shared/brand-voice-prompt.ts'
+import { renderVisualIntentPolicy, resolveVisualIntentPolicy } from '../_shared/visual-intent-policy.ts'
 
 // ── types ─────────────────────────────────────────────────────────────
+function isCampaignReportingEnabled() {
+  return Deno.env.get('SAMM_ENABLE_CAMPAIGN_REPORTING') === 'true'
+}
+
+function getLegacyVisualConversionPolicy() {
+  return renderVisualIntentPolicy(resolveVisualIntentPolicy({ contentType: 'value', visualNeed: 'static' }))
+}
+
 interface CalendarEvent {
   id: string
   event_type: string
@@ -131,6 +145,8 @@ async function getOrgConfig(supabase: any, orgId: string) {
 
 // ── brand voice prompt builder ────────────────────────────────────────
 function buildSystemPrompt(brandVoice: any): string {
+  return buildBrandVoiceSystemPrompt(brandVoice)
+/*
   const hashtagLine = Array.isArray(brandVoice.hashtags) && brandVoice.hashtags.length > 0
     ? `\nApproved hashtags (use only these — do not invent others): ${brandVoice.hashtags.join(' ')}`
     : ''
@@ -147,6 +163,7 @@ Never: ${brandVoice.never_say.join(', ')}
 Preferred CTA: ${brandVoice.cta_preference}
 Good post example: "${brandVoice.example_good_post}"
 Bad post example: "${brandVoice.example_bad_post}"${hashtagLine}${formatLine}`
+*/
 }
 
 // ── main handler ──────────────────────────────────────────────────────
@@ -644,13 +661,19 @@ async function resumePipelineCRun(params: { supabase: any; anthropic: ReturnType
         return new Response(JSON.stringify({ ok: true, waiting_human: true, run_id: runId, ...results }), { headers: { 'Content-Type': 'application/json' } })
       }
 
-      // All drafts approved — run monitor and report
-      console.log('All drafts approved — running monitor and post-campaign report...')
-      await runMonitor(supabase, anthropic, context, campaignBrief, config.kpi_targets)
-      results.monitor_check_run = true
+      // All drafts approved; campaign reporting remains gated until integrations are live.
+      console.log('All drafts approved; resolving campaign workflow.')
+      if (isCampaignReportingEnabled()) {
+        await runMonitor(supabase, anthropic, context, campaignBrief, config.kpi_targets)
+        results.monitor_check_run = true
 
-      await runPostCampaignReport(supabase, anthropic, context, campaignBrief, results)
-      results.report_generated = true
+        await runPostCampaignReport(supabase, anthropic, context, campaignBrief, results)
+        results.report_generated = true
+      } else {
+        console.log('Campaign reporting is retired until integrations are live; skipping monitor and post-campaign report.')
+        results.monitor_check_run = false
+        results.report_generated = false
+      }
 
       await updatePipelineCRun(supabase, runId, PIPELINE_RUN_STATUS.SUCCESS, results)
       return new Response(JSON.stringify({ ok: true, resumed: true, run_id: runId, ...results }), { headers: { 'Content-Type': 'application/json' } })
@@ -998,39 +1021,44 @@ async function runPlatformCopyAdapters(
   )
 
   const platforms = [
-    { platform: getIntegrationDefinition('facebook').id, instruction: '2-3 sentences, emoji ok, end with the CTA or primary link if one is available' },
+    { platform: getIntegrationDefinition('facebook').id, roleInstruction: '' },
     { platform: getIntegrationDefinition('facebook').id, instruction: 'focus on social proof or urgency — different framing from the first post, same core message' },
-    { platform: getIntegrationDefinition('whatsapp').id, instruction: 'under 200 characters, conversational, one clear call to action' },
-    { platform: getIntegrationDefinition('youtube').id, instruction: 'short community post, ask a question to drive comments' },
-    { platform: getIntegrationDefinition('email').id, instruction: 'start first line with Subject: then write email body, warm and helpful' },
+    { platform: getIntegrationDefinition('whatsapp').id, roleInstruction: '' },
+    { platform: getIntegrationDefinition('youtube').id, roleInstruction: '' },
+    { platform: getIntegrationDefinition('email').id, roleInstruction: '' },
     { platform: getIntegrationDefinition('whatsapp').id, instruction: 'partner or word-of-mouth talking points — bullet list of what to say or share' },
   ]
 
   if (requestedPlatforms.has(getIntegrationDefinition('instagram').id)) {
     platforms.push({
       platform: getIntegrationDefinition('instagram').id,
-      instruction: 'caption-first, visual-friendly, strong opening line, concise body, approved hashtags only',
+      roleInstruction: '',
     })
   }
 
   if (requestedPlatforms.has(getIntegrationDefinition('linkedin').id)) {
     platforms.push({
       platform: getIntegrationDefinition('linkedin').id,
-      instruction: 'professional and insight-led, 1-2 short paragraphs, no hype, end with a clear next step',
+      roleInstruction: '',
     })
   }
 
   if (requestedPlatforms.has(getIntegrationDefinition('blog').id)) {
     platforms.push({
       platform: getIntegrationDefinition('blog').id,
-      instruction: '500-700 word campaign article with a clear title, short intro, 2-4 useful sections, concise conclusion, and CTA; avoid hype and do not invent facts',
+      roleInstruction: 'Write this as campaign article support.',
     })
   }
 
   const results = await Promise.all(
     platforms.map(async (p, index) => {
       try {
-        const isBlog = p.platform === getIntegrationDefinition('blog').id
+        const rule = getSupportedPlatformDerivativeRule(p.platform)
+        const instruction = buildPlatformDerivativeInstruction(p.platform)
+        if (!rule || !instruction) return null
+
+        const isBlog = rule.content_shape === 'article'
+        const roleInstruction = 'roleInstruction' in p ? p.roleInstruction : p.instruction
         const response = await generateTextWithAnthropic(anthropic, {
           task: 'platform_copywriter',
           maxTokens: isBlog ? 900 : 200,
@@ -1043,7 +1071,9 @@ You MUST include these campaign elements verbatim — do not paraphrase or reint
 - Call to action: "${canonical.exact_cta}"
 - Key fact: "${canonical.key_fact}"
 
-Adapt the surrounding format, length, and tone for the platform only.`,
+Adapt the surrounding format, length, and tone for the platform only.
+
+Platform-native format wins. Preserve the meaning of the canonical elements, but do not force exact wording if it breaks the platform format. Do not copy the email body into social or messaging channels. Each platform must use a distinct structure.`,
           messages: [{
             role: 'user',
             content: `Campaign: ${brief.name}
@@ -1051,7 +1081,7 @@ Core message: ${canonical.core_body}
 Target: ${event.universities.join(', ')} audience segments
 Event date: ${event.event_date}
 Platform: ${p.platform}
-Instructions: ${p.instruction}
+Instructions: ${instruction}${roleInstruction ? ` ${roleInstruction}` : ''}
 
 Write the copy now.`
           }]
@@ -1114,7 +1144,9 @@ You MUST include these campaign elements verbatim - do not paraphrase or reinter
 - Call to action: "${canonical.exact_cta}"
 - Key fact: "${canonical.key_fact}"
 
-Adapt the surrounding format, length, and tone for the scheduled platform, role, and content type only.`,
+Adapt the surrounding format, length, and tone for the scheduled platform, role, and content type only.
+
+Platform-native format wins. Preserve the meaning of the canonical elements, but do not force exact wording if it breaks the platform format. Do not copy the email body into social or messaging channels.`,
           messages: [{
             role: 'user',
             content: `Campaign: ${brief.name}
@@ -1176,7 +1208,7 @@ async function runDesignBriefAgent(
   brandVisual: any,
   markdownDesignSpec: string | null,
   socialHandles: any,
-  primaryCtaUrl: string | null
+  _primaryCtaUrl: string | null
 ): Promise<string> {
 
   const hasVisual = brandVisual && Object.keys(brandVisual).some(k => brandVisual[k])
@@ -1205,12 +1237,10 @@ ${socialHandles.whatsapp ? `- WhatsApp: ${socialHandles.whatsapp}` : ''}
 ${socialHandles.instagram ? `- Instagram: ${socialHandles.instagram}` : ''}
 ${socialHandles.linkedin ? `- LinkedIn: ${socialHandles.linkedin}` : ''}
 ${socialHandles.tiktok ? `- TikTok: ${socialHandles.tiktok}` : ''}
-${(socialHandles.custom_app_url ?? socialHandles.studyhub_url) ? `- Product / Landing Page: ${socialHandles.custom_app_url ?? socialHandles.studyhub_url}` : ''}`.replace(/\n-\s*$\n/gm, '')
+`.replace(/\n-\s*$\n/gm, '')
     : '\nSOCIAL HANDLES: Not configured — ask the brand manager before placing social icons.'
 
-  const ctaBlock = primaryCtaUrl
-    ? `\nQR CODE / PRIMARY CTA LINK: ${primaryCtaUrl}`
-    : '\nQR CODE / PRIMARY CTA LINK: Not configured — confirm with brand manager before generating QR code.'
+  const conversionPolicyBlock = `\nVISUAL INTENT POLICY: ${getLegacyVisualConversionPolicy()}`
 
   const platformDimensionsBlock = `\nPLATFORM DIMENSIONS (use exact dimensions for each deliverable)
 - Facebook post: 1200×628 (landscape) or 1080×1080 (square)
@@ -1231,7 +1261,8 @@ ${(socialHandles.custom_app_url ?? socialHandles.studyhub_url) ? `- Product / La
     maxTokens: 500,
     system: `Write a concise design brief for a campaign visual asset.
 Plain text only. No markdown, no asterisks, no bold, no headers. Use plain bullet points with a dash (-). Under 250 words.
-You MUST include: exact brand colors, font names, logo file location, exact social handles, exact CTA URL, and platform dimensions exactly as specified. Do not substitute, invent, or omit any of these values.`,
+You MUST include: exact brand colors, font names, logo file location, exact social handles, and platform dimensions exactly as specified. Do not substitute, invent, or omit any of these values.
+Follow the visual intent policy. Conversion content is allowed only when the policy says it is allowed.`,
     messages: [{
       role: 'user',
       content: `Campaign: ${brief.name}
@@ -1240,7 +1271,7 @@ Platforms: ${brief.platforms.join(', ')}
 Target: ${brief.target_audience} at ${event.universities.join(', ')}
 ${brandVisualBlock}
 ${socialBlock}
-${ctaBlock}
+${conversionPolicyBlock}
 ${platformDimensionsBlock}
 - Instagram feed: 1080x1350 or 1080x1080
 - LinkedIn post: 1200x627
@@ -1264,7 +1295,7 @@ async function runGroundedDesignBriefAgent(
   brandVisual: any,
   markdownDesignSpec: string | null,
   socialHandles: any,
-  primaryCtaUrl: string | null,
+  _primaryCtaUrl: string | null,
   schedulePlan: CampaignScheduleItem[] = [],
 ): Promise<string> {
   const brandRules = buildBrandVisualRules(
@@ -1272,10 +1303,11 @@ async function runGroundedDesignBriefAgent(
       brand_visual: brandVisual,
       markdown_design_spec: markdownDesignSpec,
       social_handles: socialHandles,
-      primary_cta_url: primaryCtaUrl,
+      primary_cta_url: null,
     },
     {
       strict_mode: !event.creative_override_allowed,
+      includeConversionDestinations: false,
     },
   )
 
@@ -1299,9 +1331,10 @@ async function runGroundedDesignBriefAgent(
     maxTokens: 800,
     system: `Write a concise design brief for a campaign visual asset.
 Plain text only. No markdown, no asterisks, no bold, no headers. Use plain bullet points with a dash (-). Under 250 words.
-You MUST include: exact brand colors, font names, logo file location, exact social handles, exact CTA URL, and platform dimensions exactly as specified.
+You MUST include: exact brand colors, font names, logo file location, exact social handles, and platform dimensions exactly as specified.
 Do not substitute, invent, or omit any of these values.
 Never invent placeholder footer text, domains, or links such as "reallygreatsite.com" or "example.com".
+Follow the visual intent policy for each schedule row. Conversion content is allowed only when the row policy says it is allowed.
 If a campaign schedule is provided, describe the visual set by date and role so the user can generate matching campaign visuals externally.
 If a schedule row has channel blog or visual_need text_only, treat it as copy-only/editorial support and do not request a visual asset for that row.
 If a value is missing, explicitly say to omit it rather than guessing.`,
@@ -1317,6 +1350,8 @@ BRAND VISUAL IDENTITY
 ${brandVisualBlock || 'No visual brand kit is configured. Omit any unconstrained brand element instead of inventing one.'}
 ${platformDimensionsBlock}
 ${creativeBlock}
+VISUAL INTENT POLICY
+${getLegacyVisualConversionPolicy()}
 
 Write the design brief for the graphic designer.`
     }]
@@ -1722,15 +1757,7 @@ function buildLegacyCampaignScheduleFromBrief(brief: CampaignBrief, event: Calen
 }
 
 function buildPlatformInstruction(channel: string, role: string, contentType: string): string {
-  const platformInstructions: Record<string, string> = {
-    facebook: '2-3 sentences, emoji ok, clear hook, end with the CTA or primary link if one is available',
-    instagram: 'caption-first, visual-friendly, strong opening line, concise body, approved hashtags only',
-    linkedin: 'professional and insight-led, 1-2 short paragraphs, no hype, end with a clear next step',
-    whatsapp: 'under 200 characters, conversational, one clear call to action',
-    youtube: 'short community post, ask a question to drive comments',
-    email: 'start first line with Subject: then write email body, warm and helpful',
-    blog: '500-700 word article with a clear title, short intro, 2-4 useful sections, concise conclusion, and CTA; avoid hype and do not invent facts',
-  }
+  const platformInstruction = buildPlatformDerivativeInstruction(channel) ?? 'write a concise platform-ready post'
   const roleInstruction = contentType === 'countdown' || role.toLowerCase().includes('countdown')
     ? 'Make the countdown or urgency explicit without sounding spammy.'
     : contentType === 'conversion' || role.toLowerCase().includes('conversion')
@@ -1741,14 +1768,21 @@ function buildPlatformInstruction(channel: string, role: string, contentType: st
           ? 'Use proof, reassurance, or human context to build confidence.'
           : 'Keep the campaign message focused and specific.'
 
-  return `${platformInstructions[channel] ?? 'write a concise platform-ready post'}. ${roleInstruction}`
+  return `${platformInstruction}. ${roleInstruction}`
 }
 
 function formatCampaignScheduleForPrompt(schedulePlan: CampaignScheduleItem[]): string {
   if (!schedulePlan.length) return 'No campaign schedule approved yet. Write one general visual brief.'
-  return schedulePlan.map((item, index) =>
-    `${index + 1}. ${item.date} - ${item.channel} - ${item.role} - ${item.content_type} - visual: ${item.visual_need}${item.countdown_label ? ` - ${item.countdown_label}` : ''}`
-  ).join('\n')
+  return schedulePlan.map((item, index) => {
+    const visualPolicy = resolveVisualIntentPolicy({
+      contentType: item.content_type,
+      role: item.role,
+      visualNeed: item.visual_need,
+      intent: 'campaign',
+    })
+
+    return `${index + 1}. ${item.date} - ${item.channel} - ${item.role} - ${item.content_type} - visual: ${item.visual_need} - ${renderVisualIntentPolicy(visualPolicy)}${item.countdown_label ? ` - ${item.countdown_label}` : ''}`
+  }).join('\n')
 }
 
 function buildScheduledAtForPlanItem(item: CampaignScheduleItem): string {

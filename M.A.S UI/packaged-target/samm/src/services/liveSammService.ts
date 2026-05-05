@@ -23,6 +23,7 @@ type CoordinatorChatResponse = {
 };
 
 const COORDINATOR_FUNCTION = "coordinator-ingress";
+const campaignReportingEnabled = import.meta.env.VITE_ENABLE_CAMPAIGN_REPORTING === "true";
 
 function normalizeRunStatus(value?: string | null): RunStatus {
   switch (value) {
@@ -118,6 +119,13 @@ function mapCalendarEvent(row: Record<string, any>): CalendarEvent {
   };
 }
 
+function isRetiredCampaignReportingInboxRow(row: Record<string, any>) {
+  if (campaignReportingEnabled) return false;
+
+  const payload = row.payload && typeof row.payload === "object" ? row.payload : {};
+  return row.item_type === "campaign_report" || payload.type === "campaign_underperforming";
+}
+
 function buildActions(response: CoordinatorChatResponse): ActionDescriptor[] | undefined {
   if (!response.confirmation) return undefined;
   return [
@@ -193,9 +201,9 @@ export async function getSammContext(): Promise<WorkspaceContext> {
       .limit(8),
     supabase
       .from("human_inbox")
-      .select("id", { count: "exact", head: true })
+      .select("id,status,item_type,payload")
       .eq("org_id", orgId)
-      .eq("status", "pending"),
+      .in("status", ["pending", "new"]),
     supabase
       .from("academic_calendar")
       .select("id,label,event_type,event_date,event_end_date,universities,creative_override_allowed,support_content_allowed")
@@ -217,7 +225,7 @@ export async function getSammContext(): Promise<WorkspaceContext> {
 
   return {
     activeRuns,
-    pendingApprovals: inboxResult.count ?? 0,
+    pendingApprovals: (inboxResult.data ?? []).filter((row) => !isRetiredCampaignReportingInboxRow(row)).length,
     nextCalendarEvent: (calendarResult.data ?? [])[0] ? mapCalendarEvent(calendarResult.data![0]) : undefined,
     recentFailures,
     currentFocus: activeRuns[0]?.pipelineName ?? undefined,
