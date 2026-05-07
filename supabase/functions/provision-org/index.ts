@@ -5,6 +5,33 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+function jsonResponse(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  })
+}
+
+async function hasOrgRow(adminClient: any, table: string, orgId: string) {
+  const { data, error } = await adminClient
+    .from(table)
+    .select('org_id')
+    .eq('org_id', orgId)
+    .limit(1)
+
+  if (error) throw new Error(error.message)
+  return Array.isArray(data) && data.length > 0
+}
+
+async function insertIfMissing(adminClient: any, table: string, payload: Record<string, unknown>) {
+  const orgId = String(payload.org_id ?? '')
+  if (!orgId) throw new Error(`Missing org_id for ${table}`)
+  if (await hasOrgRow(adminClient, table, orgId)) return
+
+  const { error } = await adminClient.from(table).insert(payload)
+  if (error) throw new Error(error.message)
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -14,13 +41,6 @@ Deno.serve(async (req) => {
     const body = await req.json()
     const { userId, email } = body
 
-    if (!userId || !email) {
-      return new Response(JSON.stringify({ error: 'userId and email are required' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
-
     // Service role client — can write app_metadata and bypass RLS
     const adminClient = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -28,17 +48,53 @@ Deno.serve(async (req) => {
       { auth: { autoRefreshToken: false, persistSession: false } }
     )
 
-    // Generate a new org_id for this user
-    const orgId = crypto.randomUUID()
+    const authHeader = req.headers.get('Authorization') ?? ''
+    const token = authHeader.replace(/^Bearer\s+/i, '').trim()
+    if (!token) {
+      return jsonResponse({ error: 'Authentication is required to create a workspace.' }, 401)
+    }
+
+    const { data: userRecord, error: userLookupError } = await adminClient.auth.getUser(token)
+    if (userLookupError || !userRecord?.user) {
+      return jsonResponse({ error: userLookupError?.message ?? 'User not found' }, 401)
+    }
+
+    if (userId && userRecord.user.id !== userId) {
+      return jsonResponse({ error: 'Workspace user does not match the active session.' }, 403)
+    }
+
+    const normalizedEmail = String(email ?? userRecord.user.email ?? '').trim().toLowerCase()
+    if (!normalizedEmail) {
+      return jsonResponse({ error: 'A work email is required to create a workspace.' }, 400)
+    }
+
+    const existingUserOrgId =
+      typeof userRecord.user.app_metadata?.org_id === 'string' && userRecord.user.app_metadata.org_id.trim()
+        ? userRecord.user.app_metadata.org_id.trim()
+        : null
+
+    const { data: existingEmailOrg, error: existingEmailOrgError } = await adminClient
+      .from('org_config')
+      .select('org_id')
+      .eq('contact_email', normalizedEmail)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (existingEmailOrgError) {
+      return jsonResponse({ error: existingEmailOrgError.message }, 500)
+    }
+
+    const orgId = existingUserOrgId ?? existingEmailOrg?.org_id ?? crypto.randomUUID()
 
     // Create default org_config row
     const defaultConfig = {
       org_id: orgId,
-      org_name: email.split('@')[0],
+      org_name: normalizedEmail.split('@')[0],
       full_name: '',
       country: '',
       timezone: 'Africa/Lusaka',
-      contact_email: email,
+      contact_email: normalizedEmail,
       brand_voice: {
         tone: 'professional',
         target_audience: '',
@@ -109,88 +165,26 @@ Deno.serve(async (req) => {
       cancel_at_period_end: false,
     }
 
-    const { error: configError } = await adminClient
-      .from('org_config')
-      .insert(defaultConfig)
+    await insertIfMissing(adminClient, 'org_config', defaultConfig)
+    await insertIfMissing(adminClient, 'campaign_defaults', defaultCampaignDefaults)
+    await insertIfMissing(adminClient, 'approval_policy', defaultApprovalPolicy)
+    await insertIfMissing(adminClient, 'outreach_policy', defaultOutreachPolicy)
 
-    if (configError) {
-      console.error('org_config insert failed:', configError)
-      return new Response(JSON.stringify({ error: configError.message }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
-
-    const { error: campaignDefaultsError } = await adminClient
-      .from('campaign_defaults')
-      .insert(defaultCampaignDefaults)
-
-    if (campaignDefaultsError) {
-      console.error('campaign_defaults insert failed:', campaignDefaultsError)
-      return new Response(JSON.stringify({ error: campaignDefaultsError.message }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
-
-    const { error: approvalPolicyError } = await adminClient
-      .from('approval_policy')
-      .insert(defaultApprovalPolicy)
-
-    if (approvalPolicyError) {
-      console.error('approval_policy insert failed:', approvalPolicyError)
-      return new Response(JSON.stringify({ error: approvalPolicyError.message }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
-
-    const { error: outreachPolicyError } = await adminClient
-      .from('outreach_policy')
-      .insert(defaultOutreachPolicy)
-
-    if (outreachPolicyError) {
-      console.error('outreach_policy insert failed:', outreachPolicyError)
-      return new Response(JSON.stringify({ error: outreachPolicyError.message }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
-
-    const { error: billingError } = await adminClient
-      .from('org_billing')
-      .insert(defaultBilling)
-
-    if (billingError) {
-      console.error('org_billing insert failed:', billingError)
-      return new Response(JSON.stringify({ error: billingError.message }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
+    await insertIfMissing(adminClient, 'org_billing', defaultBilling)
 
     // Stamp org_id into the user's app_metadata so it's in the JWT
-    const { error: metaError } = await adminClient.auth.admin.updateUserById(userId, {
-      app_metadata: { org_id: orgId },
+    const { error: metaError } = await adminClient.auth.admin.updateUserById(userRecord.user.id, {
+      app_metadata: { ...(userRecord.user.app_metadata ?? {}), org_id: orgId },
     })
 
     if (metaError) {
       console.error('app_metadata update failed:', metaError)
-      return new Response(JSON.stringify({ error: metaError.message }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+      return jsonResponse({ error: metaError.message }, 500)
     }
 
-    return new Response(JSON.stringify({ ok: true, org_id: orgId }), {
-      status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+    return jsonResponse({ ok: true, org_id: orgId, existing: Boolean(existingUserOrgId || existingEmailOrg?.org_id) })
   } catch (err) {
     console.error('provision-org error:', err)
-    return new Response(JSON.stringify({ error: String(err) }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+    return jsonResponse({ error: err instanceof Error ? err.message : String(err) }, 500)
   }
 })

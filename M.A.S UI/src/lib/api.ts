@@ -278,7 +278,7 @@ const PIPELINE_DESCRIPTIONS: Record<string, string> = {
 };
 
 const PLATFORM_ORDER = ["facebook", "instagram", "linkedin", "whatsapp", "youtube", "email"];
-const BILLING_ACCESS_STATUSES = new Set(["active", "trialing"]);
+const BILLING_ACCESS_STATUSES = new Set(["active", "trialing", "grandfathered"]);
 const PIPELINE_RUN_STATUS = {
   idle: 'idle',
   queued: 'queued',
@@ -890,7 +890,7 @@ export function useRetryContent(options?: MutationHookOptions) {
       const { error } = await supabase
         .from("content_registry")
         .update({
-          status: "pending_approval",
+          status: "draft",
         })
         .eq("id", id)
         .eq("org_id", getOrgId());
@@ -959,6 +959,112 @@ export function useActionContent(options?: MutationHookOptions) {
       }
 
       return { id, action: data.action };
+    },
+    ...options?.mutation,
+  });
+}
+
+export function useCreateManualContentDraft(options?: MutationHookOptions) {
+  return useMutation({
+    mutationFn: async ({
+      platform = "facebook",
+      title,
+      body,
+      scheduledFor = null,
+      mediaFile = null,
+    }: {
+      platform?: string;
+      title?: string | null;
+      body: string;
+      scheduledFor?: string | null;
+      mediaFile?: File | null;
+    }) => {
+      const cleanBody = body.trim();
+      if (!cleanBody) throw new Error("Post copy is required.");
+
+      const { data, error } = await supabase
+        .from("content_registry")
+        .insert({
+          org_id: getOrgId(),
+          platform,
+          subject_line: title?.trim() || null,
+          body: cleanBody,
+          status: "draft",
+          scheduled_at: scheduledFor,
+          created_by: "manual-content-registry",
+          metadata: {
+            purpose: "manual",
+            owner_pipeline: "content-registry",
+            source: "manual_content_registry",
+            title: title?.trim() || null,
+          },
+        })
+        .select("*")
+        .single();
+
+      if (error) throw error;
+
+      if (!mediaFile) return data;
+
+      const ext = mediaFile.name.split(".").pop() ?? "jpg";
+      const safeExt = ext.replace(/[^a-z0-9]/gi, "").toLowerCase() || "jpg";
+      const path = `${getOrgId()}/${data.id}/${Date.now()}.${safeExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("content-media")
+        .upload(path, mediaFile, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from("content-media")
+        .getPublicUrl(path);
+
+      const { data: updated, error: updateError } = await supabase
+        .from("content_registry")
+        .update({ media_url: publicUrl })
+        .eq("id", data.id)
+        .eq("org_id", getOrgId())
+        .select("*")
+        .single();
+
+      if (updateError) throw updateError;
+      return updated ?? { ...data, media_url: publicUrl };
+    },
+    ...options?.mutation,
+  });
+}
+
+export function usePublishContentNow(options?: MutationHookOptions) {
+  return useMutation({
+    mutationFn: async ({ id }: { id: string }) => {
+      const nowIso = new Date().toISOString();
+      const { error: updateError } = await supabase
+        .from("content_registry")
+        .update({ status: "scheduled", scheduled_at: nowIso })
+        .eq("id", id)
+        .eq("org_id", getOrgId())
+        .in("status", ["scheduled", "approved"]);
+
+      if (updateError) throw updateError;
+
+      const { data, error } = await supabase.functions.invoke("publish-scheduled", {
+        body: { content_id: id },
+      });
+
+      if (error) {
+        const message = await readFunctionError(error);
+        throw new Error(message);
+      }
+
+      if (data?.failed && data.failed > 0) {
+        const failedResult = Array.isArray(data.results)
+          ? data.results.find((result: { outcome?: string }) => result?.outcome === "failed")
+          : null;
+        throw new Error(failedResult?.error ?? "Publishing failed.");
+      }
+
+      return data ?? { id };
     },
     ...options?.mutation,
   });

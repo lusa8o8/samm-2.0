@@ -32,7 +32,17 @@ export function PublicPageFrame({ children }: { children: ReactNode }) {
   );
 }
 
-export function PublicNav() {
+export function PublicNav({
+  primaryHref = "/waitlist",
+  primaryLabel = "Request access",
+  secondaryHref = "/login",
+  secondaryLabel = "Sign in",
+}: {
+  primaryHref?: string;
+  primaryLabel?: string;
+  secondaryHref?: string;
+  secondaryLabel?: string;
+}) {
   return (
     <header className="border-b border-black/6 bg-white/74 backdrop-blur-[14px]">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
@@ -41,13 +51,13 @@ export function PublicNav() {
           <p className="mt-1 text-sm font-medium text-muted-foreground">marketing workflow and approvals</p>
         </div>
         <div className="flex items-center gap-2">
-          <Link href="/login">
+          <Link href={secondaryHref}>
             <Button variant="ghost" className="rounded-full px-4">
-              Sign in
+              {secondaryLabel}
             </Button>
           </Link>
-          <Link href="/waitlist">
-            <Button className="rounded-full px-5">Request access</Button>
+          <Link href={primaryHref}>
+            <Button className="rounded-full px-5">{primaryLabel}</Button>
           </Link>
         </div>
       </div>
@@ -73,11 +83,14 @@ export function PublicFooter() {
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/52">Access</p>
             <div className="mt-4 flex flex-col gap-3 text-white/72">
+              <Link href="/start" className="transition-opacity hover:opacity-70">
+                Start founding access
+              </Link>
               <Link href="/login" className="transition-opacity hover:opacity-70">
                 Sign in
               </Link>
               <Link href="/waitlist" className="transition-opacity hover:opacity-70">
-                Request access
+                Request demo
               </Link>
             </div>
           </div>

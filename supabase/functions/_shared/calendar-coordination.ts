@@ -718,7 +718,7 @@ export function validateContentAgainstCalendar(params: {
   ctaText?: string | null
   ownerPipeline?: string | null
 }): ContentCalendarPreflight {
-  const slot = planningContext.slots.find((candidate) => (
+  const slot = params.planningContext.slots.find((candidate) => (
     candidate.date === params.scheduledDate
       && candidate.channel === params.platform
       && candidate.purpose === params.purpose
@@ -736,7 +736,7 @@ export function validateContentAgainstCalendar(params: {
   }
 
   const window = slot.window_ref
-    ? planningContext.windows.find((candidate) => candidate.window_id === slot.window_ref) ?? null
+    ? params.planningContext.windows.find((candidate) => candidate.window_id === slot.window_ref) ?? null
     : null
 
   if (params.purpose !== slot.purpose) {

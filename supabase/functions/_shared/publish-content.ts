@@ -121,7 +121,7 @@ export async function publishDueContentRows(params: {
         continue
       }
 
-      const publishResult = await dispatchPublish(claimed, platformConnection, orgConfig.org_name)
+      const publishResult = await dispatchPublish(supabase, claimed, platformConnection, orgConfig.org_name)
       await markPublished(supabase, claimed, publishResult)
       results.push({
         id: row.id,
@@ -195,11 +195,21 @@ async function claimContentRow(supabase: any, row: PublishableContentRow, claimP
 
 async function runCalendarPublishPreflight(supabase: any, row: PublishableContentRow) {
   const scheduledDate = (row.scheduled_at ?? new Date().toISOString()).split('T')[0]
+  const metadata = row.metadata && typeof row.metadata === 'object' ? row.metadata : {}
+  if (metadata.purpose === 'manual' || metadata.source === 'manual-content-registry') {
+    return {
+      allowed: true,
+      reason_code: 'manual_content_approved',
+      message: 'Manual content was approved for publishing.',
+      slot: null,
+      window: null,
+    }
+  }
+
   const planningContext = await loadCampaignCalendarPlanningContext(supabase, row.org_id, scheduledDate, {
     horizonDays: 1,
   })
 
-  const metadata = row.metadata && typeof row.metadata === 'object' ? row.metadata : {}
   const purpose = typeof metadata.purpose === 'string'
     ? metadata.purpose
     : row.is_campaign_post
@@ -302,13 +312,14 @@ async function markPublishFailed(supabase: any, row: PublishableContentRow, mess
 }
 
 async function dispatchPublish(
+  supabase: any,
   row: PublishableContentRow,
   platformConnection: PlatformConnection,
   orgName: string,
 ): Promise<PublishDispatchResult> {
   switch (row.platform) {
     case getIntegrationDefinition('facebook').id:
-      return await publishFacebook(row, platformConnection)
+      return await publishFacebook(supabase, row, platformConnection)
     case getIntegrationDefinition('instagram').id:
       throw new Error('Instagram live publisher scaffolded but not implemented yet')
     case getIntegrationDefinition('linkedin').id:
@@ -324,7 +335,7 @@ async function dispatchPublish(
   }
 }
 
-async function publishFacebook(row: PublishableContentRow, platformConnection: PlatformConnection): Promise<PublishDispatchResult> {
+async function publishFacebook(supabase: any, row: PublishableContentRow, platformConnection: PlatformConnection): Promise<PublishDispatchResult> {
   const pageId = String(platformConnection.page_id ?? '').trim()
   const accessToken = String(platformConnection.access_token ?? '').trim()
 
@@ -334,25 +345,33 @@ async function publishFacebook(row: PublishableContentRow, platformConnection: P
     )
   }
 
-  const params = new URLSearchParams()
-  params.set('access_token', accessToken)
-
   let endpoint = `https://graph.facebook.com/v21.0/${pageId}/feed`
+  let body: BodyInit
+  let headers: HeadersInit | undefined
+
   if (row.media_url) {
     endpoint = `https://graph.facebook.com/v21.0/${pageId}/photos`
-    params.set('url', row.media_url)
-    params.set('caption', row.body)
-    params.set('published', 'true')
+    const media = await loadContentMedia(supabase, row)
+    const form = new FormData()
+    form.set('access_token', accessToken)
+    form.set('caption', row.body)
+    form.set('published', 'true')
+    form.set('source', media.blob, media.filename)
+    body = form
   } else {
+    const params = new URLSearchParams()
+    params.set('access_token', accessToken)
     params.set('message', row.body)
+    body = params
+    headers = {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    }
   }
 
   const response = await fetch(endpoint, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: params,
+    headers,
+    body,
   })
 
   const payload = await response.json().catch(() => null)
@@ -365,6 +384,49 @@ async function publishFacebook(row: PublishableContentRow, platformConnection: P
     external_id: typeof payload?.id === 'string' ? payload.id : undefined,
     raw: payload,
   }
+}
+
+async function loadContentMedia(supabase: any, row: PublishableContentRow) {
+  const url = String(row.media_url ?? '').trim()
+  if (!url) throw new Error('Content media is missing.')
+
+  const storagePath = extractContentMediaPath(url)
+  if (storagePath) {
+    const { data, error } = await supabase.storage.from('content-media').download(storagePath)
+    if (error) throw new Error(`Failed to load media from storage: ${error.message}`)
+    if (!data) throw new Error('Failed to load media from storage: empty response')
+    return {
+      blob: data as Blob,
+      filename: filenameFromPath(storagePath),
+    }
+  }
+
+  const response = await fetch(url)
+  if (!response.ok) {
+    throw new Error(`Failed to fetch media URL ${response.status}: ${response.statusText}`)
+  }
+
+  return {
+    blob: await response.blob(),
+    filename: filenameFromPath(new URL(url).pathname),
+  }
+}
+
+function extractContentMediaPath(url: string) {
+  try {
+    const parsed = new URL(url)
+    const marker = '/storage/v1/object/public/content-media/'
+    const index = parsed.pathname.indexOf(marker)
+    if (index === -1) return null
+    return decodeURIComponent(parsed.pathname.slice(index + marker.length))
+  } catch (_err) {
+    return null
+  }
+}
+
+function filenameFromPath(path: string) {
+  const filename = path.split('/').filter(Boolean).pop()
+  return filename && filename.includes('.') ? filename : 'content-media.jpg'
 }
 
 

@@ -188,7 +188,12 @@ export async function signUp(email: string, password: string) {
 }
 
 export async function signOut() {
-  return supabase.auth.signOut();
+  const result = await supabase.auth.signOut();
+  if (typeof window !== "undefined") {
+    window.history.replaceState(null, "", "/login");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  }
+  return result;
 }
 
 export async function getSession() {

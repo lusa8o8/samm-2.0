@@ -38,6 +38,7 @@ Deno.serve(async (req) => {
     if (!priceId) {
       throw new Error('Missing STRIPE_PRICE_ID')
     }
+    const foundingCouponId = Deno.env.get('STRIPE_FOUNDING_COUPON_ID')?.trim()
 
     const existingBilling = await getOrgBillingRow(adminClient, orgId)
     let stripeCustomerId = existingBilling?.stripe_customer_id ?? null
@@ -54,12 +55,12 @@ Deno.serve(async (req) => {
       stripeCustomerId = customer.id
     }
 
-    const successUrl = new URL('/samm', origin)
+    const successUrl = new URL('/start', origin)
     successUrl.searchParams.set('billing', 'success')
-    const cancelUrl = new URL('/samm', origin)
+    const cancelUrl = new URL('/start', origin)
     cancelUrl.searchParams.set('billing', 'cancelled')
 
-    const session = await stripe.checkout.sessions.create({
+    const checkoutConfig = {
       mode: 'subscription',
       customer: stripeCustomerId,
       line_items: [
@@ -71,7 +72,6 @@ Deno.serve(async (req) => {
       success_url: successUrl.toString(),
       cancel_url: cancelUrl.toString(),
       client_reference_id: orgId,
-      allow_promotion_codes: true,
       metadata: {
         org_id: orgId,
         user_id: user.id,
@@ -82,7 +82,13 @@ Deno.serve(async (req) => {
           user_id: user.id,
         },
       },
-    })
+    } as const
+
+    const session = await stripe.checkout.sessions.create(
+      foundingCouponId
+        ? { ...checkoutConfig, discounts: [{ coupon: foundingCouponId }] }
+        : { ...checkoutConfig, allow_promotion_codes: true },
+    )
 
     await upsertOrgBillingRow(adminClient, {
       org_id: orgId,

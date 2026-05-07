@@ -14,6 +14,12 @@ function jsonResponse(body: unknown, status = 200) {
   })
 }
 
+function bearerToken(req: Request) {
+  const value = req.headers.get('Authorization') ?? ''
+  const match = value.match(/^Bearer\s+(.+)$/i)
+  return match?.[1] ?? null
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
@@ -23,8 +29,32 @@ Deno.serve(async (req) => {
   )
 
   try {
+    const body = await req.json().catch(() => ({})) as { content_id?: unknown }
+    const contentId = typeof body.content_id === 'string' ? body.content_id.trim() : ''
+    let orgId: string | null = null
+
+    if (contentId) {
+      const token = bearerToken(req)
+      if (!token) {
+        return jsonResponse({ ok: false, error: 'authentication_required' }, 401)
+      }
+
+      const { data: userData, error: userError } = await supabase.auth.getUser(token)
+      if (userError || !userData.user) {
+        return jsonResponse({ ok: false, error: 'invalid_user_token' }, 401)
+      }
+
+      orgId = typeof userData.user.app_metadata?.org_id === 'string'
+        ? userData.user.app_metadata.org_id
+        : null
+
+      if (!orgId) {
+        return jsonResponse({ ok: false, error: 'workspace_not_found' }, 403)
+      }
+    }
+
     const nowIso = new Date().toISOString()
-    const { data: rows, error } = await supabase
+    let query = supabase
       .from('content_registry')
       .select('id, org_id, platform, body, subject_line, media_url, scheduled_at, status, metadata, is_campaign_post, campaign_name, pipeline_run_id')
       .in('status', ['scheduled', 'approved'])
@@ -32,6 +62,12 @@ Deno.serve(async (req) => {
       .neq('platform', 'design_brief')
       .order('scheduled_at', { ascending: true })
       .limit(50)
+
+    if (contentId) {
+      query = query.eq('id', contentId).eq('org_id', orgId)
+    }
+
+    const { data: rows, error } = await query
 
     if (error) throw new Error(`Failed to load scheduled content: ${error.message}`)
 

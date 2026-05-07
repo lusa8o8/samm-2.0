@@ -297,7 +297,7 @@ export async function rejectContentItem(id: string, note?: string) {
 export async function retryContentItem(id: string) {
   const { error } = await supabase
     .from("content_registry")
-    .update({ status: "pending_approval" })
+    .update({ status: "draft", rejection_note: null })
     .eq("id", id)
     .eq("org_id", getOrgId());
 

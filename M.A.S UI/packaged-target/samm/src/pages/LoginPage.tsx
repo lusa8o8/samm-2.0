@@ -1,11 +1,16 @@
 import { FormEvent, useEffect, useState } from "react";
-import { Link, Redirect, useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import { AlertCircle, ArrowRight, LockKeyhole, Mail } from "lucide-react";
 import type { Session } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PublicPageFrame, PublicWordmark } from "@/components/public/brand-kit";
-import { getActiveSession, signIn, supabase } from "../../../../src/lib/supabase";
+import { getActiveSession, signIn, signOut, supabase } from "../../../../src/lib/supabase";
+
+function getPostLoginPath(session: Session | null) {
+  if (!session?.user.app_metadata?.org_id) return "/start";
+  return "/";
+}
 
 export default function LoginPage() {
   const [, setLocation] = useLocation();
@@ -50,13 +55,11 @@ export default function LoginPage() {
       return;
     }
 
-    setLocation("/");
+    setLocation(getPostLoginPath(await getActiveSession()));
     setIsSubmitting(false);
   };
 
-  if (checked && session) {
-    return <Redirect to="/" />;
-  }
+  const signedInPath = getPostLoginPath(session);
 
   return (
     <PublicPageFrame>
@@ -69,7 +72,7 @@ export default function LoginPage() {
                 access your marketing workspace
               </h1>
               <p className="mt-6 max-w-md text-sm leading-7 text-white/72">
-                Sign in only if your workspace has already been activated. New teams should request access first.
+                Sign in if your workspace already exists. New teams can start founding access or request a demo.
               </p>
             </div>
             <div className="rounded-[1.4rem] border border-white/10 bg-white/[0.04] p-5 text-sm leading-6 text-white/72">
@@ -88,9 +91,21 @@ export default function LoginPage() {
 
               <h1 className="text-4xl font-semibold tracking-tight text-[#0b0b0c]">sign in to the workspace</h1>
               <p className="mt-4 text-sm leading-7 text-muted-foreground">
-                Access is currently onboarding-only. Sign in if your workspace has already been activated.
+                {checked && session
+                  ? "You are already signed in. Continue to the workspace or sign out to use another account."
+                  : "Sign in if your workspace has already been activated."}
               </p>
 
+              {checked && session ? (
+                <div className="mt-8 space-y-3">
+                  <Button className="h-11 w-full rounded-xl" type="button" onClick={() => setLocation(signedInPath)}>
+                    {signedInPath === "/start" ? "Continue setup" : "Enter workspace"}
+                  </Button>
+                  <Button className="h-11 w-full rounded-xl" type="button" variant="outline" onClick={() => void signOut()}>
+                    Sign out
+                  </Button>
+                </div>
+              ) : (
               <form className="mt-8 space-y-4" onSubmit={handleSubmit}>
                 <label className="block space-y-2">
                   <span className="text-sm font-medium text-foreground">Email</span>
@@ -135,11 +150,16 @@ export default function LoginPage() {
                   {isSubmitting ? "Signing in..." : "Sign in"}
                 </Button>
               </form>
+              )}
 
               <div className="mt-5 rounded-[1.2rem] border border-black/8 bg-white px-4 py-4 text-sm text-muted-foreground">
-                Need access for your team?{" "}
+                New to samm?{" "}
+                <Link href="/start" className="font-medium text-[#0b0b0c] underline underline-offset-4 hover:opacity-70">
+                  Start founding access
+                </Link>
+                <span className="mx-1 text-muted-foreground">or</span>
                 <Link href="/waitlist" className="font-medium text-[#0b0b0c] underline underline-offset-4 hover:opacity-70">
-                  Request access
+                  request a demo
                 </Link>
                 <ArrowRight className="ml-1 inline h-3.5 w-3.5" />
               </div>

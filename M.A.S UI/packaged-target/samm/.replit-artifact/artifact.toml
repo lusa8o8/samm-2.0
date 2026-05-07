@@ -1,6 +1,6 @@
 kind = "web"
 previewPath = "/"
-title = "SAMM 2.0 Agentic Workspace"
+title = "samm"
 version = "1.0.0"
 id = "artifacts/samm"
 router = "path"

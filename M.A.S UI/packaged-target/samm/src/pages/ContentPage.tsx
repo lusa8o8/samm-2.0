@@ -5,6 +5,7 @@ import {
   ImagePlus,
   Pencil,
   RefreshCw,
+  Send,
   Share2,
   X,
 } from "lucide-react";
@@ -13,7 +14,9 @@ import {
   getListContentQueryKey,
   useActionContent,
   useBatchApproveContent,
+  useCreateManualContentDraft,
   useEditContent,
+  usePublishContentNow,
   useListContent,
   useRegenerateContentVariant,
   type OneTimePostAssetNeed,
@@ -200,6 +203,20 @@ function formatTimestamp(value?: string | null) {
   });
 }
 
+function getDefaultScheduledInputValue() {
+  const date = new Date();
+  date.setMinutes(date.getMinutes() + 10);
+  date.setSeconds(0, 0);
+  const offsetMs = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+}
+
+function datetimeLocalToIso(value: string) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
 function getItemTimestamp(item: ContentItem, status: TabStatus) {
   if (status === "draft") return item.created_at ?? item.updated_at ?? null;
   if (status === "scheduled") return item.scheduled_at ?? item.updated_at ?? item.created_at ?? null;
@@ -297,7 +314,7 @@ function toInspectorDraft(item: ContentItem): InspectorContentDraft {
     scheduledFor: item.scheduled_at ?? undefined,
     publishedAt: item.published_at ?? undefined,
     failedAt: item.status === "failed" ? item.updated_at ?? item.created_at ?? undefined : undefined,
-    failureReason: item.error_message ?? item.rejection_note ?? undefined,
+    failureReason: item.error_message ?? textValue(item.metadata?.publish_error) ?? item.rejection_note ?? undefined,
     linkedCampaign: item.campaign_name ?? undefined,
     linkedICP: textValue(item.metadata?.icp_name) || textValue(item.metadata?.audience_segment) || undefined,
     objective: getObjective(item) ?? undefined,
@@ -518,10 +535,154 @@ function EditorModal({
   );
 }
 
+function NewPostModal({
+  title,
+  body,
+  scheduledFor,
+  mediaFile,
+  mediaPreviewUrl,
+  isSaving,
+  error,
+  onTitleChange,
+  onBodyChange,
+  onScheduledForChange,
+  onMediaChange,
+  onMediaClear,
+  onClose,
+  onSave,
+}: {
+  title: string;
+  body: string;
+  scheduledFor: string;
+  mediaFile: File | null;
+  mediaPreviewUrl: string | null;
+  isSaving: boolean;
+  error: string | null;
+  onTitleChange: (value: string) => void;
+  onBodyChange: (value: string) => void;
+  onScheduledForChange: (value: string) => void;
+  onMediaChange: (file: File) => void;
+  onMediaClear: () => void;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  const fileRef = useRef<HTMLInputElement | null>(null);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/35 backdrop-blur-[3px]" onClick={onClose} />
+      <div className="relative z-10 flex max-h-[calc(100vh-80px)] w-[min(640px,calc(100vw-48px))] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
+        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Facebook draft</p>
+            <h3 className="text-base font-semibold text-foreground">Create a post</h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="flex-1 space-y-4 overflow-y-auto px-5 py-5">
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Title</label>
+            <input
+              value={title}
+              onChange={(event) => onTitleChange(event.target.value)}
+              className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm outline-none transition-colors focus:border-primary"
+              placeholder="e.g. Grand opening announcement"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Facebook copy</label>
+            <textarea
+              value={body}
+              onChange={(event) => onBodyChange(event.target.value)}
+              className="min-h-[220px] w-full rounded-xl border border-border bg-background px-3 py-3 text-sm leading-relaxed outline-none transition-colors focus:border-primary"
+              placeholder="Write the post copy reviewers can approve and publish."
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Scheduled time</label>
+            <input
+              value={scheduledFor}
+              onChange={(event) => onScheduledForChange(event.target.value)}
+              type="datetime-local"
+              className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm outline-none transition-colors focus:border-primary"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Image</label>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) onMediaChange(file);
+                event.target.value = "";
+              }}
+            />
+            {mediaPreviewUrl ? (
+              <div className="overflow-hidden rounded-xl border border-border bg-muted/20">
+                <img src={mediaPreviewUrl} alt="Selected post media" className="max-h-64 w-full object-cover" />
+              </div>
+            ) : null}
+            <div className="flex flex-wrap items-center gap-2">
+              <ActionButton
+                type="button"
+                className="border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
+                onClick={() => fileRef.current?.click()}
+              >
+                <ImagePlus className="h-3.5 w-3.5" />
+                {mediaFile ? "Replace image" : "Add image"}
+              </ActionButton>
+              {mediaFile ? (
+                <ActionButton
+                  type="button"
+                  className="border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
+                  onClick={onMediaClear}
+                >
+                  <X className="h-3.5 w-3.5" />
+                  Remove
+                </ActionButton>
+              ) : null}
+            </div>
+          </div>
+          {error ? <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
+        </div>
+
+        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border px-5 py-4">
+          <ActionButton
+            type="button"
+            className="border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
+            onClick={onClose}
+          >
+            Cancel
+          </ActionButton>
+          <ActionButton
+            type="button"
+            className="border-primary bg-primary text-white hover:opacity-90 disabled:opacity-60"
+            disabled={isSaving || !body.trim()}
+            onClick={onSave}
+          >
+            {isSaving ? "Creating..." : "Create draft"}
+          </ActionButton>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ContentCard({
   item,
   onOpen,
   onApprove,
+  onPublishNow,
   onReject,
   onRetry,
   onRegenerateVariant,
@@ -532,6 +693,7 @@ function ContentCard({
   item: ContentItem;
   onOpen: (item: ContentItem) => void;
   onApprove: (item: ContentItem) => void;
+  onPublishNow: (item: ContentItem) => void;
   onReject: (item: ContentItem) => void;
   onRetry: (item: ContentItem) => void;
   onRegenerateVariant: (item: ContentItem) => void;
@@ -542,8 +704,10 @@ function ContentCard({
   const fileRef = useRef<HTMLInputElement | null>(null);
   const isDesignBrief = item.platform === "design_brief";
   const isDraft = item.status === "draft";
+  const isScheduled = item.status === "scheduled";
   const isRejected = item.status === "rejected";
   const isFailed = item.status === "failed";
+  const canPublishNow = item.platform === "facebook" && isScheduled;
   const supportsRegeneration = isOneTimeDesignBrief(item);
   const supportsVariantRegeneration = canRegenerateContentVariant(item);
   const preview = stripMarkdownToPreviewText(item.body);
@@ -704,6 +868,17 @@ function ContentCard({
           </ActionButton>
         )}
 
+        {canPublishNow && (
+          <ActionButton
+            type="button"
+            className="border-primary bg-primary text-white hover:opacity-90"
+            onClick={() => onPublishNow(item)}
+          >
+            <Send className="h-3.5 w-3.5" />
+            Publish now
+          </ActionButton>
+        )}
+
         {isDesignBrief && (
           <>
             {supportsRegeneration && (
@@ -734,6 +909,13 @@ function ContentCard({
 export default function ContentPage() {
   const [status, setStatus] = useState<TabStatus>(getInitialTabStatus);
   const [sortBy, setSortBy] = useState<SortOption>("newest");
+  const [isNewPostOpen, setIsNewPostOpen] = useState(false);
+  const [newPostTitle, setNewPostTitle] = useState("");
+  const [newPostBody, setNewPostBody] = useState("");
+  const [newPostScheduledFor, setNewPostScheduledFor] = useState(getDefaultScheduledInputValue);
+  const [newPostMediaFile, setNewPostMediaFile] = useState<File | null>(null);
+  const [newPostMediaPreviewUrl, setNewPostMediaPreviewUrl] = useState<string | null>(null);
+  const [newPostError, setNewPostError] = useState<string | null>(null);
   const [editingItem, setEditingItem] = useState<ContentItem | null>(null);
   const [editorBody, setEditorBody] = useState("");
   const [editorSubject, setEditorSubject] = useState("");
@@ -760,6 +942,29 @@ export default function ContentPage() {
   const retryMutation = useRetryContent({ mutation: { onSuccess: invalidate } });
   const actionMutation = useActionContent({ mutation: { onSuccess: invalidate } });
   const batchApproveMutation = useBatchApproveContent({ mutation: { onSuccess: invalidate } });
+  const createManualDraftMutation = useCreateManualContentDraft({
+    mutation: {
+      onSuccess: () => {
+        invalidate();
+        setStatus("draft");
+        if (typeof window !== "undefined") {
+          window.sessionStorage.setItem(CONTENT_STATUS_STORAGE_KEY, "draft");
+        }
+        setIsNewPostOpen(false);
+        setNewPostTitle("");
+        setNewPostBody("");
+        setNewPostScheduledFor(getDefaultScheduledInputValue());
+        setNewPostMediaFile(null);
+        setNewPostMediaPreviewUrl((current) => {
+          if (current) URL.revokeObjectURL(current);
+          return null;
+        });
+        setNewPostError(null);
+      },
+      onError: (error: Error) => setNewPostError(error.message),
+    },
+  });
+  const publishNowMutation = usePublishContentNow({ mutation: { onSuccess: invalidate } });
   const editMutation = useEditContent({
     mutation: {
       onSuccess: () => {
@@ -845,6 +1050,37 @@ export default function ContentPage() {
       platform: item.platform,
       data: { action: "approve" },
     });
+  };
+
+  const handleCreateManualDraft = () => {
+    setNewPostError(null);
+    createManualDraftMutation.mutate({
+      platform: "facebook",
+      title: newPostTitle,
+      body: newPostBody,
+      scheduledFor: datetimeLocalToIso(newPostScheduledFor),
+      mediaFile: newPostMediaFile,
+    });
+  };
+
+  const handleNewPostMediaChange = (file: File) => {
+    setNewPostMediaFile(file);
+    setNewPostMediaPreviewUrl((current) => {
+      if (current) URL.revokeObjectURL(current);
+      return URL.createObjectURL(file);
+    });
+  };
+
+  const handleNewPostMediaClear = () => {
+    setNewPostMediaFile(null);
+    setNewPostMediaPreviewUrl((current) => {
+      if (current) URL.revokeObjectURL(current);
+      return null;
+    });
+  };
+
+  const handlePublishNow = (item: ContentItem) => {
+    publishNowMutation.mutate({ id: item.id });
   };
 
   const handleReject = (item: ContentItem) => {
@@ -958,7 +1194,14 @@ export default function ContentPage() {
                 <option value="platform">Platform</option>
               </select>
             </label>
-            <button className="inline-flex h-9 shrink-0 items-center rounded-lg bg-primary px-3 text-xs font-medium text-white transition-opacity hover:opacity-90 sm:px-3.5">
+            <button
+              type="button"
+              onClick={() => {
+                setNewPostError(null);
+                setIsNewPostOpen(true);
+              }}
+              className="inline-flex h-9 shrink-0 items-center rounded-lg bg-primary px-3 text-xs font-medium text-white transition-opacity hover:opacity-90 sm:px-3.5"
+            >
               New Post
             </button>
           </div>
@@ -1017,6 +1260,7 @@ export default function ContentPage() {
                       item={item}
                       onOpen={openContentInspector}
                       onApprove={handleApprove}
+                      onPublishNow={handlePublishNow}
                       onReject={handleReject}
                       onRetry={handleRetry}
                       onRegenerateVariant={handleRegenerateVariant}
@@ -1041,6 +1285,7 @@ export default function ContentPage() {
                       item={item}
                       onOpen={openContentInspector}
                       onApprove={handleApprove}
+                      onPublishNow={handlePublishNow}
                       onReject={handleReject}
                       onRetry={handleRetry}
                       onRegenerateVariant={handleRegenerateVariant}
@@ -1061,6 +1306,7 @@ export default function ContentPage() {
                 item={item}
                 onOpen={openContentInspector}
                 onApprove={handleApprove}
+                onPublishNow={handlePublishNow}
                 onReject={handleReject}
                 onRetry={handleRetry}
                 onRegenerateVariant={handleRegenerateVariant}
@@ -1085,6 +1331,28 @@ export default function ContentPage() {
           onSave={handleSave}
           onUploadImage={(file) => handleImageUpload(editingItem, file)}
           onShare={() => handleShareBrief(editingItem)}
+        />
+      )}
+
+      {isNewPostOpen && (
+        <NewPostModal
+          title={newPostTitle}
+          body={newPostBody}
+          scheduledFor={newPostScheduledFor}
+          mediaFile={newPostMediaFile}
+          mediaPreviewUrl={newPostMediaPreviewUrl}
+          isSaving={createManualDraftMutation.isPending}
+          error={newPostError}
+          onTitleChange={setNewPostTitle}
+          onBodyChange={setNewPostBody}
+          onScheduledForChange={setNewPostScheduledFor}
+          onMediaChange={handleNewPostMediaChange}
+          onMediaClear={handleNewPostMediaClear}
+          onClose={() => {
+            setIsNewPostOpen(false);
+            handleNewPostMediaClear();
+          }}
+          onSave={handleCreateManualDraft}
         />
       )}
     </div>

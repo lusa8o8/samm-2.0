@@ -14,7 +14,7 @@ export type OrgBillingRow = {
   last_event_id: string | null
 }
 
-export const BILLING_ACCESS_STATUSES = new Set(['active', 'trialing'])
+export const BILLING_ACCESS_STATUSES = new Set(['active', 'trialing', 'grandfathered'])
 
 export function createAdminClient() {
   return createClient(

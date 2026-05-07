@@ -19,8 +19,8 @@ type WaitlistScreenProps = {
 export default function WaitlistScreen({
   loginHref,
   homeHref,
-  title = "Request access",
-  subtitle = "Tell us about your current setup  we will review and onboard the right teams.",
+  title = "Request a demo",
+  subtitle = "Tell us about your current setup and we will follow up with a walkthrough.",
 }: WaitlistScreenProps) {
   const submitWaitlist = useSubmitWaitlist();
   const [fullName, setFullName] = useState("");
@@ -62,10 +62,10 @@ export default function WaitlistScreen({
               <CheckCircle2 className="h-6 w-6" />
             </div>
             <p className="mt-6 text-[11px] font-semibold lowercase tracking-[0.24em] text-foreground/65">samm</p>
-            <h1 className="mt-4 text-3xl font-semibold tracking-tight text-[#0b0b0c]">Request received</h1>
+              <h1 className="mt-4 text-3xl font-semibold tracking-tight text-[#0b0b0c]">Demo request received</h1>
             <p className="mt-4 text-sm leading-7 text-muted-foreground">
               We've captured your request and will review it manually. If your team is a good fit for the current PMF
-              stage, we'll reach out with onboarding details and access.
+              stage, we'll reach out with demo details and next steps.
             </p>
 
             <div className="mt-8 flex flex-wrap gap-3">
@@ -97,7 +97,7 @@ export default function WaitlistScreen({
             <div>
               <p className="text-[11px] font-semibold lowercase tracking-[0.24em] text-white/70">samm</p>
               <h1 className="mt-12 max-w-md text-[3.4rem] font-semibold leading-[1.04] tracking-tight text-[#f5f3ef] xl:text-[3.9rem]">
-                Stop guessing what to post <span className="text-[#bda7ff]">every day.</span>
+                See whether samm fits <span className="text-[#bda7ff]">your workflow.</span>
               </h1>
               <p className="mt-7 max-w-md text-lg leading-8 text-white/82">
                 Plan your entire month in one sitting.
@@ -155,7 +155,7 @@ export default function WaitlistScreen({
             </div>
 
             <p className="mt-6 max-w-sm text-sm font-medium leading-6 text-[#bda7ff]">
-              early access is limited
+              self-serve founding access is also available
             </p>
           </aside>
 
@@ -303,7 +303,7 @@ export default function WaitlistScreen({
                     type="submit"
                     disabled={submitWaitlist.isPending}
                   >
-                    {submitWaitlist.isPending ? "Submitting..." : "Request access"}
+                    {submitWaitlist.isPending ? "Submitting..." : "Request demo"}
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Button>
                   <Link href={loginHref}>
@@ -314,7 +314,7 @@ export default function WaitlistScreen({
                 </div>
                 <p className="flex items-center gap-2 text-xs text-muted-foreground">
                   <LockKeyhole className="h-3.5 w-3.5" />
-                  We will only use this information to review your request and onboard you.
+                  We will only use this information to review your request and prepare a walkthrough.
                 </p>
               </form>
             </div>

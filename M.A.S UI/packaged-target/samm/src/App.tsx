@@ -15,11 +15,13 @@ import CRMPage from "@/pages/CRMPage";
 import SalesPage from "@/pages/SalesPage";
 import LandingPage from "@/pages/LandingPage";
 import LoginPage from "@/pages/LoginPage";
+import OnboardingPage from "@/pages/OnboardingPage";
 import WaitlistPage from "@/pages/WaitlistPage";
 import PrivacyPage from "@/pages/PrivacyPage";
 import TermsPage from "@/pages/TermsPage";
 import DataDeletionPage from "@/pages/DataDeletionPage";
 import NotFoundPage from "@/pages/NotFoundPage";
+import { BillingGate } from "@/components/billing/BillingGate";
 import { getActiveSession, supabase } from "../../../src/lib/supabase";
 
 const queryClient = new QueryClient();
@@ -29,6 +31,7 @@ function PublicRouter() {
   return (
     <Switch>
       <Route path="/" component={LandingPage} />
+      <Route path="/start" component={OnboardingPage} />
       <Route path="/login" component={LoginPage} />
       <Route path="/waitlist" component={WaitlistPage} />
       <Route path="/privacy" component={PrivacyPage} />
@@ -41,25 +44,43 @@ function PublicRouter() {
   );
 }
 
-function PrivateRouter() {
+function PrivateRouter({ session }: { session: Session }) {
+  const hasWorkspace = Boolean(session.user.app_metadata?.org_id);
+
   return (
-    <Layout>
-      <Switch>
-        <Route path="/" component={SammPage} />
-        <Route path="/samm" component={SammPage} />
-        <Route path="/inbox" component={InboxPage} />
-        <Route path="/content" component={ContentPage} />
-        <Route path="/metrics">{metricsEnabled ? <MetricsPage /> : <Redirect to="/calendar" />}</Route>
-        <Route path="/calendar" component={CalendarPage} />
-        <Route path="/operations" component={OperationsPage} />
-        <Route path="/crm" component={CRMPage} />
-        <Route path="/sales" component={SalesPage} />
-        <Route path="/login">
-          <Redirect to="/" />
-        </Route>
-        <Route component={NotFoundPage} />
-      </Switch>
-    </Layout>
+    <Switch>
+      <Route path="/start" component={OnboardingPage} />
+      <Route path="/login" component={LoginPage} />
+      <Route path="/waitlist" component={WaitlistPage} />
+      <Route path="/privacy" component={PrivacyPage} />
+      <Route path="/terms" component={TermsPage} />
+      <Route path="/data-deletion" component={DataDeletionPage} />
+      <Route>
+        {!hasWorkspace ? (
+          <Redirect to="/start" />
+        ) : (
+        <BillingGate>
+          <Layout>
+            <Switch>
+              <Route path="/" component={SammPage} />
+              <Route path="/samm" component={SammPage} />
+              <Route path="/inbox" component={InboxPage} />
+              <Route path="/content" component={ContentPage} />
+              <Route path="/metrics">{metricsEnabled ? <MetricsPage /> : <Redirect to="/calendar" />}</Route>
+              <Route path="/calendar" component={CalendarPage} />
+              <Route path="/operations" component={OperationsPage} />
+              <Route path="/crm" component={CRMPage} />
+              <Route path="/sales" component={SalesPage} />
+              <Route path="/login">
+                <Redirect to="/" />
+              </Route>
+              <Route component={NotFoundPage} />
+            </Switch>
+          </Layout>
+        </BillingGate>
+        )}
+      </Route>
+    </Switch>
   );
 }
 
@@ -110,7 +131,7 @@ function AuthGate() {
     );
   }
 
-  return session ? <PrivateRouter /> : <PublicRouter />;
+  return session ? <PrivateRouter session={session} /> : <PublicRouter />;
 }
 
 function App() {
