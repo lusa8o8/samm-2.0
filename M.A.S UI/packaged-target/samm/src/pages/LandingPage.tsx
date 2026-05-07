@@ -39,7 +39,14 @@ const contentMix = [
 export default function LandingPage() {
   return (
     <PublicPageFrame>
-      <PublicNav primaryHref="/start" primaryLabel="Start founding access" secondaryHref="/waitlist" secondaryLabel="Request demo" />
+      <PublicNav
+        primaryHref="/start"
+        primaryLabel="Start founding access"
+        secondaryHref="/waitlist"
+        secondaryLabel="Request demo"
+        tertiaryHref="/login"
+        tertiaryLabel="Sign in"
+      />
 
       <main>
         <section className="mx-auto grid max-w-7xl gap-10 px-4 py-16 sm:px-6 lg:grid-cols-[0.92fr_1.08fr] lg:px-8 lg:py-24">

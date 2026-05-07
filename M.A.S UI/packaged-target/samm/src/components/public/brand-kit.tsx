@@ -37,11 +37,15 @@ export function PublicNav({
   primaryLabel = "Request access",
   secondaryHref = "/login",
   secondaryLabel = "Sign in",
+  tertiaryHref,
+  tertiaryLabel,
 }: {
   primaryHref?: string;
   primaryLabel?: string;
   secondaryHref?: string;
   secondaryLabel?: string;
+  tertiaryHref?: string;
+  tertiaryLabel?: string;
 }) {
   return (
     <header className="border-b border-black/6 bg-white/74 backdrop-blur-[14px]">
@@ -56,6 +60,13 @@ export function PublicNav({
               {secondaryLabel}
             </Button>
           </Link>
+          {tertiaryHref && tertiaryLabel ? (
+            <Link href={tertiaryHref}>
+              <Button variant="ghost" className="rounded-full px-4">
+                {tertiaryLabel}
+              </Button>
+            </Link>
+          ) : null}
           <Link href={primaryHref}>
             <Button className="rounded-full px-5">{primaryLabel}</Button>
           </Link>
